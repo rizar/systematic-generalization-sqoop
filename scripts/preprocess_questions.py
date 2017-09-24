@@ -18,8 +18,8 @@ import os
 import h5py
 import numpy as np
 
-import iep.programs
-from iep.preprocess import tokenize, encode, build_vocab
+import vr.programs
+from vr.preprocess import tokenize, encode, build_vocab
 
 
 """
@@ -42,15 +42,15 @@ parser.add_argument('--output_vocab_json', default='')
 
 def program_to_str(program, mode):
   if mode == 'chain':
-    if not iep.programs.is_chain(program):
+    if not vr.programs.is_chain(program):
       return None
-    return iep.programs.list_to_str(program)
+    return vr.programs.list_to_str(program)
   elif mode == 'prefix':
-    program_prefix = iep.programs.list_to_prefix(program)
-    return iep.programs.list_to_str(program_prefix)
+    program_prefix = vr.programs.list_to_prefix(program)
+    return vr.programs.list_to_str(program_prefix)
   elif mode == 'postfix':
-    program_postfix = iep.programs.list_to_postfix(program)
-    return iep.programs.list_to_str(program_postfix)
+    program_postfix = vr.programs.list_to_postfix(program)
+    return vr.programs.list_to_str(program_postfix)
   return None
 
 
@@ -116,8 +116,11 @@ def main(args):
   orig_idxs = []
   image_idxs = []
   answers = []
+  types = []
   for orig_idx, q in enumerate(questions):
     question = q['question']
+    if 'program' in q:
+      types += [q['program'][-1]['function']]
 
     orig_idxs.append(orig_idx)
     image_idxs.append(q['image_index'])
@@ -159,6 +162,17 @@ def main(args):
   programs_encoded = np.asarray(programs_encoded, dtype=np.int32)
   print(questions_encoded.shape)
   print(programs_encoded.shape)
+
+  mapping = {}
+  for i, t in enumerate(set(types)):
+    mapping[t] = i
+
+  print(mapping)
+
+  types_coded = []
+  for t in types:
+    types_coded += [mapping[t]]
+
   with h5py.File(args.output_h5_file, 'w') as f:
     f.create_dataset('questions', data=questions_encoded)
     f.create_dataset('image_idxs', data=np.asarray(image_idxs))
@@ -170,6 +184,8 @@ def main(args):
       f.create_dataset('question_families', data=np.asarray(question_families))
     if len(answers) > 0:
       f.create_dataset('answers', data=np.asarray(answers))
+    if len(types) > 0:
+      f.create_dataset('types', data=np.asarray(types_coded))
 
 
 if __name__ == '__main__':

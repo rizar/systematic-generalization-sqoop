@@ -58,7 +58,8 @@ def build_vocab(sequences, min_token_count=1, delim=' ',
     'punct_to_remove': punct_to_remove,
   }
   for seq in sequences:
-    seq_tokens = tokenize(seq, **tokenize_kwargs,
+    seq_tokens = tokenize(seq, delim=delim, punct_to_keep=punct_to_keep,
+                    punct_to_remove=punct_to_remove,
                     add_start_token=False, add_end_token=False)
     for token in seq_tokens:
       if token not in token_to_count:

@@ -1,103 +1,62 @@
-# inferring-and-executing
+# FiLM: Visual Reasoning with a General Conditioning Layer
 
-This is the code for the paper
+## Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, Aaron Courville
 
- **<a href="https://arxiv.org/abs/1705.03633">Inferring and Executing Programs for Visual Reasoning</a>**
- <br>
- <a href='http://cs.stanford.edu/people/jcjohns/'>Justin Johnson</a>,
- <a href='http://home.bharathh.info/'>Bharath Hariharan</a>,
- <a href='https://lvdmaaten.github.io/'>Laurens van der Maaten</a>,
- <a href='http://cs.stanford.edu/~jhoffman/'>Judy Hoffman</a>,
- <a href='http://vision.stanford.edu/feifeili/'>Fei-Fei Li</a>,
- <a href='http://larryzitnick.org/'>Larry Zitnick</a>,
- <a href='http://www.rossgirshick.info/'>Ross Girshick</a>
- <br>
- To appear at [ICCV 2017](http://iccv2017.thecvf.com/)
+This code implements a Feature-wise Linear Modulation approach to Visual Reasoning - answering multi-step questions on images. This codebase reproduces results from the arXiv paper "FiLM: Visual Reasoning with a General Conditioning Layer," which extends prior work "Learning Visual Reasoning Without Strong Priors" presented at ICML's MLSLP workshop.
 
-<div align="center">
-  <img src="https://github.com/facebookresearch/clevr-iep/blob/master/img/system.png" width="450px">
-</div>
+If you find this code useful, please cite the arXiv version of this paper.
 
-If you find this code useful in your research then please cite
+### Code Outline
 
-```
-@inproceedings{johnson2017inferring,
-  title={Inferring and Executing Programs for Visual Reasoning},
-  author={Johnson, Justin and Hariharan, Bharath and van der Maaten, Laurens and Hoffman, Judy
-          and Fei-Fei, Li and Zitnick, C Lawrence and Girshick, Ross},
-  booktitle={ICCV},
-  year={2017}
-}
-```
+This code is a fork from the code for "Inferring and Executing Programs for Visual Reasoning" available [here](https://github.com/facebookresearch/clevr-iep).
 
-# Setup
+Our FiLM Generator is located in [vr/models/film_gen.py](https://github.com/ethanjperez/sa-iep/blob/master/vr/models/film_gen.py), and our FiLMed Network and FiLM layer implementation is located in [vr/models/filmed_net.py](https://github.com/ethanjperez/sa-iep/blob/master/vr/models/filmed_net.py).
 
-All code was developed and tested on Ubuntu 16.04 with Python 3.5.
+We inserted a new model mode "FiLM" which integrates into forked code for [CLEVR baselines](https://arxiv.org/abs/1612.06890) and the [Program Generator + Execution Engine model](https://arxiv.org/abs/1705.03633). Throughout the code, for our model, our FiLM Generator acts in place of the "program generator" which generates the FiLM parameters for an the FiLMed Network, i.e. "execution engine." In some sense, FiLM parameters can vaguely be thought of as a "soft program" of sorts, but we use this denotation in the code to integrate better with the forked models.
 
-You can set up a virtual environment to run the code like this:
+### Setup and Training
 
+Because of this integration, setup instructions for the FiLM model are nearly the same as for "Inferring and Executing Programs for Visual Reasoning." We will post more detailed instructions on how to use our code in particular soon for more step-by-step guidance. For now, the guidelines below should give substantial direction to those interested.
+
+
+First, follow the virtual environment setup [instructions](https://github.com/facebookresearch/clevr-iep#setup).
+
+Second, follow the CLEVR data preprocessing [instructions](https://github.com/facebookresearch/clevr-iep/blob/master/TRAINING.md#preprocessing-clevr).
+
+Lastly, model training details are similar at a high level (though adapted for FiLM and our repo) to [these](https://github.com/facebookresearch/clevr-iep/blob/master/TRAINING.md#training-on-clevr) for the Program Generator + Execution Engine model, though our model only uses one step of training, rather than a 3-step training procedure.
+
+The below script has the hyperparameters and settings to reproduce FiLM CLEVR results:
 ```bash
-virtualenv -p python3 .env       # Create virtual environment
-source .env/bin/activate         # Activate virtual environment
-pip install -r requirements.txt  # Install dependencies
-echo $PWD > .env/lib/python3.5/site-packages/iep.pth # Add this package to virtual environment
-# Work for a while ...
-deactivate # Exit virtual environment
+sh scripts/train/film.sh
 ```
 
-# Pretrained Models
-You can download and unzip the pretrained models by running `bash scripts/download_pretrained_models.sh`;
-the models will take about 1.1 GB on disk.
 
-We provide two sets of pretrained models:
-- The models in `models/CLEVR` were trained on the CLEVR dataset; these were used to make Table 1 in the paper.
-- The models in `models/CLEVR-Humans` were first trained on CLEVR and then finetuned on the CLEVR-Humans dataset;
-   these models were used to make Table 3 in the paper.
-
-# Running models
-
-You can easily run any of the pretrained models on new images and questions. As an example, we will run several
-models on the following example image from the CLEVR validation set:
-
-<div align='center'>
- <img src='https://github.com/facebookresearch/clevr-iep/blob/master/img/CLEVR_val_000013.png'>
-</div>
-
-After downloading the pretrained models, you can use the pretrained model to answer questions about this image with
-the following command:
-
+For CLEVR-Humans, data preprocessing instructions are [here](https://github.com/facebookresearch/clevr-iep/blob/master/TRAINING.md#preprocessing-clevr-humans).
+The below script has the hyperparameters and settings to reproduce FiLM CLEVR-Humans results:
 ```bash
-python scripts/run_model.py \
-  --program_generator models/CLEVR/program_generator_18k.pt \
-  --execution_engine models/CLEVR/execution_engine_18k.pt \
-  --image img/CLEVR_val_000013.png \
-  --question "Does the small sphere have the same color as the cube left of the gray cube?"
+sh scripts/train/film_humans.sh
 ```
 
-This will print the predicted answer, as well as the program that the model used to produce the answer.
-For the example command we get the output:
 
+Training a CLEVR-CoGenT model is very similar to training a normal CLEVR model. Training a model from pixels requires modifying the preprocessing with scripts included in the repo to preprocess pixels. The scripts to reproduce our results are also located in the scripts/train/ folder.
+
+We tried to not break existing models from the CLEVR codebase with our modifications, but we haven't tested their code after our changes. We recommend using using the CLEVR and "Inferring and Executing Programs for Visual Reasoning" code directly.
+
+### Pretrained Models
+
+We will have pretrained models available soon. In the meanwhile, feel free to use our code to train your own FiLM models; it should only take ~12 hours on a good GPU to train a solid one (See training curves in the arXiv paper appendix).
+
+### Running models
+
+We added an interactive command line tool for use with the below command/script. It's actually super enjoyable to play around with trained models. It's great for gaining intuition around what various trained models have or have not learned and how they tackle reasoning questions.
 ```bash
-Question: "Does the small sphere have the same color as the cube left of the gray cube?"
-Predicted answer:  yes
-
-Predicted program:
-equal_color
-query_color
-unique
-filter_shape[sphere]
-filter_size[small]
-scene
-query_color
-unique
-filter_shape[cube]
-relate[left]
-unique
-filter_shape[cube]
-filter_color[gray]
-scene
+python run_model.py --program_generator <FiLM Generator filepath> --execution_engine <FiLMed Network filepath>
 ```
 
-# Training
+By default, the command runs on [this CLEVR image](https://github.com/ethanjperez/sa-iep/blob/master/img/CLEVR_val_000017.png) in our repo, but you may modify which image to use via command line flag to test on any CLEVR image.
 
-The procedure for training your own models [is described here](TRAINING.md).
+CLEVR vocab is enforced by default, but for CLEVR-Humans models, for example, you may append the command line flag option '--enforce_clevr_vocab 0' to ask any string of characters you please.
+
+In addition, one easier way to try out zero-shot with FiLM is to run a trained model with run_model.py, but with the implemented debug command line flag on so you can manipulate the FiLM parameters modulating the FiLMed network during the forward computation. For example, '--debug_every -1' will stop the program after the model generates FiLM parameters but before the FiLMed network carries out its forward pass using FiLM layers.
+
+Thanks for stopping by, and we hope you enjoy playing around with FiLM!

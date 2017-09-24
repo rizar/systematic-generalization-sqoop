@@ -11,8 +11,8 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from iep.models.layers import ResidualBlock
-from iep.embedding import expand_embedding_vocab
+from vr.models.layers import init_modules, ResidualBlock
+from vr.embedding import expand_embedding_vocab
 
 
 class StackedAttention(nn.Module):
@@ -23,6 +23,7 @@ class StackedAttention(nn.Module):
     self.Wp = nn.Conv2d(hidden_dim, 1, kernel_size=1, padding=0)
     self.hidden_dim = hidden_dim
     self.attention_maps = None
+    init_modules(self.modules(), init='normal')
 
   def forward(self, v, u):
     """
@@ -233,6 +234,7 @@ class CnnLstmSaModel(nn.Module):
       'dropout': fc_dropout,
     }
     self.classifier = build_mlp(**classifier_args)
+    init_modules(self.modules(), init='normal')
 
   def forward(self, questions, feats):
     u = self.rnn(questions)

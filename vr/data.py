@@ -12,7 +12,7 @@ import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 
-import iep.programs
+import vr.programs
 
 
 def _dataset_to_tensor(dset, mask=None):
@@ -50,17 +50,30 @@ class ClevrDataset(Dataset):
 
     # Data from the question file is small, so read it all into memory
     print('Reading question data into memory')
+    self.all_types = None
+    if 'types' in question_h5:
+      self.all_types = _dataset_to_tensor(question_h5['types'], mask)
+    self.all_question_families = None
+    if 'question_families' in question_h5:
+      self.all_question_families = _dataset_to_tensor(question_h5['question_families'], mask)
     self.all_questions = _dataset_to_tensor(question_h5['questions'], mask)
     self.all_image_idxs = _dataset_to_tensor(question_h5['image_idxs'], mask)
     self.all_programs = None
     if 'programs' in question_h5:
       self.all_programs = _dataset_to_tensor(question_h5['programs'], mask)
-    self.all_answers = _dataset_to_tensor(question_h5['answers'], mask)
+    self.all_answers = None
+    if 'answers' in question_h5:
+      self.all_answers = _dataset_to_tensor(question_h5['answers'], mask)
 
   def __getitem__(self, index):
+    if self.all_question_families is not None:
+      question_family = self.all_question_families[index]
+    q_type = None if self.all_types is None else self.all_types[index]
     question = self.all_questions[index]
     image_idx = self.all_image_idxs[index]
-    answer = self.all_answers[index]
+    answer = None
+    if self.all_answers is not None:
+      answer = self.all_answers[index]
     program_seq = None
     if self.all_programs is not None:
       program_seq = self.all_programs[index]
@@ -79,14 +92,16 @@ class ClevrDataset(Dataset):
       for fn_idx in program_seq:
         fn_str = self.vocab['program_idx_to_token'][fn_idx]
         if fn_str == '<START>' or fn_str == '<END>': continue
-        fn = iep.programs.str_to_function(fn_str)
+        fn = vr.programs.str_to_function(fn_str)
         program_json_seq.append(fn)
       if self.mode == 'prefix':
-        program_json = iep.programs.prefix_to_list(program_json_seq)
+        program_json = vr.programs.prefix_to_list(program_json_seq)
       elif self.mode == 'postfix':
-        program_json = iep.programs.postfix_to_list(program_json_seq)
+        program_json = vr.programs.postfix_to_list(program_json_seq)
 
-    return (question, image, feats, answer, program_seq, program_json)
+    if q_type is None:
+      return (question, image, feats, answer, program_seq, program_json)
+    return ([question, q_type], image, feats, answer, program_seq, program_json)
 
   def __len__(self):
     if self.max_samples is None:
@@ -105,7 +120,7 @@ class ClevrDataLoader(DataLoader):
       raise ValueError('Must give vocab')
 
     feature_h5_path = kwargs.pop('feature_h5')
-    print('Reading features from ', feature_h5_path)
+    print('Reading features from', feature_h5_path)
     self.feature_h5 = h5py.File(feature_h5_path, 'r')
 
     self.image_h5 = None
@@ -153,7 +168,9 @@ def clevr_collate(batch):
   feat_batch = transposed[2]
   if any(f is not None for f in feat_batch):
     feat_batch = default_collate(feat_batch)
-  answer_batch = default_collate(transposed[3])
+  answer_batch = transposed[3]
+  if transposed[3][0] is not None:
+    answer_batch = default_collate(transposed[3])
   program_seq_batch = transposed[4]
   if transposed[4][0] is not None:
     program_seq_batch = default_collate(transposed[4])

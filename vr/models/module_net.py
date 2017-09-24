@@ -13,64 +13,9 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
 
-from iep.models.layers import ResidualBlock, GlobalAveragePool, Flatten
-import iep.programs
-
-
-class ConcatBlock(nn.Module):
-  def __init__(self, dim, with_residual=True, with_batchnorm=True):
-    super(ConcatBlock, self).__init__()
-    self.proj = nn.Conv2d(2 * dim, dim, kernel_size=1, padding=0)
-    self.res_block = ResidualBlock(dim, with_residual=with_residual,
-                        with_batchnorm=with_batchnorm)
-
-  def forward(self, x, y):
-    out = torch.cat([x, y], 1) # Concatentate along depth
-    out = F.relu(self.proj(out))
-    out = self.res_block(out)
-    return out
-
-
-def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True):
-  layers = []
-  prev_dim = feature_dim
-  for i in range(num_layers):
-    layers.append(nn.Conv2d(prev_dim, module_dim, kernel_size=3, padding=1))
-    if with_batchnorm:
-      layers.append(nn.BatchNorm2d(module_dim))
-    layers.append(nn.ReLU(inplace=True))
-    prev_dim = module_dim
-  return nn.Sequential(*layers)
-
-
-def build_classifier(module_C, module_H, module_W, num_answers,
-                     fc_dims=[], proj_dim=None, downsample='maxpool2',
-                     with_batchnorm=True, dropout=0):
-  layers = []
-  prev_dim = module_C * module_H * module_W
-  if proj_dim is not None and proj_dim > 0:
-    layers.append(nn.Conv2d(module_C, proj_dim, kernel_size=1))
-    if with_batchnorm:
-      layers.append(nn.BatchNorm2d(proj_dim))
-    layers.append(nn.ReLU(inplace=True))
-    prev_dim = proj_dim * module_H * module_W
-  if downsample == 'maxpool2':
-    layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-    prev_dim //= 4
-  elif downsample == 'maxpool4':
-    layers.append(nn.MaxPool2d(kernel_size=4, stride=4))
-    prev_dim //= 16
-  layers.append(Flatten())
-  for next_dim in fc_dims:
-    layers.append(nn.Linear(prev_dim, next_dim))
-    if with_batchnorm:
-      layers.append(nn.BatchNorm1d(next_dim))
-    layers.append(nn.ReLU(inplace=True))
-    if dropout > 0:
-      layers.append(nn.Dropout(p=dropout))
-    prev_dim = next_dim
-  layers.append(nn.Linear(prev_dim, num_answers))
-  return nn.Sequential(*layers)
+from vr.models.layers import init_modules, ResidualBlock, GlobalAveragePool, Flatten
+from vr.models.layers import build_classifier, build_stem, ConcatBlock
+import vr.programs
 
 
 class ModuleNet(nn.Module):
@@ -116,7 +61,7 @@ class ModuleNet(nn.Module):
     self.function_modules_num_inputs = {}
     self.vocab = vocab
     for fn_str in vocab['program_token_to_idx']:
-      num_inputs = iep.programs.get_num_inputs(fn_str)
+      num_inputs = vr.programs.get_num_inputs(fn_str)
       self.function_modules_num_inputs[fn_str] = num_inputs
       if fn_str == 'scene' or num_inputs == 1:
         mod = ResidualBlock(module_dim,
@@ -165,7 +110,7 @@ class ModuleNet(nn.Module):
         self.all_module_grad_outputs.append([None] * len(program[i]))
       module_outputs = []
       for j, f in enumerate(program[i]):
-        f_str = iep.programs.function_to_str(f)
+        f_str = vr.programs.function_to_str(f)
         module = self.function_modules[f_str]
         if f_str == 'scene':
           module_inputs = [feats[i:i+1]]
@@ -234,6 +179,8 @@ class ModuleNet(nn.Module):
       final_module_outputs = self._forward_modules_json(feats, program)
     elif type(program) is Variable and program.dim() == 2:
       final_module_outputs = self._forward_modules_ints(feats, program)
+    elif torch.is_tensor(program) and program.dim() == 3:
+      final_module_outputs = self._forward_modules_probs(feats, program)
     else:
       raise ValueError('Unrecognized program format')
 

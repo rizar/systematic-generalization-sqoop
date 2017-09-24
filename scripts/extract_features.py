@@ -8,6 +8,7 @@ import argparse, os, json
 import h5py
 import numpy as np
 from scipy.misc import imread, imresize
+from tqdm import tqdm
 
 import torch
 import torchvision
@@ -27,6 +28,8 @@ parser.add_argument('--batch_size', default=128, type=int)
 
 
 def build_model(args):
+  if args.model.lower() == 'none':
+    return None
   if not hasattr(torchvision.models, args.model):
     raise ValueError('Invalid model "%s"' % args.model)
   if not 'resnet' in args.model:
@@ -48,6 +51,10 @@ def build_model(args):
 
 
 def run_batch(cur_batch, model):
+  if model is None:
+    image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
+    return image_batch / 255.  # Scale pixel values to [0, 1]
+
   mean = np.array([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
   std = np.array([0.229, 0.224, 0.224]).reshape(1, 3, 1, 1)
 
@@ -85,7 +92,7 @@ def main(args):
     feat_dset = None
     i0 = 0
     cur_batch = []
-    for i, (path, idx) in enumerate(input_paths):
+    for i, (path, idx) in tqdm(enumerate(input_paths)):
       img = imread(path, mode='RGB')
       img = imresize(img, img_size, interp='bicubic')
       img = img.transpose(2, 0, 1)[None]
@@ -100,13 +107,12 @@ def main(args):
         i1 = i0 + len(cur_batch)
         feat_dset[i0:i1] = feats
         i0 = i1
-        print('Processed %d / %d images' % (i1, len(input_paths)))
         cur_batch = []
     if len(cur_batch) > 0:
       feats = run_batch(cur_batch, model)
       i1 = i0 + len(cur_batch)
       feat_dset[i0:i1] = feats
-      print('Processed %d / %d images' % (i1, len(input_paths)))
+  return
 
 
 if __name__ == '__main__':

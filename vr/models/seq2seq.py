@@ -12,7 +12,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 
-from iep.embedding import expand_embedding_vocab
+from vr.embedding import expand_embedding_vocab
 
 class Seq2Seq(nn.Module):
   def __init__(self,
@@ -34,6 +34,8 @@ class Seq2Seq(nn.Module):
     self.decoder_embed = nn.Embedding(decoder_vocab_size, wordvec_dim)
     self.decoder_rnn = nn.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
                                dropout=rnn_dropout, batch_first=True)
+    self.decoder_rnn_new = nn.LSTM(hidden_dim, hidden_dim, rnn_num_layers,
+                                   dropout=rnn_dropout, batch_first=True)
     self.decoder_linear = nn.Linear(hidden_dim, decoder_vocab_size)
     self.NULL = null_token
     self.START = start_token
@@ -96,9 +98,9 @@ class Seq2Seq(nn.Module):
     y_embed = self.decoder_embed(y)
     encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
     rnn_input = torch.cat([encoded_repeat, y_embed], 2)
-    if h0 is None:
+    if not h0:
       h0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    if c0 is None:
+    if not c0:
       c0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
     rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
 
@@ -135,6 +137,14 @@ class Seq2Seq(nn.Module):
 
   def forward(self, x, y):
     encoded = self.encoder(x)
+
+    V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
+    T_out = 15
+    encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
+    h0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
+    c0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
+    rnn_output, (ht, ct) = self.decoder_rnn_new(encoded_repeat, (h0, c0))
+
     output_logprobs, _, _ = self.decoder(encoded, y)
     loss = self.compute_loss(output_logprobs, y)
     return loss

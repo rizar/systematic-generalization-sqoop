@@ -2,9 +2,7 @@
 
 ## Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, Aaron Courville
 
-This code implements a Feature-wise Linear Modulation approach to Visual Reasoning - answering multi-step questions on images. This codebase reproduces results from the arXiv paper "FiLM: Visual Reasoning with a General Conditioning Layer," which extends prior work "Learning Visual Reasoning Without Strong Priors" presented at ICML's MLSLP workshop.
-
-If you find this code useful, please cite the arXiv version of this paper.
+This code implements a Feature-wise Linear Modulation approach to Visual Reasoning - answering multi-step questions on images. This codebase reproduces results from the AAAI 2018 paper "FiLM: Visual Reasoning with a General Conditioning Layer," which extends prior work "Learning Visual Reasoning Without Strong Priors" presented at ICML's MLSLP workshop.
 
 ### Code Outline
 
@@ -17,7 +15,6 @@ We inserted a new model mode "FiLM" which integrates into forked code for [CLEVR
 ### Setup and Training
 
 Because of this integration, setup instructions for the FiLM model are nearly the same as for "Inferring and Executing Programs for Visual Reasoning." We will post more detailed instructions on how to use our code in particular soon for more step-by-step guidance. For now, the guidelines below should give substantial direction to those interested.
-
 
 First, follow the virtual environment setup [instructions](https://github.com/facebookresearch/clevr-iep#setup).
 
@@ -42,9 +39,7 @@ Training a CLEVR-CoGenT model is very similar to training a normal CLEVR model. 
 
 We tried to not break existing models from the CLEVR codebase with our modifications, but we haven't tested their code after our changes. We recommend using using the CLEVR and "Inferring and Executing Programs for Visual Reasoning" code directly.
 
-### Pretrained Models
-
-We will have pretrained models available soon. In the meanwhile, feel free to use our code to train your own FiLM models; it should only take ~12 hours on a good GPU to train a solid one (See training curves in the arXiv paper appendix).
+Training a solid FiLM CLEVR model should only take ~12 hours on a good GPU (See training curves in the paper appendix).
 
 ### Running models
 
@@ -60,3 +55,13 @@ CLEVR vocab is enforced by default, but for CLEVR-Humans models, for example, yo
 In addition, one easier way to try out zero-shot with FiLM is to run a trained model with run_model.py, but with the implemented debug command line flag on so you can manipulate the FiLM parameters modulating the FiLMed network during the forward computation. For example, '--debug_every -1' will stop the program after the model generates FiLM parameters but before the FiLMed network carries out its forward pass using FiLM layers.
 
 Thanks for stopping by, and we hope you enjoy playing around with FiLM!
+
+### Bibtex
+```bash
+@InProceedings{perez2018film,
+  title={FiLM: Visual Reasoning with a General Conditioning Layer},
+  author={Ethan Perez and Florian Strub and Harm de Vries and Vincent Dumoulin and Aaron C. Courville},
+  booktitle={AAAI},
+  year={2018}
+}
+```

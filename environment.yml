@@ -1,0 +1,43 @@
+name: nmn
+channels:
+- soumith
+- defaults
+dependencies:
+- ca-certificates=2017.08.26=h1d4fec5_0
+- certifi=2018.1.18=py35_0
+- cffi=1.11.4=py35h9745a5d_0
+- freetype=2.8=hab7d2ae_1
+- h5py=2.7.1=py35ha1a889d_0
+- hdf5=1.8.18=h6792536_1
+- intel-openmp=2018.0.0=hc7b2577_8
+- jpeg=9b=h024ee3a_2
+- libedit=3.1=heed3624_0
+- libffi=3.2.1=hd88cf55_4
+- libgcc=7.2.0=h69d50b8_2
+- libgcc-ng=7.2.0=h7cc24e2_2
+- libgfortran-ng=7.2.0=h9f7466a_2
+- libpng=1.6.34=hb9fc6fc_0
+- libstdcxx-ng=7.2.0=h7a57d05_2
+- libtiff=4.0.9=h28f6b97_0
+- mkl=2018.0.1=h19d6760_4
+- ncurses=6.0=h9df7e31_2
+- numpy=1.14.1=py35h3dfced4_1
+- olefile=0.45.1=py35_0
+- openssl=1.0.2n=hb7f436b_0
+- pillow=5.0.0=py35h3deb7b8_0
+- pip=9.0.1=py35_5
+- pycparser=2.18=py35h61b3040_1
+- python=3.5.4=hc3d631a_27
+- readline=7.0=ha6073c6_4
+- setuptools=38.5.1=py35_0
+- six=1.11.0=py35h423b573_1
+- sqlite=3.22.0=h1bed415_0
+- tk=8.6.7=hc745277_3
+- wheel=0.30.0=py35hd3883cf_1
+- xz=5.2.3=h55aa19d_2
+- zlib=1.2.11=ha838bed_2
+- pytorch=0.1.11=py35_5
+- torchvision=0.1.8=py35_2
+- pip:
+  - torch==0.1.11+b13b701
+prefix: /home/mnoukhov/miniconda3/envs/nmn

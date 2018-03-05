@@ -179,9 +179,9 @@ class Seq2Seq(nn.Module):
       # logprobs is N x 1 x V
       logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
       logprobs = logprobs / temperature
-      probs = F.softmax(logprobs.view(N, -1)) # Now N x V
+      probs = F.softmax(logprobs.view(N, -1), dim=1) # Now N x V
       if argmax:
-        _, cur_output = probs.max(1)
+        _, cur_output = probs.max(1, keepdim=True)
       else:
         cur_output = probs.multinomial() # Now N x 1
       self.multinomial_outputs.append(cur_output)

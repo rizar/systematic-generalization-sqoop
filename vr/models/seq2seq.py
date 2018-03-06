@@ -160,7 +160,7 @@ class Seq2Seq(nn.Module):
     while True:
       cur_y = Variable(torch.LongTensor([y[-1]]).type_as(x.data).view(1, 1))
       logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
-      _, next_y = logprobs.data.max(2)
+      _, next_y = logprobs.data.max(2, keepdim=True)
       y.append(next_y[0, 0, 0])
       if len(y) >= max_length or y[-1] == self.END:
         break

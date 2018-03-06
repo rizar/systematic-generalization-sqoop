@@ -1,3 +1,3 @@
-#!bin/bash
-export PYTHONPATH="Test"
+#!/bin/bash
+export PYTHONPATH=$PWD
 source activate nmn

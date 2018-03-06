@@ -35,12 +35,13 @@ from vr.models import FiLMGen
 parser = argparse.ArgumentParser()
 
 # Input data
-parser.add_argument('--train_question_h5', default='data/train_questions.h5')
-parser.add_argument('--train_features_h5', default='data/train_features.h5')
-parser.add_argument('--val_question_h5', default='data/val_questions.h5')
-parser.add_argument('--val_features_h5', default='data/val_features.h5')
+parser.add_argument('--data_dir', default='data')
+parser.add_argument('--train_question_h5', default='train_questions.h5')
+parser.add_argument('--train_features_h5', default='train_features.h5')
+parser.add_argument('--val_question_h5', default='val_questions.h5')
+parser.add_argument('--val_features_h5', default='val_features.h5')
 parser.add_argument('--feature_dim', default='1024,14,14')
-parser.add_argument('--vocab_json', default='data/vocab.json')
+parser.add_argument('--vocab_json', default='vocab.json')
 
 parser.add_argument('--loader_num_workers', type=int, default=1)
 parser.add_argument('--use_local_copies', default=0, type=int)
@@ -151,6 +152,13 @@ def main(args):
     num = random.randint(1, 1000000)
     args.checkpoint_path = '%s_%06d%s' % (name, num, ext)
   print('Will save checkpoints to %s' % args.checkpoint_path)
+
+  if args.data_dir:
+    args.train_question_h5 = os.path.join(args.data_dir, args.train_question_h5)
+    args.train_features_h5 = os.path.join(args.data_dir, args.train_features_h5)
+    args.val_question_h5 = os.path.join(args.data_dir, args.val_question_h5)
+    args.val_features_h5 = os.path.join(args.data_dir, args.val_features_h5)
+    args.vocab_json = os.path.join(args.data_dir, args.vocab_json)
 
   vocab = utils.load_vocab(args.vocab_json)
 

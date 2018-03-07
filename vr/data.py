@@ -24,7 +24,7 @@ def _dataset_to_tensor(dset, mask=None):
 
 
 class ClevrDataset(Dataset):
-  def __init__(self, question_h5, feature_h5, vocab, mode='prefix',
+  def __init__(self, question_h5, feature_h5_path, vocab, mode='prefix',
                image_h5=None, max_samples=None, question_families=None,
                image_idx_start_from=None):
     mode_choices = ['prefix', 'postfix']
@@ -32,7 +32,8 @@ class ClevrDataset(Dataset):
       raise ValueError('Invalid mode "%s"' % mode)
     self.image_h5 = image_h5
     self.vocab = vocab
-    self.feature_h5 = feature_h5
+    self.feature_h5_path = feature_h5_path
+    self.feature_h5 = None
     self.mode = mode
     self.max_samples = max_samples
 
@@ -69,6 +70,8 @@ class ClevrDataset(Dataset):
     if self.all_question_families is not None:
       question_family = self.all_question_families[index]
     q_type = None if self.all_types is None else self.all_types[index]
+    if not self.feature_h5:
+      self.feature_h5 = h5py.File(self.feature_h5_path, 'r')
     question = self.all_questions[index]
     image_idx = self.all_image_idxs[index]
     answer = None
@@ -120,8 +123,7 @@ class ClevrDataLoader(DataLoader):
       raise ValueError('Must give vocab')
 
     feature_h5_path = kwargs.pop('feature_h5')
-    print('Reading features from', feature_h5_path)
-    self.feature_h5 = h5py.File(feature_h5_path, 'r')
+    print('Reading features from ', feature_h5_path)
 
     self.image_h5 = None
     if 'image_h5' in kwargs:
@@ -138,7 +140,7 @@ class ClevrDataLoader(DataLoader):
     image_idx_start_from = kwargs.pop('image_idx_start_from', None)
     print('Reading questions from ', question_h5_path)
     with h5py.File(question_h5_path, 'r') as question_h5:
-      self.dataset = ClevrDataset(question_h5, self.feature_h5, vocab, mode,
+      self.dataset = ClevrDataset(question_h5, feature_h5_path, vocab, mode,
                                   image_h5=self.image_h5,
                                   max_samples=max_samples,
                                   question_families=question_families,
@@ -149,8 +151,6 @@ class ClevrDataLoader(DataLoader):
   def close(self):
     if self.image_h5 is not None:
       self.image_h5.close()
-    if self.feature_h5 is not None:
-      self.feature_h5.close()
 
   def __enter__(self):
     return self

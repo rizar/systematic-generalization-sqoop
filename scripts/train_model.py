@@ -8,7 +8,7 @@
 
 import sys
 import os
-sys.path.insert(0, os.path.abspath('.'))
+import time
 
 import argparse
 import ipdb as pdb
@@ -274,7 +274,11 @@ def train_loop(args, train_loader, val_loader):
 
     epoch += 1
     print('Starting epoch %d' % epoch)
+
+    batch_start_time = time.time()
     for batch in train_loader:
+      compute_start_time = time.time()
+
       t += 1
       questions, _, feats, answers, programs, _ = batch
       if isinstance(questions, list):
@@ -354,7 +358,8 @@ def train_loop(args, train_loader, val_loader):
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
         avg_loss = running_loss / args.record_loss_every
-        print(t, avg_loss)
+        print(t, time.time() - batch_start_time, time.time() - compute_start_time,
+              loss.data[0])
         stats['train_losses'].append(avg_loss)
         stats['train_losses_ts'].append(t)
         if reward is not None:
@@ -419,6 +424,8 @@ def train_loop(args, train_loader, val_loader):
 
       if t == args.num_iterations:
         break
+
+      batch_start_time = time.time()
 
 
 def parse_int_list(s):

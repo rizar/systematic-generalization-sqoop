@@ -43,7 +43,7 @@ class StackedAttention(nn.Module):
     p = F.softmax(self.Wp(h).view(N, H * W)).view(N, 1, H, W)
     self.attention_maps = p.data.clone()
 
-    v_tilde = (p.expand_as(v) * v).sum(2).sum(3).view(N, D)
+    v_tilde = (p.expand_as(v) * v).sum(3).sum(2).view(N, D)
     next_u = u + v_tilde
     return next_u
 

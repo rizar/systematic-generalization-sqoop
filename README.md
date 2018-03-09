@@ -24,9 +24,11 @@ Lastly, model training details are similar at a high level (though adapted for F
 
 The below script has the hyperparameters and settings to reproduce FiLM CLEVR results:
 ```bash
+conda env create -f environment.yml
+source activate nmn
 sh scripts/train/film.sh
+deactivate # Exit virtual environment
 ```
-
 
 For CLEVR-Humans, data preprocessing instructions are [here](https://github.com/facebookresearch/clevr-iep/blob/master/TRAINING.md#preprocessing-clevr-humans).
 The below script has the hyperparameters and settings to reproduce FiLM CLEVR-Humans results:

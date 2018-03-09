@@ -163,14 +163,28 @@ def main(args):
   vocab = utils.load_vocab(args.vocab_json)
 
   if args.use_local_copies == 1:
-    shutil.copy(args.train_question_h5, '/tmp/train_questions.h5')
-    shutil.copy(args.train_features_h5, '/tmp/train_features.h5')
-    shutil.copy(args.val_question_h5, '/tmp/val_questions.h5')
-    shutil.copy(args.val_features_h5, '/tmp/val_features.h5')
-    args.train_question_h5 = '/tmp/train_questions.h5'
-    args.train_features_h5 = '/tmp/train_features.h5'
-    args.val_question_h5 = '/tmp/val_questions.h5'
-    args.val_features_h5 = '/tmp/val_features.h5'
+    if os.path.exists('/Tmpfast'):
+      tmp = '/Tmpfast/'
+    else:
+      tmp = '/Tmp/'
+    if not os.path.exists(tmp + 'bahdanau'):
+      os.mkdir(tmp + 'bahdanau')
+    if not os.path.exists(tmp + 'bahdanau/clevr'):
+      os.mkdir(tmp + 'bahdanau/clevr')
+    root = tmp + 'bahdanau/clevr/'
+
+    def rsync_copy_if_not_exists(src, dst):
+      if not os.path.exists(dst):
+        os.system("rsync -vrz --progress {} {}".format(src, dst))
+
+    rsync_copy_if_not_exists(args.train_question_h5, root + 'train_questions.h5')
+    rsync_copy_if_not_exists(args.train_features_h5, root + 'train_features.h5')
+    rsync_copy_if_not_exists(args.val_question_h5, root + 'val_questions.h5')
+    rsync_copy_if_not_exists(args.val_features_h5, root + 'val_features.h5')
+    args.train_question_h5 = root + 'train_questions.h5'
+    args.train_features_h5 = root + 'train_features.h5'
+    args.val_question_h5 = root + 'val_questions.h5'
+    args.val_features_h5 = root + 'val_features.h5'
 
   question_families = None
   if args.family_split_file is not None:

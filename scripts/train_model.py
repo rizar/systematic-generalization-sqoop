@@ -44,7 +44,7 @@ parser.add_argument('--feature_dim', default='1024,14,14')
 parser.add_argument('--vocab_json', default='vocab.json')
 
 parser.add_argument('--loader_num_workers', type=int, default=1)
-parser.add_argument('--use_local_copies', default=0, type=int)
+parser.add_argument('--use_local_copies', default=1, type=int)
 parser.add_argument('--cleanup_local_copies', default=1, type=int)
 
 parser.add_argument('--family_split_file', default=None)

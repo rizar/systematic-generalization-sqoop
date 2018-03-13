@@ -138,7 +138,7 @@ parser.add_argument('--reward_decay', default=0.9, type=float)
 parser.add_argument('--weight_decay', default=0, type=float)
 
 # Output options
-parser.add_argument('--checkpoint_path', default='data/checkpoint.pt')
+parser.add_argument('--checkpoint_path', default='')
 parser.add_argument('--randomize_checkpoint_path', type=int, default=0)
 parser.add_argument('--avoid_checkpoint_override', default=0, type=int)
 parser.add_argument('--record_loss_every', default=1, type=int)
@@ -152,13 +152,17 @@ def main(args):
     num = random.randint(1, 1000000)
     args.checkpoint_path = '%s_%06d%s' % (name, num, ext)
   print('Will save checkpoints to %s' % args.checkpoint_path)
-
   if args.data_dir:
     args.train_question_h5 = os.path.join(args.data_dir, args.train_question_h5)
     args.train_features_h5 = os.path.join(args.data_dir, args.train_features_h5)
     args.val_question_h5 = os.path.join(args.data_dir, args.val_question_h5)
     args.val_features_h5 = os.path.join(args.data_dir, args.val_features_h5)
     args.vocab_json = os.path.join(args.data_dir, args.vocab_json)
+  if not args.checkpoint_path:
+    if 'SLURM_JOB_ID' in os.environ:
+      args.checkpoint_path = os.environ['SLURM_JOB_ID'] + '.pt'
+    else:
+      raise NotImplementedError()
 
   vocab = utils.load_vocab(args.vocab_json)
 
@@ -434,7 +438,7 @@ def train_loop(args, train_loader, val_loader):
         del checkpoint['execution_engine_state']
         del checkpoint['baseline_state']
         with open(args.checkpoint_path + '.json', 'w') as f:
-          json.dump(checkpoint, f)
+          json.dump(checkpoint, f, indent=2, sort_keys=True)
 
       if t == args.num_iterations:
         break

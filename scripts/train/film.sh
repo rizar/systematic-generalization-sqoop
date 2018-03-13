@@ -1,9 +1,8 @@
 #!/bin/bash
 
-checkpoint_path="data/film.pt"
-log_path="data/film.log"
-python scripts/train_model.py \
-  --checkpoint_path $checkpoint_path \
+THIS_SCRIPT_DIR=`dirname $0`
+
+python $THIS_SCRIPT_DIR/../train_model.py \
   --model_type FiLM \
   --num_iterations 20000000 \
   --print_verbose_every 20000000 \
@@ -44,5 +43,4 @@ python scripts/train_model.py \
   --use_gamma 1 \
   --use_beta 1 \
   --condition_method bn-film \
-  --program_generator_parameter_efficient 1 \
-  | tee $log_path
+  --program_generator_parameter_efficient 1 $@

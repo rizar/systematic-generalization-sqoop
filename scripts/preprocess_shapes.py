@@ -35,7 +35,8 @@ def main():
     with open(questions_path) as src:
       questions = [str_.split() for str_ in src]
     max_question_len = max([len(q) for q in questions])
-    question_vocab = create_vocab(questions)
+    if part == 'train':
+      question_vocab = create_vocab(questions)
     questions = [[question_vocab[w] for w in q] for q in questions]
     questions_arr = numpy.zeros((len(questions), max_question_len), dtype='int64')
     for row, q in zip(questions_arr, questions):
@@ -51,7 +52,8 @@ def main():
         programs.append([w for w in line_.split() if w])
     programs = [['<START>'] + program + ['<END>'] for program in programs]
     max_program_len = max([len(p) for p in programs])
-    program_vocab = create_vocab(programs)
+    if part == 'train':
+      program_vocab = create_vocab(programs)
     programs = [[program_vocab[w] for w in p] for p in programs]
     programs_arr = numpy.zeros((len(programs), max_program_len), dtype='int64')
     for row, p in zip(programs_arr, programs):
@@ -81,11 +83,11 @@ def main():
         'image_idxs', (len(questions),), dtype=numpy.int64)
       image_idxs_dataset[:] = range(len(questions))
 
-    with open('vocab.json', 'w') as dst:
-      json.dump({'question_token_to_idx': question_vocab,
-                 'program_token_to_idx': program_vocab,
-                 'answer_token_to_idx': {'false': 0, 'true': 1}},
-                dst)
+  with open('vocab.json', 'w') as dst:
+    json.dump({'question_token_to_idx': question_vocab,
+                'program_token_to_idx': program_vocab,
+                'answer_token_to_idx': {'false': 0, 'true': 1}},
+              dst)
 
 if __name__ == '__main__':
   main()

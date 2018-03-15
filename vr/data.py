@@ -13,6 +13,7 @@ from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
 
 import vr.programs
+from vr.programs import ProgramConverter
 
 
 def _dataset_to_tensor(dset, mask=None):
@@ -32,6 +33,7 @@ class ClevrDataset(Dataset):
       raise ValueError('Invalid mode "%s"' % mode)
     self.image_h5 = image_h5
     self.vocab = vocab
+    self.program_converter = ProgramConverter(vocab)
     self.feature_h5_path = feature_h5_path
     self.feature_h5 = None
     self.mode = mode
@@ -94,13 +96,14 @@ class ClevrDataset(Dataset):
       program_json_seq = []
       for fn_idx in program_seq:
         fn_str = self.vocab['program_idx_to_token'][fn_idx]
-        if fn_str == '<START>' or fn_str == '<END>': continue
+        if fn_str == '<START>' or fn_str == '<END>':
+          continue
         fn = vr.programs.str_to_function(fn_str)
         program_json_seq.append(fn)
       if self.mode == 'prefix':
-        program_json = vr.programs.prefix_to_list(program_json_seq)
+        program_json = self.program_converter.prefix_to_list(program_json_seq)
       elif self.mode == 'postfix':
-        program_json = vr.programs.postfix_to_list(program_json_seq)
+        program_json = self.program_converter.to_list(program_json_seq)
 
     if q_type is None:
       return (question, image, feats, answer, program_seq, program_json)

@@ -41,15 +41,16 @@ parser.add_argument('--output_vocab_json', default='')
 
 
 def program_to_str(program, mode):
+  converter = vr.programs.ProgramConverter()
   if mode == 'chain':
-    if not vr.programs.is_chain(program):
+    if not converter.is_chain(program):
       return None
     return vr.programs.list_to_str(program)
   elif mode == 'prefix':
-    program_prefix = vr.programs.list_to_prefix(program)
+    program_prefix = converter.list_to_prefix(program)
     return vr.programs.list_to_str(program_prefix)
   elif mode == 'postfix':
-    program_postfix = vr.programs.list_to_postfix(program)
+    program_postfix = converter.list_to_postfix(program)
     return vr.programs.list_to_str(program_postfix)
   return None
 
@@ -77,7 +78,8 @@ def main(args):
     )
     all_program_strs = []
     for q in questions:
-      if 'program' not in q: continue
+      if 'program' not in q:
+        continue
       program_str = program_to_str(q['program'], args.mode)
       if program_str is not None:
         all_program_strs.append(program_str)
@@ -87,7 +89,13 @@ def main(args):
       'program_token_to_idx': program_token_to_idx,
       'answer_token_to_idx': answer_token_to_idx,
     }
-
+    def arity(name):
+      if name == 'scene':
+        return 0
+      if 'equal' in name or name in ['union', 'intersect', 'less_than', 'greater_than']:
+        return 2
+      return 1
+    vocab['program_token_arity'] = {name: arity(name) for name in program_token_to_idx}
   if args.input_vocab_json != '':
     print('Loading vocab')
     if args.expand_vocab == 1:

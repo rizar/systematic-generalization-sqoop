@@ -49,7 +49,9 @@ def main():
       programs = []
       for line_ in src:
         line_ = line_.replace('(', ' ').replace(')', ' ')
-        programs.append([w for w in line_.split() if w])
+        # We need to add a 0-arity token at the end,
+        program = [w for w in line_.split() if w] + ['scene']
+        programs.append(program)
     programs = [['<START>'] + program + ['<END>'] for program in programs]
     max_program_len = max([len(p) for p in programs])
     if part == 'train':
@@ -86,7 +88,10 @@ def main():
   with open('vocab.json', 'w') as dst:
     json.dump({'question_token_to_idx': question_vocab,
                 'program_token_to_idx': program_vocab,
-                'answer_token_to_idx': {'false': 0, 'true': 1}},
+                'program_token_arity':
+                  {name: (1 if name != 'scene' else 0) for name in program_vocab},
+                'answer_token_to_idx':
+                  {'false': 0, 'true': 1}},
               dst)
 
 if __name__ == '__main__':

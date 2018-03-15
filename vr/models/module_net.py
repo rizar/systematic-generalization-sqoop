@@ -61,7 +61,7 @@ class ModuleNet(nn.Module):
     self.function_modules_num_inputs = {}
     self.vocab = vocab
     for fn_str in vocab['program_token_to_idx']:
-      num_inputs = vr.programs.get_num_inputs(fn_str)
+      num_inputs = vocab['program_token_arity'][fn_str]
       self.function_modules_num_inputs[fn_str] = num_inputs
       if fn_str == 'scene' or num_inputs == 1:
         mod = ResidualBlock(module_dim,

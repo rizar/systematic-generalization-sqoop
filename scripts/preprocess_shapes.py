@@ -1,8 +1,8 @@
 import h5py
 import numpy
-import os
 import argparse
 import json
+import sexpdata
 
 def create_vocab(questions):
   question_vocab = {'<NULL>': 0, '<START>': 1, '<END>': 2}
@@ -11,6 +11,55 @@ def create_vocab(questions):
       if not w in question_vocab:
         question_vocab[w] = len(question_vocab)
   return question_vocab
+
+# An adaptation of the original code for parsing SHAPES queries
+
+def extract_parse(p):
+    if isinstance(p, sexpdata.Symbol):
+        return p.value()
+    elif isinstance(p, int):
+        return str(p)
+    elif isinstance(p, bool):
+        return str(p).lower()
+    elif isinstance(p, float):
+        return str(p).lower()
+    return tuple(extract_parse(q) for q in p)
+
+
+def parse_tree(p):
+    parsed = sexpdata.loads(p)
+    extracted = extract_parse(parsed)
+    return extracted
+
+
+def layout_from_parsing(parse):
+    if isinstance(parse, str):
+        return ("_Find[{}]".format(parse),)
+    head = parse[0]
+    if len(parse) > 2:  # fuse multiple tokens with "_And"
+        assert(len(parse)) == 3
+        below = ("_And", layout_from_parsing(parse[1]),
+                 layout_from_parsing(parse[2]))
+    else:
+        below = layout_from_parsing(parse[1])
+    if head == "is":
+        module = "_Answer"
+    elif head in ["above", "below", "left_of", "right_of"]:
+        module = "_Transform[{}]".format(head)
+    return (module, below)
+
+
+def flatten_layout(module_layout):
+    # Postorder traversal to generate Reverse Polish Notation (RPN)
+    if isinstance(module_layout, str):
+        return [module_layout]
+    PN = []
+    module = module_layout[0]
+    PN += [module]
+    for m in module_layout[1:]:
+        PN += flatten_layout(m)
+    return PN
+
 
 def main():
   parser = argparse.ArgumentParser()
@@ -24,14 +73,12 @@ def main():
   args = parser.parse_args()
   parts = ['train', 'val', 'test']
   part_prefixes = ['train.' + args.size, 'val', 'test']
-  part_prefixes = [os.path.join(args.shapes_data, prefix)
-                   for prefix in part_prefixes]
 
   for part, prefix in zip(parts, part_prefixes):
-    image_path = prefix + '.input.npy'
+    image_path = "{}/shapes_dataset/{}.input.npy".format(args.shapes_data, prefix)
     images = numpy.load(image_path)
 
-    questions_path = prefix + '.query_str.txt'
+    questions_path = "{}/shapes_dataset/{}.query_str.txt".format(args.shapes_data, prefix)
     with open(questions_path) as src:
       questions = [str_.split() for str_ in src]
     max_question_len = max([len(q) for q in questions])
@@ -42,17 +89,18 @@ def main():
     for row, q in zip(questions_arr, questions):
       row[:][:len(q)] = q
 
-    # The parentheses in programs seem to denote the tree structure,
-    # but since it is always linear, they can just be discarded
-    programs_path = prefix + '.query'
+    programs_path = "{}/shapes_dataset/{}.query".format(args.shapes_data, prefix)
+    programs = []
     with open(programs_path) as src:
-      programs = []
-      for line_ in src:
-        line_ = line_.replace('(', ' ').replace(')', ' ')
-        # We need to add a 0-arity token at the end,
-        program = [w for w in line_.split() if w] + ['scene']
+      for line in src:
+        program = flatten_layout(layout_from_parsing(parse_tree(line)))
+        buffer_ = []
+        for token in program:
+          buffer_.append(token)
+          if token.startswith('_Find'):
+            buffer_.append('scene')
+        program = ['<START>'] + buffer_ + ['<END>']
         programs.append(program)
-    programs = [['<START>'] + program + ['<END>'] for program in programs]
     max_program_len = max([len(p) for p in programs])
     if part == 'train':
       program_vocab = create_vocab(programs)
@@ -61,7 +109,7 @@ def main():
     for row, p in zip(programs_arr, programs):
       row[:][:len(p)] = p
 
-    answers_path = prefix + '.output'
+    answers_path = "{}/shapes_dataset/{}.output".format(args.shapes_data, prefix)
     with open(answers_path) as src:
       answers = [1 if w.strip() == 'true' else 0 for w in src]
 

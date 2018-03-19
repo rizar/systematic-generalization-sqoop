@@ -66,7 +66,7 @@ def main():
       answers = [1 if w.strip() == 'true' else 0 for w in src]
 
     with h5py.File(part + '_features.h5', 'w') as dst:
-      features = images.transpose(0, 3, 1, 2)
+      features = images.transpose(0, 3, 1, 2) / 255.0
       features_dataset = dst.create_dataset(
         'features', (features.shape), dtype=numpy.float32)
       features_dataset[:] = features

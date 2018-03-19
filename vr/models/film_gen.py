@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 
-import ipdb as pdb
 import torch
 import torch.cuda
 import torch.nn as nn

@@ -17,11 +17,13 @@ programs = None
 if 'programs' in f:
   programs = f['programs']
 questions = f['questions']
-answers = f['answers']
+if 'answers' in f:
+  answers = f['answers']
 for i in range(num):
   if programs:
     prog = programs[i]
     print(" ".join('"' + program_vocab[prog[j]] + '"' for j in range(len(prog))))
   quest = questions[i]
   print(" ".join(question_vocab[quest[j]] for j in range(len(quest))))
-  print(answers[i])
+  if 'answers' in f:
+    print(answers[i])

@@ -133,11 +133,18 @@ def main():
         'image_idxs', (len(questions),), dtype=numpy.int64)
       image_idxs_dataset[:] = range(len(questions))
 
+  def arity(token):
+    if token.startswith('_And'):
+      return 2
+    elif token == 'scene':
+      return 0
+    else:
+      return 1
   with open('vocab.json', 'w') as dst:
     json.dump({'question_token_to_idx': question_vocab,
                 'program_token_to_idx': program_vocab,
                 'program_token_arity':
-                  {name: (1 if name != 'scene' else 0) for name in program_vocab},
+                  {name: arity(name) for name in program_vocab},
                 'answer_token_to_idx':
                   {'false': 0, 'true': 1}},
               dst)

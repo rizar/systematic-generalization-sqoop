@@ -1,3 +1,4 @@
+Test on local machine
 # FiLM: Visual Reasoning with a General Conditioning Layer
 
 ## Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, Aaron Courville

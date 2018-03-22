@@ -122,6 +122,7 @@ class TFiLMedNet(nn.Module):
                        num_layers=self.module_num_layers,
                        condition_method=condition_method,
                        debug_every=self.debug_every)
+    mod = ResidualBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
     self.add_module('0', mod)
     self.function_modules['0'] = mod
     
@@ -141,6 +142,7 @@ class TFiLMedNet(nn.Module):
                        num_layers=self.module_num_layers,
                        condition_method=condition_method,
                        debug_every=self.debug_every)
+          mod = ResidualBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
         else:
           mod = ConCatTfilmBlock(art+1, module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm,
                        with_cond=with_cond,
@@ -154,6 +156,7 @@ class TFiLMedNet(nn.Module):
                        num_layers=self.module_num_layers,
                        condition_method=condition_method,
                        debug_every=self.debug_every)
+          mod = ConcatBlock(art+1, module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
         ikey = str(dep+1)+'-'+str(art+1)
         self.add_module(ikey, mod)
         self.function_modules[ikey] = mod
@@ -328,6 +331,50 @@ class TFiLMedNet(nn.Module):
     if ((self.fwd_count % self.debug_every) == 0) or (self.debug_every <= -1):
       pdb.set_trace()
     return out
+
+class ResidualBlock(nn.Module):
+  def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True):
+    if out_dim is None:
+      out_dim = in_dim
+    super(ResidualBlock, self).__init__()
+    self.conv1 = nn.Conv2d(in_dim, out_dim, kernel_size=3, padding=1)
+    self.conv2 = nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1)
+    self.with_batchnorm = with_batchnorm
+    if with_batchnorm:
+      self.bn1 = nn.BatchNorm2d(out_dim)
+      self.bn2 = nn.BatchNorm2d(out_dim)
+    self.with_residual = with_residual
+    if in_dim == out_dim or not with_residual:
+      self.proj = None
+    else:
+      self.proj = nn.Conv2d(in_dim, out_dim, kernel_size=1)
+
+  def forward(self, x):
+    if self.with_batchnorm:
+      out = F.relu(self.bn1(self.conv1(x)))
+      out = self.bn2(self.conv2(out))
+    else:
+      out = self.conv2(F.relu(self.conv1(x)))
+    res = x if self.proj is None else self.proj(x)
+    if self.with_residual:
+      out = F.relu(res + out)
+    else:
+      out = F.relu(out)
+    return out
+
+
+class ConcatBlock(nn.Module):
+  def __init__(self, num_input, dim, with_residual=True, with_batchnorm=True):
+    super(ConcatBlock, self).__init__()
+    self.proj = nn.Conv2d(num_input * dim, dim, kernel_size=1, padding=0)
+    self.res_block = ResidualBlock(dim, with_residual=with_residual,
+                        with_batchnorm=with_batchnorm)
+
+  def forward(self, x):
+    out = torch.cat(x, 1) # Concatentate along depth
+    out = F.relu(self.proj(out))
+    out = self.res_block(out)
+    return out  
 
 class ConCatTfilmBlock(nn.Module):
   def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_batchnorm=True,

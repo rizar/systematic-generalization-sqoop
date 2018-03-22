@@ -246,11 +246,11 @@ class TFiLMedNet(nn.Module):
     if self.condition_method == 'concat':
       icond_maps = cond_maps[i:i+1,0,:] if fn_art == 0 else cond_maps[i:i+1,midx,:]
       icond_maps = icond_maps.unsqueeze(2).unsqueeze(3).expand(icond_maps.size() + feats.size()[-2:])
-      module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
+      module_output = module(module_inputs) #, extra_channels=bcoords, cond_maps=icond_maps)
     else:
       igammas = gammas[i:i+1,0,:] if fn_art == 0 else gammas[i:i+1,midx,:]
       ibetas = betas[i:i+1,0,:] if fn_art == 0 else betas[i:i+1,midx,:]
-      module_output = module(module_inputs, igammas, ibetas, bcoords)
+      module_output = module(module_inputs) #, igammas, ibetas, bcoords)
     if save_activations:
       self.module_outputs.append(module_output)
     return module_output, j

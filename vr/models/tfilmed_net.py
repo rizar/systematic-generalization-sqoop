@@ -239,14 +239,15 @@ class TFiLMedNet(nn.Module):
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
     
     midx = 0 if fn_art == 0 else (fn_dept-1)*self.max_program_module_arity+fn_art
+    bcoords = batch_coords[i:i+1] if batch_coords is not None else None
     if self.condition_method == 'concat':
       icond_maps = cond_maps[i:i+1,0,:] if fn_art == 0 else cond_maps[i:i+1,midx,:]
       icond_maps = icond_maps.unsqueeze(2).unsqueeze(3).expand(icond_maps.size() + feats.size()[-2:])
-      module_output = module(module_inputs, extra_channels=batch_coords[i:i+1], cond_maps=icond_maps)
+      module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
     else:
       igammas = gammas[i:i+1,0,:] if fn_art == 0 else gammas[i:i+1,midx,:]
       ibetas = betas[i:i+1,0,:] if fn_art == 0 else betas[i:i+1,midx,:]
-      module_output = module(module_inputs, igammas, ibetas, batch_coords[i:i+1])
+      module_output = module(module_inputs, igammas, ibetas, bcoords)
     if save_activations:
       self.module_outputs.append(module_output)
     return module_output, j

@@ -79,32 +79,9 @@ class TFiLMedNet(nn.Module):
     self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
     self.condition_pattern = condition_pattern
     self.first_condition_pattern = []
-    if len(condition_pattern) == 0:
-      self.first_condition_pattern = [self.condition_method != 'concat']*2
-      self.condition_pattern = []
-      for i in range(self.max_program_tree_depth):
-        idepth = []
-        for j in range(self.max_program_module_arity):
-          ijarity = [[self.condition_method != 'concat']*2] * self.module_num_layers
-          idepth.append(ijarity)
-        self.condition_pattern.append(idepth)
-    else:
-      ijc = 0
-      if len(self.condition_pattern) > ijc: val1 = self.condition_pattern[ijc]
-      else: val1 = self.condition_pattern[-1]
-      ijc += 1
-      if len(self.condition_pattern) > ijc: val2 = self.condition_pattern[ijc]
-      else: val2 = self.condition_pattern[-1]
-      self.first_condition_pattern = [val1 > 0, val2 > 0]
-      for i in range(self.max_program_tree_depth):
-        for j in range(self.max_program_module_arity):
-          ijc += 1
-          if len(self.condition_pattern) > ijc: val1 = self.condition_pattern[ijc]
-          else: val1 = self.condition_pattern[-1]
-          ijc += 1
-          if len(self.condition_pattern) > ijc: val2 = self.condition_pattern[ijc]
-          else: val2 = self.condition_pattern[-1]
-          self.condition_pattern[i][j] = [val1 > 0, val2 > 0]
+    
+    self.prepare_condition_pattern()
+    
     self.extra_channel_freq = self.use_coords_freq
     #self.block = FiLMedResBlock
     self.num_cond_maps = 2 * self.module_dim if self.condition_method == 'concat' else 0
@@ -188,7 +165,40 @@ class TFiLMedNet(nn.Module):
                                        dropout=classifier_dropout)
 
     init_modules(self.modules())
-
+  
+  def prepare_condition_pattern(self):
+    if len(self.condition_pattern) == 0:
+      self.first_condition_pattern = [self.condition_method != 'concat'] * (2*self.module_num_layers)
+      outCond = []
+      for i in range(self.max_program_tree_depth):
+        idepth = []
+        for j in range(self.max_program_module_arity):
+          ijarity = [self.condition_method != 'concat'] * (2*self.module_num_layers)
+          idepth.append(ijarity)
+        outCond.append(idepth)
+      self.condition_pattern = outCond
+    else:
+      ijc = 0
+      if len(self.condition_pattern) > ijc: val1 = self.condition_pattern[ijc]
+      else: val1 = self.condition_pattern[-1]
+      ijc += 1
+      if len(self.condition_pattern) > ijc: val2 = self.condition_pattern[ijc]
+      else: val2 = self.condition_pattern[-1]
+      self.first_condition_pattern = [val1 > 0, val2 > 0] * self.module_num_layers
+      outCond = []
+      for i in range(self.max_program_tree_depth):
+        idepth = []
+        for j in range(self.max_program_module_arity):
+          ijc += 1
+          if len(self.condition_pattern) > ijc: val1 = self.condition_pattern[ijc]
+          else: val1 = self.condition_pattern[-1]
+          ijc += 1
+          if len(self.condition_pattern) > ijc: val2 = self.condition_pattern[ijc]
+          else: val2 = self.condition_pattern[-1]
+          idepth.append([val1 > 0, val2 > 0] * self.module_num_layers)
+        outCond.append(idepth)
+      self.condition_pattern = outCond
+  
   def _forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd):
     #used_fn_j = True
     if j < program.size(1):

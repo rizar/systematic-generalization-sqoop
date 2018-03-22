@@ -54,7 +54,7 @@ parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA'])
+  choices=['Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -107,6 +107,10 @@ parser.add_argument('--use_coords', default=1, type=int)  # 0: none, 1: low usag
 parser.add_argument('--grad_clip', default=0, type=float)  # <= 0 for no grad clipping
 parser.add_argument('--debug_every', default=float('inf'), type=float)  # inf for no pdb
 parser.add_argument('--print_verbose_every', default=float('inf'), type=float)  # inf for min print
+
+#Tfilm options
+parser.add_argument('--max_program_module_arity', default=2, type=int)
+parser.add_argument('--max_program_tree_depth', default=5, type=int)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -237,14 +241,14 @@ def train_loop(args, train_loader, val_loader):
 
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
-  if args.model_type in ['FiLM', 'PG', 'PG+EE']:
+  if args.model_type in ['Tfilm', 'FiLM', 'PG', 'PG+EE']:
     program_generator, pg_kwargs = get_program_generator(args)
     pg_optimizer = optim_method(program_generator.parameters(),
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['FiLM', 'EE', 'PG+EE']:
+  if args.model_type in ['Tfilm', 'FiLM', 'EE', 'PG+EE']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     ee_optimizer = optim_method(execution_engine.parameters(),
                                 lr=args.learning_rate,
@@ -372,6 +376,30 @@ def train_loop(args, train_loader, val_loader):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
+      elif args.model_type == 'Tfilm':
+        if args.set_execution_engine_eval == 1:
+          set_mode('eval', [execution_engine])
+        programs_pred = program_generator(questions_var)
+        scores = execution_engine(feats_var, programs_pred, programs_var)
+        loss = loss_fn(scores, answers_var)
+
+        pg_optimizer.zero_grad()
+        ee_optimizer.zero_grad()
+        if args.debug_every <= -2:
+          pdb.set_trace()
+        loss.backward()
+        if args.debug_every < float('inf'):
+          check_grad_num_nans(execution_engine, 'TFiLMedNet')
+          check_grad_num_nans(program_generator, 'FiLMGen')
+
+        if args.train_program_generator == 1:
+          if args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
+          pg_optimizer.step()
+        if args.train_execution_engine == 1:
+          if args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
+          ee_optimizer.step()
 
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
@@ -479,7 +507,7 @@ def get_program_generator(args):
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
     }
-    if args.model_type == 'FiLM':
+    if args.model_type == 'FiLM' or args.model_type == 'Tfilm':
       kwargs['parameter_efficient'] = args.program_generator_parameter_efficient == 1
       kwargs['output_batchnorm'] = args.rnn_output_batchnorm == 1
       kwargs['bidirectional'] = args.bidirectional == 1
@@ -487,7 +515,7 @@ def get_program_generator(args):
       kwargs['decoder_type'] = args.decoder_type
       kwargs['gamma_option'] = args.gamma_option
       kwargs['gamma_baseline'] = args.gamma_baseline
-      kwargs['num_modules'] = args.num_modules
+      kwargs['num_modules'] = args.num_modules if args.model_type == 'FiLM' else args.max_program_module_arity * args.max_program_tree_depth + 1
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
@@ -537,6 +565,28 @@ def get_execution_engine(args):
       kwargs['condition_method'] = args.condition_method
       kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
       ee = FiLMedNet(**kwargs)
+    elif args.model_type == 'Tfilm':
+      kwargs['num_modules'] = args.max_program_module_arity * args.max_program_tree_depth + 1
+      
+      kwargs['max_program_module_arity'] = args.max_program_module_arity
+      kwargs['max_program_tree_depth'] = args.max_program_tree_depth
+      
+      kwargs['stem_kernel_size'] = args.module_stem_kernel_size
+      kwargs['stem_stride'] = args.module_stem_stride
+      kwargs['stem_padding'] = args.module_stem_padding
+      kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['module_batchnorm_affine'] = args.module_batchnorm_affine == 1
+      kwargs['module_dropout'] = args.module_dropout
+      kwargs['module_input_proj'] = args.module_input_proj
+      kwargs['module_kernel_size'] = args.module_kernel_size
+      kwargs['use_gamma'] = args.use_gamma == 1
+      kwargs['use_beta'] = args.use_beta == 1
+      kwargs['use_coords'] = args.use_coords
+      kwargs['debug_every'] = args.debug_every
+      kwargs['print_verbose_every'] = args.print_verbose_every
+      kwargs['condition_method'] = args.condition_method
+      kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
+      ee = TFiLMedNet(**kwargs)
     else:
       ee = ModuleNet(**kwargs)
   ee.cuda()

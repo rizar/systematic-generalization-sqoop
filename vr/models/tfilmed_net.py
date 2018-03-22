@@ -226,7 +226,7 @@ class TFiLMedNet(nn.Module):
       module_inputs = feats[i:i+1]
 
     else:
-      module_key = str(fn_dep) + '-' + str(fn_art)
+      module_key = str(fn_dept) + '-' + str(fn_art)
       if module_key not in self.function_modules:
         print('Cannot find module: ' + module_key)
         exit()

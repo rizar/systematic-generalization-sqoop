@@ -198,7 +198,7 @@ class TFiLMedNet(nn.Module):
           idepth.append([val1 > 0, val2 > 0] * self.module_num_layers)
         outCond.append(idepth)
       self.condition_pattern = outCond
-  
+
   def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd):
     #used_fn_j = True
     if j < program.size(1):
@@ -236,6 +236,7 @@ class TFiLMedNet(nn.Module):
       while len(module_inputs) < fn_art:
         cur_input, j = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd+1)
         module_inputs.append(cur_input)
+      if len(module_inputs) == 1: module_inputs = module_inputs[0]
     
     midx = 0 if fn_art == 0 else (fn_dept-1)*self.max_program_module_arity+fn_art
     if self.condition_method == 'concat':

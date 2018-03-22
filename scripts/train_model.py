@@ -99,7 +99,7 @@ parser.add_argument('--module_dropout', default=5e-2, type=float)
 parser.add_argument('--module_input_proj', default=1, type=int)  # Inp conv kernel size (0 for None)
 parser.add_argument('--module_kernel_size', default=3, type=int)
 parser.add_argument('--condition_method', default='bn-film', type=str,
-  choices=['block-input-film', 'block-output-film', 'bn-film', 'concat', 'conv-film', 'relu-film'])
+  choices=['nothing', 'block-input-film', 'block-output-film', 'bn-film', 'concat', 'conv-film', 'relu-film'])
 parser.add_argument('--condition_pattern', default='', type=str)  # List of 0/1's (len = # FiLMs)
 parser.add_argument('--use_gamma', default=1, type=int)
 parser.add_argument('--use_beta', default=1, type=int)

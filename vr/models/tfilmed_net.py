@@ -214,7 +214,7 @@ class TFiLMedNet(nn.Module):
     
     if fn_str == '<START>':
       #used_fn_j = False
-      return self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, i, j + 1, ijd)
+      return self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j + 1, ijd)
     if fn_art < 0 or fn_str == '<END>': return feats[i:i+1], j+1
     
     #if used_fn_j:

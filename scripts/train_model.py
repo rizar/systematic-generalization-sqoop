@@ -194,6 +194,7 @@ def main(args):
     args.val_question_h5 = root + 'val_questions.h5'
     args.val_features_h5 = root + 'val_features.h5'
 
+  print(args)
   question_families = None
   if args.family_split_file is not None:
     with open(args.family_split_file, 'r') as f:

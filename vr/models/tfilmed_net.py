@@ -276,7 +276,8 @@ class TFiLMedNet(nn.Module):
     if self.debug_every <= -2:
       pdb.set_trace()
 
-    # Prepare FiLM layers
+    # Prepare Tfilm layers
+    cond_maps = None
     gammas = None
     betas = None
     if self.condition_method == 'concat':

@@ -199,7 +199,7 @@ class TFiLMedNet(nn.Module):
         outCond.append(idepth)
       self.condition_pattern = outCond
   
-  def _forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd):
+  def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd):
     #used_fn_j = True
     if j < program.size(1):
       fn_idx = program.data[i, j]

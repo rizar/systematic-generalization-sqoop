@@ -122,6 +122,7 @@ class TFiLMedNet(nn.Module):
                        num_layers=self.module_num_layers,
                        condition_method=condition_method,
                        debug_every=self.debug_every)
+    #mod = ResidualBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
     self.add_module('0', mod)
     self.function_modules['0'] = mod
     
@@ -141,6 +142,7 @@ class TFiLMedNet(nn.Module):
                        num_layers=self.module_num_layers,
                        condition_method=condition_method,
                        debug_every=self.debug_every)
+          #mod = ResidualBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
         else:
           mod = ConCatTfilmBlock(art+1, module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm,
                        with_cond=with_cond,
@@ -154,6 +156,7 @@ class TFiLMedNet(nn.Module):
                        num_layers=self.module_num_layers,
                        condition_method=condition_method,
                        debug_every=self.debug_every)
+          #mod = ConcatBlock(art+1, module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
         ikey = str(dep+1)+'-'+str(art+1)
         self.add_module(ikey, mod)
         self.function_modules[ikey] = mod
@@ -239,14 +242,15 @@ class TFiLMedNet(nn.Module):
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
     
     midx = 0 if fn_art == 0 else (fn_dept-1)*self.max_program_module_arity+fn_art
+    bcoords = batch_coords[i:i+1] if batch_coords is not None else None
     if self.condition_method == 'concat':
       icond_maps = cond_maps[i:i+1,0,:] if fn_art == 0 else cond_maps[i:i+1,midx,:]
       icond_maps = icond_maps.unsqueeze(2).unsqueeze(3).expand(icond_maps.size() + feats.size()[-2:])
-      module_output = module(module_inputs, extra_channels=batch_coords[i:i+1], cond_maps=icond_maps)
+      module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
     else:
       igammas = gammas[i:i+1,0,:] if fn_art == 0 else gammas[i:i+1,midx,:]
       ibetas = betas[i:i+1,0,:] if fn_art == 0 else betas[i:i+1,midx,:]
-      module_output = module(module_inputs, igammas, ibetas, batch_coords[i:i+1])
+      module_output = module(module_inputs, igammas, ibetas, bcoords)
     if save_activations:
       self.module_outputs.append(module_output)
     return module_output, j
@@ -328,6 +332,50 @@ class TFiLMedNet(nn.Module):
       pdb.set_trace()
     return out
 
+class ResidualBlock(nn.Module):
+  def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True):
+    if out_dim is None:
+      out_dim = in_dim
+    super(ResidualBlock, self).__init__()
+    self.conv1 = nn.Conv2d(in_dim, out_dim, kernel_size=3, padding=1)
+    self.conv2 = nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1)
+    self.with_batchnorm = with_batchnorm
+    if with_batchnorm:
+      self.bn1 = nn.BatchNorm2d(out_dim)
+      self.bn2 = nn.BatchNorm2d(out_dim)
+    self.with_residual = with_residual
+    if in_dim == out_dim or not with_residual:
+      self.proj = None
+    else:
+      self.proj = nn.Conv2d(in_dim, out_dim, kernel_size=1)
+
+  def forward(self, x):
+    if self.with_batchnorm:
+      out = F.relu(self.bn1(self.conv1(x)))
+      out = self.bn2(self.conv2(out))
+    else:
+      out = self.conv2(F.relu(self.conv1(x)))
+    res = x if self.proj is None else self.proj(x)
+    if self.with_residual:
+      out = F.relu(res + out)
+    else:
+      out = F.relu(out)
+    return out
+
+
+class ConcatBlock(nn.Module):
+  def __init__(self, num_input, dim, with_residual=True, with_batchnorm=True):
+    super(ConcatBlock, self).__init__()
+    self.proj = nn.Conv2d(num_input * dim, dim, kernel_size=1, padding=0)
+    self.res_block = ResidualBlock(dim, with_residual=with_residual,
+                        with_batchnorm=with_batchnorm)
+
+  def forward(self, x):
+    out = torch.cat(x, 1) # Concatentate along depth
+    out = F.relu(self.proj(out))
+    out = self.res_block(out)
+    return out  
+
 class ConCatTfilmBlock(nn.Module):
   def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_batchnorm=True,
                with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
@@ -387,7 +435,8 @@ class TfilmedResBlock(nn.Module):
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       self.film = FiLM()
     if self.with_batchnorm:
-      self.bn1 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
+      self.bn1 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
+      self.bn2 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
     if self.condition_method == 'bn-film' and self.with_cond[0]:
       self.film = FiLM()
     if dropout > 0:
@@ -409,7 +458,10 @@ class TfilmedResBlock(nn.Module):
     if self.with_input_proj:
       if extra_channels is not None and self.extra_channel_freq >= 1:
         x = torch.cat([x, extra_channels], 1)
-      x = F.relu(self.input_proj(x))
+      x = self.input_proj(x)
+      if self.with_batchnorm: #
+        x = self.bn1(x) #
+      x = F.relu(x)
     out = x
 
     # ResBlock body
@@ -421,7 +473,7 @@ class TfilmedResBlock(nn.Module):
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       out = self.film(out, gammas, betas)
     if self.with_batchnorm:
-      out = self.bn1(out)
+      out = self.bn2(out)
     if self.condition_method == 'bn-film' and self.with_cond[0]:
       out = self.film(out, gammas, betas)
     if self.dropout > 0:

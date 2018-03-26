@@ -231,9 +231,9 @@ def run_single_example(args, model, dtype, question_raw, feats_var=None):
   pre_pool = ee.classifier[2](cf_bn)
   pooled = ee.classifier[3](pre_pool)
 
-  pre_pool_max_per_c = pre_pool.max(2)[0].max(3)[0].expand_as(pre_pool)
+  pre_pool_max_per_c = pre_pool.max(2, keepdim=True)[0].max(3, keepdim=True)[0].expand_as(pre_pool)
   pre_pool_masked = (pre_pool_max_per_c == pre_pool).float() * pre_pool
-  pool_feat_locs = (pre_pool_masked > 0).float().sum(1)
+  pool_feat_locs = (pre_pool_masked > 0).float().sum(1, keepdim=True)
   if args.debug_every <= 1:
     pdb.set_trace()
 
@@ -417,7 +417,7 @@ def visualize(features, args, file_name=None):
     img_path = args.image
 
     # Scale map to [0, 1]
-    f_map = (features ** 2).mean(0).mean(1).squeeze().sqrt()
+    f_map = (features ** 2).mean(0, keepdim=True).mean(1, keepdim=True).squeeze().sqrt()
     f_map_shifted = f_map - f_map.min().expand_as(f_map)
     f_map_scaled = f_map_shifted / f_map_shifted.max().expand_as(f_map_shifted)
 

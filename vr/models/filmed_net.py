@@ -246,8 +246,7 @@ class FiLMedResBlock(nn.Module):
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       self.film = FiLM()
     if self.with_batchnorm:
-      self.bn1 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
-      self.bn2 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
+      self.bn1 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
     if self.condition_method == 'bn-film' and self.with_cond[0]:
       self.film = FiLM()
     if dropout > 0:
@@ -269,10 +268,7 @@ class FiLMedResBlock(nn.Module):
     if self.with_input_proj:
       if extra_channels is not None and self.extra_channel_freq >= 1:
         x = torch.cat([x, extra_channels], 1)
-      x = self.input_proj(x)
-      if self.with_batchnorm: #
-        x = self.bn1(x) #
-      x = F.relu(x)
+      x = F.relu(self.input_proj(x))
     out = x
 
     # ResBlock body
@@ -284,7 +280,7 @@ class FiLMedResBlock(nn.Module):
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       out = self.film(out, gammas, betas)
     if self.with_batchnorm:
-      out = self.bn2(out)
+      out = self.bn1(out)
     if self.condition_method == 'bn-film' and self.with_cond[0]:
       out = self.film(out, gammas, betas)
     if self.dropout > 0:

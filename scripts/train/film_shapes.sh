@@ -11,11 +11,11 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --record_loss_every 100 \
   --num_val_samples 149991 \
   --optimizer Adam \
-  --learning_rate 3e-4 \
+  --learning_rate 1e-4 \
   --batch_size 64 \
-  --use_coords 1 \
+  --use_coords 0 \
   --module_stem_batchnorm 1 \
-  --module_stem_num_layers 1 \
+  --module_stem_num_layers 2 \
   --module_batchnorm 1 \
   --classifier_batchnorm 1 \
   --bidirectional 0 \
@@ -37,8 +37,8 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --module_kernel_size 3 \
   --module_batchnorm_affine 0 \
   --module_num_layers 1 \
-  --num_modules 4 \
-  --condition_pattern 1,1,1,1 \
+  --num_modules 8 \
+  --condition_pattern 1,1,1,1,1,1,1,1 \
   --gamma_option linear \
   --gamma_baseline 1 \
   --use_gamma 1 \

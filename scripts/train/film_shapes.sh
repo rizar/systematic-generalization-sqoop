@@ -16,6 +16,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --use_coords 0 \
   --module_stem_batchnorm 1 \
   --module_stem_num_layers 2 \
+  --module_intermediate_batchnorm 1 \
   --module_batchnorm 1 \
   --classifier_batchnorm 1 \
   --bidirectional 0 \
@@ -35,7 +36,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --module_dropout 0e-2 \
   --module_stem_kernel_size 3 \
   --module_kernel_size 3 \
-  --module_batchnorm_affine 0 \
+  --module_batchnorm_affine 1 \
   --module_num_layers 1 \
   --num_modules 8 \
   --condition_pattern 1,1,1,1,1,1,1,1 \

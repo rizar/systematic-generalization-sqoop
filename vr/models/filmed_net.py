@@ -36,6 +36,7 @@ class FiLMedNet(nn.Module):
                module_num_layers=1,
                module_dim=128,
                module_residual=True,
+               module_intermediate_batchnorm=False,
                module_batchnorm=False,
                module_batchnorm_affine=False,
                module_dropout=0,
@@ -109,7 +110,8 @@ class FiLMedNet(nn.Module):
     for fn_num in range(self.num_modules):
       with_cond = self.condition_pattern[self.module_num_layers * fn_num:
                                           self.module_num_layers * (fn_num + 1)]
-      mod = self.block(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm,
+      mod = self.block(module_dim, with_residual=module_residual,
+                       with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=with_cond,
                        dropout=module_dropout,
                        num_extra_channels=self.num_extra_channels,
@@ -206,7 +208,7 @@ class FiLMedNet(nn.Module):
 
 
 class FiLMedResBlock(nn.Module):
-  def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True,
+  def __init__(self, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
                with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
                with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
                num_layers=1, condition_method='bn-film', debug_every=float('inf')):
@@ -214,6 +216,7 @@ class FiLMedResBlock(nn.Module):
       out_dim = in_dim
     super(FiLMedResBlock, self).__init__()
     self.with_residual = with_residual
+    self.with_intermediate_batchnorm = with_intermediate_batchnorm
     self.with_batchnorm = with_batchnorm
     self.with_cond = with_cond
     self.dropout = dropout
@@ -245,6 +248,8 @@ class FiLMedResBlock(nn.Module):
                             padding=self.kernel_size // 2)
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       self.film = FiLM()
+    if self.with_intermediate_batchnorm:
+      self.bn0 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
     if self.with_batchnorm:
       self.bn1 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
     if self.condition_method == 'bn-film' and self.with_cond[0]:
@@ -268,7 +273,10 @@ class FiLMedResBlock(nn.Module):
     if self.with_input_proj:
       if extra_channels is not None and self.extra_channel_freq >= 1:
         x = torch.cat([x, extra_channels], 1)
-      x = F.relu(self.input_proj(x))
+      x = self.input_proj(x)
+      if self.with_intermediate_batchnorm:
+        x = self.bn0(x)
+      x = F.relu(x)
     out = x
 
     # ResBlock body

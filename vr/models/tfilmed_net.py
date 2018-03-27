@@ -32,6 +32,7 @@ class TFiLMedNet(nn.Module):
                module_num_layers=1,
                module_dim=128,
                module_residual=True,
+               module_intermediate_batchnorm=False,
                module_batchnorm=False,
                module_batchnorm_affine=False,
                module_dropout=0,
@@ -110,7 +111,8 @@ class TFiLMedNet(nn.Module):
       self.function_modules_num_inputs[fn_str] = num_inputs
     #for fn_num in range(self.num_modules):
     
-    mod = TfilmedResBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm,
+    mod = TfilmedResBlock(module_dim, with_residual=module_residual,
+                       with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=self.first_condition_pattern,
                        dropout=module_dropout,
                        num_extra_channels=self.num_extra_channels,
@@ -130,7 +132,8 @@ class TFiLMedNet(nn.Module):
       for art in range(self.max_program_module_arity):
         with_cond = self.condition_pattern[dep][art]
         if art == 0:
-          mod = TfilmedResBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm,
+          mod = TfilmedResBlock(module_dim, with_residual=module_residual,
+                       with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=with_cond,
                        dropout=module_dropout,
                        num_extra_channels=self.num_extra_channels,
@@ -144,7 +147,8 @@ class TFiLMedNet(nn.Module):
                        debug_every=self.debug_every)
           #mod = ResidualBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
         else:
-          mod = ConCatTfilmBlock(art+1, module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm,
+          mod = ConCatTfilmBlock(art+1, module_dim, with_residual=module_residual,
+                       with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=with_cond,
                        dropout=module_dropout,
                        num_extra_channels=self.num_extra_channels,
@@ -377,13 +381,14 @@ class ConcatBlock(nn.Module):
     return out  
 
 class ConCatTfilmBlock(nn.Module):
-  def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_batchnorm=True,
+  def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
                with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
                with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
                num_layers=1, condition_method='bn-film', debug_every=float('inf')):
       super(ConCatTfilmBlock, self).__init__()
       self.proj = nn.Conv2d(num_input * in_dim, in_dim, kernel_size=1, padding=0)
-      self.tfilmedResBlock = TfilmedResBlock(in_dim=in_dim, out_dim=out_dim, with_residual=with_residual, with_batchnorm=with_batchnorm,
+      self.tfilmedResBlock = TfilmedResBlock(in_dim=in_dim, out_dim=out_dim, with_residual=with_residual,
+               with_intermediate_batchnorm=with_intermediate_batchnorm, with_batchnorm=with_batchnorm,
                with_cond=with_cond, dropout=dropout, num_extra_channels=num_extra_channels, extra_channel_freq=extra_channel_freq,
                with_input_proj=with_input_proj, num_cond_maps=num_cond_maps, kernel_size=kernel_size, batchnorm_affine=batchnorm_affine,
                num_layers=num_layers, condition_method=condition_method, debug_every=debug_every)
@@ -395,7 +400,7 @@ class ConCatTfilmBlock(nn.Module):
     return out
 
 class TfilmedResBlock(nn.Module):
-  def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True,
+  def __init__(self, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
                with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
                with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
                num_layers=1, condition_method='bn-film', debug_every=float('inf')):
@@ -403,6 +408,7 @@ class TfilmedResBlock(nn.Module):
       out_dim = in_dim
     super(TfilmedResBlock, self).__init__()
     self.with_residual = with_residual
+    self.with_intermediate_batchnorm = with_intermediate_batchnorm
     self.with_batchnorm = with_batchnorm
     self.with_cond = with_cond
     self.dropout = dropout
@@ -434,9 +440,10 @@ class TfilmedResBlock(nn.Module):
                             padding=self.kernel_size // 2)
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       self.film = FiLM()
+    if self.with_intermediate_batchnorm:
+      self.bn0 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
     if self.with_batchnorm:
-      self.bn1 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
-      self.bn2 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
+      self.bn1 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
     if self.condition_method == 'bn-film' and self.with_cond[0]:
       self.film = FiLM()
     if dropout > 0:
@@ -459,8 +466,8 @@ class TfilmedResBlock(nn.Module):
       if extra_channels is not None and self.extra_channel_freq >= 1:
         x = torch.cat([x, extra_channels], 1)
       x = self.input_proj(x)
-      if self.with_batchnorm: #
-        x = self.bn1(x) #
+      if self.with_intermediate_batchnorm:
+        x = self.bn0(x)
       x = F.relu(x)
     out = x
 
@@ -473,7 +480,7 @@ class TfilmedResBlock(nn.Module):
     if self.condition_method == 'conv-film' and self.with_cond[0]:
       out = self.film(out, gammas, betas)
     if self.with_batchnorm:
-      out = self.bn2(out)
+      out = self.bn1(out)
     if self.condition_method == 'bn-film' and self.with_cond[0]:
       out = self.film(out, gammas, betas)
     if self.dropout > 0:

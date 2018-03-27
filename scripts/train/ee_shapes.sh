@@ -16,6 +16,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --use_coords 1 \
   --module_stem_batchnorm 1 \
   --module_stem_num_layers 1 \
+  --module_intermediate_batchnorm 0 \
   --module_batchnorm 1 \
   --classifier_batchnorm 1 \
   --bidirectional 0 \

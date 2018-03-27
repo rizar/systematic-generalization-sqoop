@@ -78,6 +78,7 @@ parser.add_argument('--module_stem_batchnorm', default=0, type=int)
 parser.add_argument('--module_dim', default=128, type=int)
 parser.add_argument('--module_residual', default=1, type=int)
 parser.add_argument('--module_batchnorm', default=0, type=int)
+parser.add_argument('--module_intermediate_batchnorm', default=0, type=int)
 
 # FiLM only options
 parser.add_argument('--set_execution_engine_eval', default=0, type=int)
@@ -590,6 +591,7 @@ def get_execution_engine(args):
       kwargs['stem_stride'] = args.module_stem_stride
       kwargs['stem_padding'] = args.module_stem_padding
       kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['module_intermediate_batchnorm'] = args.module_intermediate_batchnorm == 1
       kwargs['module_batchnorm_affine'] = args.module_batchnorm_affine == 1
       kwargs['module_dropout'] = args.module_dropout
       kwargs['module_input_proj'] = args.module_input_proj
@@ -612,6 +614,7 @@ def get_execution_engine(args):
       kwargs['stem_stride'] = args.module_stem_stride
       kwargs['stem_padding'] = args.module_stem_padding
       kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['module_intermediate_batchnorm'] = args.module_intermediate_batchnorm == 1
       kwargs['module_batchnorm_affine'] = args.module_batchnorm_affine == 1
       kwargs['module_dropout'] = args.module_dropout
       kwargs['module_input_proj'] = args.module_input_proj
@@ -634,6 +637,7 @@ def get_execution_engine(args):
       kwargs['stem_stride'] = args.module_stem_stride
       kwargs['stem_padding'] = args.module_stem_padding
       kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['module_intermediate_batchnorm'] = args.module_intermediate_batchnorm == 1
       kwargs['module_batchnorm_affine'] = args.module_batchnorm_affine == 1
       kwargs['module_dropout'] = args.module_dropout
       kwargs['module_input_proj'] = args.module_input_proj
@@ -759,7 +763,6 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type == 'Tfilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred, programs_var)
-      
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
 

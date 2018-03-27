@@ -149,7 +149,7 @@ class RTFiLMedNet(nn.Module):
       for _ in range(art):
               
     
-    self.generateModules(0)
+    #self.generateModules(0)
 
     # Initialize output classifier
     self.classifier = build_classifier(module_dim + self.num_extra_channels, module_H, module_W,

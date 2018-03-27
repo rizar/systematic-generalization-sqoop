@@ -29,7 +29,7 @@ import vr.utils as utils
 import vr.preprocess
 from vr.data import ClevrDataset, ClevrDataLoader
 from vr.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
-from vr.models import FiLMedNet, TFiLMedNet, RTFiLMedNet
+from vr.models import FiLMedNet, TFiLMedNet #, RTFiLMedNet
 from vr.models import FiLMGen
 
 from vr.treeGenerator import TreeGenerator

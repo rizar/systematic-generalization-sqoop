@@ -104,7 +104,7 @@ class RTFiLMedNet(nn.Module):
     self.function_modules = []
     self.vocab = vocab
     
-    def generateModules(self, i, j):
+    def generateModules(i, j):
       if i >= len(self.treeArities): return -1
       art = self.treeArities[i]
       if len(self.condition_pattern) == 0:
@@ -153,12 +153,12 @@ class RTFiLMedNet(nn.Module):
       idx = i+1
       dpt = j+1
       for _ in range(art):
-        idx = self.generateModules(idx, dpt)
+        idx = generateModules(idx, dpt)
       
       return idx
               
     
-    self.generateModules(0, 0)
+    generateModules(0, 0)
 
     # Initialize output classifier
     self.classifier = build_classifier(module_dim + self.num_extra_channels, module_H, module_W,

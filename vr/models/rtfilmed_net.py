@@ -115,7 +115,7 @@ class RTFiLMedNet(nn.Module):
         else: with_cond.append(self.condition_pattern[-1] > 0)
         if len(self.condition_pattern) > (2*i+1): with_cond.append(self.condition_pattern[2*i+1] > 0)
         else: with_cond.append(self.condition_pattern[-1] > 0)
-        with_cond = wind_cond * self.module_num_layers
+        with_cond = with_cond * self.module_num_layers
       if art == 1 or art == 0:
         mod = TfilmedResBlock(module_dim, with_residual=module_residual,
                        with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,

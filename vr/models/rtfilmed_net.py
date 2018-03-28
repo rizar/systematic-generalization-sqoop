@@ -199,58 +199,8 @@ class RTFiLMedNet(nn.Module):
     
     if save_activations:
       self.module_outputs.append(module_output)
-    return module_output, idx
-    
-    if j < program.size(1):
-      fn_idx = program.data[i, j]
-      fn_str = self.vocab['program_idx_to_token'][fn_idx]
-      fn_art = program_arity.data[i,j]
-      fn_dept = ijd
-    else:
-      #used_fn_j = False
-      #fn_str = 'scene'
-      fn_art = -1
-      fn_dept = -1
-    
-    if fn_str == '<START>':
-      #used_fn_j = False
-      return self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j + 1, ijd)
-    if fn_art < 0 or fn_str == '<END>': return feats[i:i+1], j+1
-    
-    #if used_fn_j:
-    #  self.used_fns[i, j] = 1
-    j += 1
-    
-    if fn_art == 0:
-      module = self.function_modules['0']
-      module_inputs = feats[i:i+1]
 
-    else:
-      module_key = str(fn_dept) + '-' + str(fn_art)
-      if module_key not in self.function_modules:
-        print('Cannot find module: ' + module_key)
-        exit()
-      module = self.function_modules[module_key]
-      
-      module_inputs = []
-      while len(module_inputs) < fn_art:
-        cur_input, j = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd+1)
-        module_inputs.append(cur_input)
-      if len(module_inputs) == 1: module_inputs = module_inputs[0]
-    
-    midx = 0 if fn_art == 0 else (fn_dept-1)*self.max_program_module_arity+fn_art
-    bcoords = batch_coords[i:i+1] if batch_coords is not None else None
-    if self.condition_method == 'concat':
-      icond_maps = cond_maps[i:i+1,0,:] if fn_art == 0 else cond_maps[i:i+1,midx,:]
-      icond_maps = icond_maps.unsqueeze(2).unsqueeze(3).expand(icond_maps.size() + feats.size()[-2:])
-      module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
-    else:
-      igammas = gammas[i:i+1,0,:] if fn_art == 0 else gammas[i:i+1,midx,:]
-      ibetas = betas[i:i+1,0,:] if fn_art == 0 else betas[i:i+1,midx,:]
-      module_output = module(module_inputs, igammas, ibetas, bcoords)
-    if save_activations:
-      self.module_outputs.append(module_output)
-    return module_output, j
+    return module_output, idx
 
   def forward(self, x, film, save_activations=False):
     # Initialize forward pass and externally viewable activations
@@ -288,7 +238,7 @@ class RTFiLMedNet(nn.Module):
     if save_activations:
       self.feats = feats
     N, _, H, W = feats.size()
-    
+
     final_module_output = []
     for i in range(N):
       cur_output, _ = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, i, 0, 1)

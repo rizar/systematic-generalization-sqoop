@@ -145,7 +145,7 @@ class RTFiLMedNet(nn.Module):
                        condition_method=condition_method,
                        debug_every=self.debug_every)
     
-      ikey = str(art) + '-' + str(j)
+      ikey = str(i) + '-' + str(art) + '-' + str(j)
       self.add_module(ikey, mod)
       self.function_modules.append(mod)
       

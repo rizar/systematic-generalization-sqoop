@@ -116,7 +116,7 @@ parser.add_argument('--max_program_module_arity', default=2, type=int)
 parser.add_argument('--max_program_tree_depth', default=5, type=int)
 
 #RTfilm options
-parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', choices=['complete_binary'])
+parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', type=str)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)

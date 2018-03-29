@@ -22,14 +22,14 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --weight_decay 1e-5 \
   --rnn_num_layers 1 \
   --rnn_wordvec_dim 200 \
-  --rnn_hidden_dim 4096 \
+  --rnn_hidden_dim 1024 `#was 4096 in original FiLM` \
   --rnn_output_batchnorm 0 \
   --classifier_downsample maxpoolfull \
   --classifier_proj_dim 512 \
   --classifier_fc_dims 1024 \
   --module_input_proj 1 \
   --module_residual 1 \
-  --module_dim 128 \
+  --module_dim 64 `#was 128 in original FiLM`\
   --module_dropout 0e-2 \
   --module_stem_kernel_size 3 \
   --module_kernel_size 3 \

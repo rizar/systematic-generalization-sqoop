@@ -11,7 +11,7 @@ import os
 import time
 
 import argparse
-import ipdb as pdb
+import pdb as pdb
 import json
 import random
 import shutil
@@ -29,7 +29,7 @@ import vr.utils as utils
 import vr.preprocess
 from vr.data import ClevrDataset, ClevrDataLoader
 from vr.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
-from vr.models import FiLMedNet, TFiLMedNet, RTFiLMedNet
+from vr.models import FiLMedNet, TFiLMedNet #, RTFiLMedNet
 from vr.models import FiLMGen
 
 from vr.treeGenerator import TreeGenerator
@@ -444,7 +444,7 @@ def train_loop(args, train_loader, val_loader):
         running_loss = 0.0
       else:
         running_loss += loss.data[0]
-    
+
 
       if t % args.checkpoint_every == 0:
         num_checkpoints += 1
@@ -606,10 +606,10 @@ def get_execution_engine(args):
       ee = FiLMedNet(**kwargs)
     elif args.model_type == 'Tfilm':
       kwargs['num_modules'] = args.max_program_module_arity * args.max_program_tree_depth + 1
-      
+
       kwargs['max_program_module_arity'] = args.max_program_module_arity
       kwargs['max_program_tree_depth'] = args.max_program_tree_depth
-      
+
       kwargs['stem_kernel_size'] = args.module_stem_kernel_size
       kwargs['stem_stride'] = args.module_stem_stride
       kwargs['stem_padding'] = args.module_stem_padding
@@ -632,7 +632,7 @@ def get_execution_engine(args):
       kwargs['num_modules'] = len(treeArities)
       kwargs['treeArities'] = treeArities
       kwargs['tree_type_for_RTfilm'] = args.tree_type_for_RTfilm
-      
+
       kwargs['stem_kernel_size'] = args.module_stem_kernel_size
       kwargs['stem_stride'] = args.module_stem_stride
       kwargs['stem_padding'] = args.module_stem_padding

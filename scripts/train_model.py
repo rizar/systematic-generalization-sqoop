@@ -29,7 +29,7 @@ import vr.utils as utils
 import vr.preprocess
 from vr.data import ClevrDataset, ClevrDataLoader
 from vr.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
-from vr.models import FiLMedNet, TFiLMedNet #, RTFiLMedNet
+from vr.models import FiLMedNet, TFiLMedNet, RTFiLMedNet
 from vr.models import FiLMGen
 
 from vr.treeGenerator import TreeGenerator
@@ -116,7 +116,7 @@ parser.add_argument('--max_program_module_arity', default=2, type=int)
 parser.add_argument('--max_program_tree_depth', default=5, type=int)
 
 #RTfilm options
-parser.add_argument('--tree_type_for_RTfilm', default='complete_binary', choices=['complete_binary'])
+parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', type=str)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)

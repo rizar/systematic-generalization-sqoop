@@ -117,6 +117,7 @@ parser.add_argument('--max_program_tree_depth', default=5, type=int)
 
 #RTfilm options
 parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', type=str)
+parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -632,6 +633,7 @@ def get_execution_engine(args):
       kwargs['num_modules'] = len(treeArities)
       kwargs['treeArities'] = treeArities
       kwargs['tree_type_for_RTfilm'] = args.tree_type_for_RTfilm
+      kwargs['share_module_weight_at_depth'] = args.share_module_weight_at_depth
 
       kwargs['stem_kernel_size'] = args.module_stem_kernel_size
       kwargs['stem_stride'] = args.module_stem_stride

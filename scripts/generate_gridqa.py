@@ -54,12 +54,14 @@ def surf2array(surf):
 
 class SceneGenerator:
 
-  def __init__(self, grid_size, cell_size, num_objects, seed):
+  def __init__(self, grid_size, cell_size, num_objects, seed,
+               object_allowed):
     self._grid_size = grid_size
     self._cell_size = cell_size
     self._num_objects = num_objects
     self._seed = seed
     self._rng = numpy.random.RandomState(seed)
+    self._object_allowed = object_allowed
 
   def __iter__(self):
     self._rng = numpy.random.RandomState(self._seed)
@@ -81,6 +83,8 @@ class SceneGenerator:
         continue
       shape = self._rng.choice(SHAPES)
       color = self._rng.choice(list(COLOR2RGB.keys()))
+      if not self._object_allowed((shape, color)):
+        continue
       objects.append(((i, j), shape, color))
       positions.add((i, j))
 
@@ -91,9 +95,10 @@ class SceneGenerator:
     return objects, surface
 
 
-def generate_dataset(prefix, size, seed):
+def generate_dataset(prefix, size, seed, object_allowed):
   sg = SceneGenerator(grid_size=5, cell_size=10,
-                      num_objects=5, seed=1)
+                      num_objects=5, seed=1,
+                      object_allowed=object_allowed)
 
   # generate images
   scenes = []
@@ -140,6 +145,8 @@ def generate_dataset(prefix, size, seed):
         while True:
           shape = rng.choice(SHAPES)
           color = rng.choice(list(COLOR2RGB.keys()))
+          if not object_allowed((shape, color)):
+            continue
           found = any((shape, color) == (obj_shape, obj_color)
                       for _, obj_shape, obj_color in scene)
           if not found:
@@ -171,9 +178,28 @@ def generate_dataset(prefix, size, seed):
 
 
 def main():
-  generate_dataset('train', args.train, 1)
-  generate_dataset('val', args.val, 2)
-  generate_dataset('test', args.test, 3)
+  class ObjectAllowed:
+    def __init__(self, square_colors, triangle_colors):
+      self._square_colors = square_colors
+      self._triangle_colors = triangle_colors
+    def __call__(self, obj):
+      shape, color = obj
+      if shape == 'square':
+        return color in self._square_colors
+      elif shape == 'triangle':
+        return color in self._triangle_colors
+      return True
+
+  set1 = ['gray', 'blue', 'brown', 'yellow']
+  set2 = ['red', 'green', 'purple', 'cyan']
+  train_object_allowed = val_object_allowed = test_object_allowed = lambda obj: True
+  if args.split == 'CoGenT':
+    train_object_allowed = ObjectAllowed(set1, set2)
+    val_object_allowed = test_object_allowed = ObjectAllowed(set2, set1)
+
+  generate_dataset('train', args.train, 1, train_object_allowed)
+  generate_dataset('val', args.val, 2, val_object_allowed)
+  generate_dataset('test', args.test, 3, test_object_allowed)
 
 
 if __name__ == '__main__':
@@ -184,5 +210,7 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=100,
                       help="Size of the test set")
+  parser.add_argument('--split', type=str, choices=('none', 'CoGenT'),
+                      help="The split to use")
   args = parser.parse_args()
   main()

@@ -17,7 +17,6 @@ import vr.programs
 from vr.models.tfilmed_net import TfilmedResBlock, ConCatTfilmBlock
 
 from vr.models.filmed_net import FiLM
-from quodlibet.ext.songsmenu.makesorttags import artist_to_sort
 
 class RTFiLMedNet(nn.Module):
   def __init__(self, vocab, feature_dim=(1024, 14, 14),

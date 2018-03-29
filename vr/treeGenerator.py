@@ -9,6 +9,11 @@ class TreeGenerator:
       if depth == '': depth = 3
       else: depth = int(depth)
       return completeBinaryTree(depth)
+    elif tree_type.startswith('chainTree'):
+      depth = tree_type[9:]
+      if depth == '': depth = 8
+      else: depth = int(depth)
+      return chainTree(depth)
     else:
       raise(NotImplemented)
 
@@ -24,3 +29,10 @@ def completeBinaryTree(depth=3):
       gen(idepth+1)
   gen(0)
   return arities    
+
+def chainTree(depth=8):
+  if depth == 0: return [0]
+  arities = []
+  while (len(arities) < depth-1): arities.append(1)
+  arities.append(0)
+  return arities

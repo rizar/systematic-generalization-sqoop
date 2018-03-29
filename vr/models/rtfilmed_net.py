@@ -119,14 +119,7 @@ class RTFiLMedNet(nn.Module):
         else: with_cond.append(self.condition_pattern[-1] > 0)
         if len(self.condition_pattern) > (2*i+1): with_cond.append(self.condition_pattern[2*i+1] > 0)
         else: with_cond.append(self.condition_pattern[-1] > 0)
-        with_cond = with_cond * self.module_num_layers
-      
-      # ensuring every node at the same depth has the same arity
-      if self.share_module_weight_at_depth:
-        if j not in self.depth_to_arity:
-          self.depth_to_arity[j] = art
-        else:
-          if art != self.depth_to_arity[j]: raise Exception("Nodes at the same depth need to have the same arity.")        
+        with_cond = with_cond * self.module_num_layers    
 
       if not self.share_module_weight_at_depth or j not in self.depth_to_arity:
         if art == 1 or art == 0:
@@ -165,6 +158,13 @@ class RTFiLMedNet(nn.Module):
           ikey = str(j) + '-' + str(art)
           self.function_modules[j] = mod
         self.add_module(ikey, mod)
+    
+      # ensuring every node at the same depth has the same arity
+      if self.share_module_weight_at_depth:
+        if j not in self.depth_to_arity:
+          self.depth_to_arity[j] = art
+        else:
+          if art != self.depth_to_arity[j]: raise Exception("Nodes at the same depth need to have the same arity.")    
       
       if art == 0: return i+1
       idx = i+1
@@ -175,7 +175,7 @@ class RTFiLMedNet(nn.Module):
       return idx
               
     
-    generateModules(0, 0)
+    generateModules(0, 1)
 
     # Initialize output classifier
     self.classifier = build_classifier(module_dim + self.num_extra_channels, module_H, module_W,

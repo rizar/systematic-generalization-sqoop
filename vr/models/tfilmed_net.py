@@ -2,7 +2,6 @@
 
 import math
 import numpy
-import ipdb as pdb
 import pprint
 from termcolor import colored
 import torch
@@ -25,10 +24,10 @@ class TFiLMedNet(nn.Module):
                stem_stride=1,
                stem_padding=None,
                num_modules=4,
-               
+
                max_program_module_arity=2,
                max_program_tree_depth=5,
-               
+
                module_num_layers=1,
                module_dim=128,
                module_residual=True,
@@ -62,10 +61,10 @@ class TFiLMedNet(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
-    
+
     self.max_program_module_arity = max_program_module_arity
     self.max_program_tree_depth = max_program_tree_depth
-    
+
     self.module_num_layers = module_num_layers
     self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
@@ -80,9 +79,9 @@ class TFiLMedNet(nn.Module):
     self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
     self.condition_pattern = condition_pattern
     self.first_condition_pattern = []
-    
+
     self.prepare_condition_pattern()
-    
+
     self.extra_channel_freq = self.use_coords_freq
     #self.block = FiLMedResBlock
     self.num_cond_maps = 2 * self.module_dim if self.condition_method == 'concat' else 0
@@ -110,7 +109,7 @@ class TFiLMedNet(nn.Module):
       num_inputs = vocab['program_token_arity'][fn_str]
       self.function_modules_num_inputs[fn_str] = num_inputs
     #for fn_num in range(self.num_modules):
-    
+
     mod = TfilmedResBlock(module_dim, with_residual=module_residual,
                        with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=self.first_condition_pattern,
@@ -127,7 +126,7 @@ class TFiLMedNet(nn.Module):
     #mod = ResidualBlock(module_dim, with_residual=module_residual, with_batchnorm=module_batchnorm)
     self.add_module('0', mod)
     self.function_modules['0'] = mod
-    
+
     for dep in range(self.max_program_tree_depth):
       for art in range(self.max_program_module_arity):
         with_cond = self.condition_pattern[dep][art]
@@ -172,7 +171,7 @@ class TFiLMedNet(nn.Module):
                                        dropout=classifier_dropout)
 
     init_modules(self.modules())
-  
+
   def prepare_condition_pattern(self):
     if len(self.condition_pattern) == 0:
       self.first_condition_pattern = [self.condition_method != 'concat'] * (2*self.module_num_layers)
@@ -218,16 +217,16 @@ class TFiLMedNet(nn.Module):
       #fn_str = 'scene'
       fn_art = -1
       fn_dept = -1
-    
+
     if fn_str == '<START>':
       #used_fn_j = False
       return self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j + 1, ijd)
     if fn_art < 0 or fn_str == '<END>': return feats[i:i+1], j+1
-    
+
     #if used_fn_j:
     #  self.used_fns[i, j] = 1
     j += 1
-    
+
     if fn_art == 0:
       module = self.function_modules['0']
       module_inputs = feats[i:i+1]
@@ -238,13 +237,13 @@ class TFiLMedNet(nn.Module):
         print('Cannot find module: ' + module_key)
         exit()
       module = self.function_modules[module_key]
-      
+
       module_inputs = []
       while len(module_inputs) < fn_art:
         cur_input, j = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, program, program_arity, save_activations, i, j, ijd+1)
         module_inputs.append(cur_input)
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
-    
+
     midx = 0 if fn_art == 0 else (fn_dept-1)*self.max_program_module_arity+fn_art
     bcoords = batch_coords[i:i+1] if batch_coords is not None else None
     if self.condition_method == 'concat':
@@ -258,7 +257,7 @@ class TFiLMedNet(nn.Module):
     if save_activations:
       self.module_outputs.append(module_output)
     return module_output, j
-  
+
   def computeArity(self, program):
     progDat = program.data
     arity = numpy.zeros(progDat.shape).astype('int32')
@@ -310,7 +309,7 @@ class TFiLMedNet(nn.Module):
     if save_activations:
       self.feats = feats
     N, _, H, W = feats.size()
-    
+
     program_arity = self.computeArity(program)
     final_module_output = []
     for i in range(N):
@@ -378,7 +377,7 @@ class ConcatBlock(nn.Module):
     out = torch.cat(x, 1) # Concatentate along depth
     out = F.relu(self.proj(out))
     out = self.res_block(out)
-    return out  
+    return out
 
 class ConCatTfilmBlock(nn.Module):
   def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,

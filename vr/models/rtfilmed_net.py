@@ -185,9 +185,9 @@ class RTFiLMedNet(nn.Module):
 
     init_modules(self.modules())
   
-  def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, save_activations, i, j, ijd):
+  def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, save_activations, j, ijd):
     
-    if j > len(self.treeArities): return None, j+1
+    if j >= len(self.treeArities): return None, j+1
     fn_art = self.treeArities[j]
     fn_dept = ijd
     
@@ -200,22 +200,22 @@ class RTFiLMedNet(nn.Module):
     dpt = ijd + 1
     
     if fn_art == 0:
-      module_inputs = feats[i:i+1]
+      module_inputs = feats
     else:
       module_inputs = []
       while len(module_inputs) < fn_art:
-        cur_input, idx = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, i, idx, dpt)
+        cur_input, idx = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, idx, dpt)
         module_inputs.append(cur_input)
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
     
-    bcoords = batch_coords[i:i+1] if batch_coords is not None else None
+    bcoords = batch_coords
     if self.condition_method == 'concat':
-      icond_maps = cond_maps[i:i+1,j,:]
+      icond_maps = cond_maps[:,j,:]
       icond_maps = icond_maps.unsqueeze(2).unsqueeze(3).expand(icond_maps.size() + feats.size()[-2:])
       module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
     else:
-      igammas = gammas[i:i+1,j,:]
-      ibetas = betas[i:i+1,j,:]
+      igammas = gammas[:,j,:]
+      ibetas = betas[:,j,:]
       module_output = module(module_inputs, igammas, ibetas, bcoords)
     
     if save_activations:
@@ -260,11 +260,7 @@ class RTFiLMedNet(nn.Module):
       self.feats = feats
     N, _, H, W = feats.size()
 
-    final_module_output = []
-    for i in range(N):
-      cur_output, _ = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, i, 0, 1)
-      final_module_output.append(cur_output)
-    final_module_output = torch.cat(final_module_output, 0)
+    final_module_output, _ = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, 0, 1)
 
     # Store for future computation
     #if save_activations:

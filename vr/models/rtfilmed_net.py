@@ -2,6 +2,7 @@
 
 import math
 import numpy
+import ipdb as pdb
 import pprint
 from termcolor import colored
 import torch
@@ -25,11 +26,11 @@ class RTFiLMedNet(nn.Module):
                stem_stride=1,
                stem_padding=None,
                num_modules=4,
-
+               
                tree_type_for_RTfilm='complete_binary',
                treeArities=None,
                share_module_weight_at_depth=0,
-
+               
                module_num_layers=1,
                module_dim=128,
                module_residual=True,
@@ -63,11 +64,11 @@ class RTFiLMedNet(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
-
+    
     self.tree_type_for_RTfilm = tree_type_for_RTfilm
     self.treeArities = treeArities
     self.share_module_weight_at_depth = share_module_weight_at_depth == 1
-
+    
     self.module_num_layers = module_num_layers
     self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
@@ -81,7 +82,7 @@ class RTFiLMedNet(nn.Module):
     # Initialize helper variables
     self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
     self.condition_pattern = condition_pattern
-
+    
     self.extra_channel_freq = self.use_coords_freq
     #self.block = FiLMedResBlock
     self.num_cond_maps = 2 * self.module_dim if self.condition_method == 'concat' else 0
@@ -106,7 +107,7 @@ class RTFiLMedNet(nn.Module):
     if self.share_module_weight_at_depth:
       self.depth_to_arity = {}
     self.vocab = vocab
-
+    
     def generateModules(i, j):
       if i >= len(self.treeArities): return -1
       art = self.treeArities[i]
@@ -118,7 +119,7 @@ class RTFiLMedNet(nn.Module):
         else: with_cond.append(self.condition_pattern[-1] > 0)
         if len(self.condition_pattern) > (2*i+1): with_cond.append(self.condition_pattern[2*i+1] > 0)
         else: with_cond.append(self.condition_pattern[-1] > 0)
-        with_cond = with_cond * self.module_num_layers
+        with_cond = with_cond * self.module_num_layers    
 
       if not self.share_module_weight_at_depth or j not in self.depth_to_arity:
         if art == 1 or art == 0:
@@ -149,7 +150,7 @@ class RTFiLMedNet(nn.Module):
                          num_layers=self.module_num_layers,
                          condition_method=condition_method,
                          debug_every=self.debug_every)
-
+        
         if not self.share_module_weight_at_depth:
           ikey = str(i) + '-' + str(j) + '-' + str(art)
           self.function_modules[i] = mod
@@ -157,23 +158,23 @@ class RTFiLMedNet(nn.Module):
           ikey = str(j) + '-' + str(art)
           self.function_modules[j] = mod
         self.add_module(ikey, mod)
-
+    
       # ensuring every node at the same depth has the same arity
       if self.share_module_weight_at_depth:
         if j not in self.depth_to_arity:
           self.depth_to_arity[j] = art
         else:
-          if art != self.depth_to_arity[j]: raise Exception("Nodes at the same depth need to have the same arity.")
-
+          if art != self.depth_to_arity[j]: raise Exception("Nodes at the same depth need to have the same arity.")    
+      
       if art == 0: return i+1
       idx = i+1
       dpt = j+1
       for _ in range(art):
         idx = generateModules(idx, dpt)
-
+      
       return idx
-
-
+              
+    
     generateModules(0, 1)
 
     # Initialize output classifier
@@ -183,40 +184,40 @@ class RTFiLMedNet(nn.Module):
                                        dropout=classifier_dropout)
 
     init_modules(self.modules())
-
-  def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, save_activations, i, j, ijd):
-
-    if j > len(self.treeArities): return None, j+1
+  
+  def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, save_activations, j, ijd):
+    
+    if j >= len(self.treeArities): return None, j+1
     fn_art = self.treeArities[j]
     fn_dept = ijd
-
+    
     if not self.share_module_weight_at_depth:
       module = self.function_modules[j]
     else:
       module = self.function_modules[fn_dept]
-
+    
     idx = j + 1
     dpt = ijd + 1
-
+    
     if fn_art == 0:
-      module_inputs = feats[i:i+1]
+      module_inputs = feats
     else:
       module_inputs = []
       while len(module_inputs) < fn_art:
-        cur_input, idx = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, i, idx, dpt)
+        cur_input, idx = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, idx, dpt)
         module_inputs.append(cur_input)
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
-
-    bcoords = batch_coords[i:i+1] if batch_coords is not None else None
+    
+    bcoords = batch_coords
     if self.condition_method == 'concat':
-      icond_maps = cond_maps[i:i+1,j,:]
+      icond_maps = cond_maps[:,j,:]
       icond_maps = icond_maps.unsqueeze(2).unsqueeze(3).expand(icond_maps.size() + feats.size()[-2:])
       module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
     else:
-      igammas = gammas[i:i+1,j,:]
-      ibetas = betas[i:i+1,j,:]
+      igammas = gammas[:,j,:]
+      ibetas = betas[:,j,:]
       module_output = module(module_inputs, igammas, ibetas, bcoords)
-
+    
     if save_activations:
       self.module_outputs.append(module_output)
 
@@ -259,11 +260,7 @@ class RTFiLMedNet(nn.Module):
       self.feats = feats
     N, _, H, W = feats.size()
 
-    final_module_output = []
-    for i in range(N):
-      cur_output, _ = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, i, 0, 1)
-      final_module_output.append(cur_output)
-    final_module_output = torch.cat(final_module_output, 0)
+    final_module_output, _ = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, 0, 1)
 
     # Store for future computation
     #if save_activations:
@@ -325,123 +322,7 @@ class ConcatBlock(nn.Module):
     out = torch.cat(x, 1) # Concatentate along depth
     out = F.relu(self.proj(out))
     out = self.res_block(out)
-    return out
-
-class ConCatTfilmBlock(nn.Module):
-  def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
-               with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
-               with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
-               num_layers=1, condition_method='bn-film', debug_every=float('inf')):
-      super(ConCatTfilmBlock, self).__init__()
-      self.proj = nn.Conv2d(num_input * in_dim, in_dim, kernel_size=1, padding=0)
-      self.tfilmedResBlock = TfilmedResBlock(in_dim=in_dim, out_dim=out_dim, with_residual=with_residual,
-               with_intermediate_batchnorm=with_intermediate_batchnorm, with_batchnorm=with_batchnorm,
-               with_cond=with_cond, dropout=dropout, num_extra_channels=num_extra_channels, extra_channel_freq=extra_channel_freq,
-               with_input_proj=with_input_proj, num_cond_maps=num_cond_maps, kernel_size=kernel_size, batchnorm_affine=batchnorm_affine,
-               num_layers=num_layers, condition_method=condition_method, debug_every=debug_every)
-
-  def forward(self, x, gammas=None, betas=None, extra_channels=None, cond_maps=None):
-    out = torch.cat(x, 1) # Concatentate along depth
-    out = F.relu(self.proj(out))
-    out = self.tfilmedResBlock(out, gammas=gammas, betas=betas, extra_channels=extra_channels, cond_maps=cond_maps)
-    return out
-
-class TfilmedResBlock(nn.Module):
-  def __init__(self, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
-               with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
-               with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
-               num_layers=1, condition_method='bn-film', debug_every=float('inf')):
-    if out_dim is None:
-      out_dim = in_dim
-    super(TfilmedResBlock, self).__init__()
-    self.with_residual = with_residual
-    self.with_intermediate_batchnorm = with_intermediate_batchnorm
-    self.with_batchnorm = with_batchnorm
-    self.with_cond = with_cond
-    self.dropout = dropout
-    self.extra_channel_freq = 0 if num_extra_channels == 0 else extra_channel_freq
-    self.with_input_proj = with_input_proj  # Kernel size of input projection
-    self.num_cond_maps = num_cond_maps
-    self.kernel_size = kernel_size
-    self.batchnorm_affine = batchnorm_affine
-    self.num_layers = num_layers
-    self.condition_method = condition_method
-    self.debug_every = debug_every
-
-    if self.with_input_proj % 2 == 0:
-      raise(NotImplementedError)
-    if self.kernel_size % 2 == 0:
-      raise(NotImplementedError)
-    if self.num_layers >= 2:
-      raise(NotImplementedError)
-
-    if self.condition_method == 'block-input-film' and self.with_cond[0]:
-      self.film = FiLM()
-    if self.with_input_proj:
-      self.input_proj = nn.Conv2d(in_dim + (num_extra_channels if self.extra_channel_freq >= 1 else 0),
-                                  in_dim, kernel_size=self.with_input_proj, padding=self.with_input_proj // 2)
-
-    self.conv1 = nn.Conv2d(in_dim + self.num_cond_maps +
-                           (num_extra_channels if self.extra_channel_freq >= 2 else 0),
-                            out_dim, kernel_size=self.kernel_size,
-                            padding=self.kernel_size // 2)
-    if self.condition_method == 'conv-film' and self.with_cond[0]:
-      self.film = FiLM()
-    if self.with_intermediate_batchnorm:
-      self.bn0 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
-    if self.with_batchnorm:
-      self.bn1 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
-    if self.condition_method == 'bn-film' and self.with_cond[0]:
-      self.film = FiLM()
-    if dropout > 0:
-      self.drop = nn.Dropout2d(p=self.dropout)
-    if ((self.condition_method == 'relu-film' or self.condition_method == 'block-output-film')
-         and self.with_cond[0]):
-      self.film = FiLM()
-
-    init_modules(self.modules())
-
-  def forward(self, x, gammas=None, betas=None, extra_channels=None, cond_maps=None):
-    if self.debug_every <= -2:
-      pdb.set_trace()
-
-    if self.condition_method == 'block-input-film' and self.with_cond[0]:
-      x = self.film(x, gammas, betas)
-
-    # ResBlock input projection
-    if self.with_input_proj:
-      if extra_channels is not None and self.extra_channel_freq >= 1:
-        x = torch.cat([x, extra_channels], 1)
-      x = self.input_proj(x)
-      if self.with_intermediate_batchnorm:
-        x = self.bn0(x)
-      x = F.relu(x)
-    out = x
-
-    # ResBlock body
-    if cond_maps is not None:
-      out = torch.cat([out, cond_maps], 1)
-    if extra_channels is not None and self.extra_channel_freq >= 2:
-      out = torch.cat([out, extra_channels], 1)
-    out = self.conv1(out)
-    if self.condition_method == 'conv-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-    if self.with_batchnorm:
-      out = self.bn1(out)
-    if self.condition_method == 'bn-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-    if self.dropout > 0:
-      out = self.drop(out)
-    out = F.relu(out)
-    if self.condition_method == 'relu-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-
-    # ResBlock remainder
-    if self.with_residual:
-      out = x + out
-    if self.condition_method == 'block-output-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-    return out
+    return out  
 
 
 def coord_map(shape, start=-1, end=1):

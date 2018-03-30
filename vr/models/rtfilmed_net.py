@@ -2,7 +2,6 @@
 
 import math
 import numpy
-import ipdb as pdb
 import pprint
 from termcolor import colored
 import torch
@@ -26,11 +25,11 @@ class RTFiLMedNet(nn.Module):
                stem_stride=1,
                stem_padding=None,
                num_modules=4,
-               
+
                tree_type_for_RTfilm='complete_binary',
                treeArities=None,
                share_module_weight_at_depth=0,
-               
+
                module_num_layers=1,
                module_dim=128,
                module_residual=True,
@@ -64,11 +63,11 @@ class RTFiLMedNet(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
-    
+
     self.tree_type_for_RTfilm = tree_type_for_RTfilm
     self.treeArities = treeArities
     self.share_module_weight_at_depth = share_module_weight_at_depth == 1
-    
+
     self.module_num_layers = module_num_layers
     self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
@@ -82,7 +81,7 @@ class RTFiLMedNet(nn.Module):
     # Initialize helper variables
     self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
     self.condition_pattern = condition_pattern
-    
+
     self.extra_channel_freq = self.use_coords_freq
     #self.block = FiLMedResBlock
     self.num_cond_maps = 2 * self.module_dim if self.condition_method == 'concat' else 0
@@ -107,7 +106,7 @@ class RTFiLMedNet(nn.Module):
     if self.share_module_weight_at_depth:
       self.depth_to_arity = {}
     self.vocab = vocab
-    
+
     def generateModules(i, j):
       if i >= len(self.treeArities): return -1
       art = self.treeArities[i]
@@ -119,7 +118,7 @@ class RTFiLMedNet(nn.Module):
         else: with_cond.append(self.condition_pattern[-1] > 0)
         if len(self.condition_pattern) > (2*i+1): with_cond.append(self.condition_pattern[2*i+1] > 0)
         else: with_cond.append(self.condition_pattern[-1] > 0)
-        with_cond = with_cond * self.module_num_layers    
+        with_cond = with_cond * self.module_num_layers
 
       if not self.share_module_weight_at_depth or j not in self.depth_to_arity:
         if art == 1 or art == 0:
@@ -150,7 +149,7 @@ class RTFiLMedNet(nn.Module):
                          num_layers=self.module_num_layers,
                          condition_method=condition_method,
                          debug_every=self.debug_every)
-        
+
         if not self.share_module_weight_at_depth:
           ikey = str(i) + '-' + str(j) + '-' + str(art)
           self.function_modules[i] = mod
@@ -158,23 +157,23 @@ class RTFiLMedNet(nn.Module):
           ikey = str(j) + '-' + str(art)
           self.function_modules[j] = mod
         self.add_module(ikey, mod)
-    
+
       # ensuring every node at the same depth has the same arity
       if self.share_module_weight_at_depth:
         if j not in self.depth_to_arity:
           self.depth_to_arity[j] = art
         else:
-          if art != self.depth_to_arity[j]: raise Exception("Nodes at the same depth need to have the same arity.")    
-      
+          if art != self.depth_to_arity[j]: raise Exception("Nodes at the same depth need to have the same arity.")
+
       if art == 0: return i+1
       idx = i+1
       dpt = j+1
       for _ in range(art):
         idx = generateModules(idx, dpt)
-      
+
       return idx
-              
-    
+
+
     generateModules(0, 1)
 
     # Initialize output classifier
@@ -184,21 +183,21 @@ class RTFiLMedNet(nn.Module):
                                        dropout=classifier_dropout)
 
     init_modules(self.modules())
-  
+
   def _forward_modules(self, feats, gammas, betas, cond_maps, batch_coords, save_activations, j, ijd):
-    
+
     if j >= len(self.treeArities): return None, j+1
     fn_art = self.treeArities[j]
     fn_dept = ijd
-    
+
     if not self.share_module_weight_at_depth:
       module = self.function_modules[j]
     else:
       module = self.function_modules[fn_dept]
-    
+
     idx = j + 1
     dpt = ijd + 1
-    
+
     if fn_art == 0:
       module_inputs = feats
     else:
@@ -207,7 +206,7 @@ class RTFiLMedNet(nn.Module):
         cur_input, idx = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, idx, dpt)
         module_inputs.append(cur_input)
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
-    
+
     bcoords = batch_coords
     if self.condition_method == 'concat':
       icond_maps = cond_maps[:,j,:]
@@ -217,7 +216,7 @@ class RTFiLMedNet(nn.Module):
       igammas = gammas[:,j,:]
       ibetas = betas[:,j,:]
       module_output = module(module_inputs, igammas, ibetas, bcoords)
-    
+
     if save_activations:
       self.module_outputs.append(module_output)
 
@@ -322,7 +321,7 @@ class ConcatBlock(nn.Module):
     out = torch.cat(x, 1) # Concatentate along depth
     out = F.relu(self.proj(out))
     out = self.res_block(out)
-    return out  
+    return out
 
 
 def coord_map(shape, start=-1, end=1):

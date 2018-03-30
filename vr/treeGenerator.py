@@ -44,7 +44,7 @@ def chainTree(depth=8):
 
 def pairChainTree(depth=8):
   if depth < 2: raise Exception('Depth has to be at least 2')
-  half = depth / 2
+  half = int(depth / 2)
   above = [1] * half
   above[-1] = 2
   below = [1] * half

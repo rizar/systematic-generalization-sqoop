@@ -14,6 +14,7 @@ def _arity(token):
     else:
         return 1
 
+
 def create_vocab(questions):
     question_vocab = {'<NULL>': 0, '<START>': 1, '<END>': 2}
     for q in questions:
@@ -22,6 +23,7 @@ def create_vocab(questions):
                 question_vocab[w] = len(question_vocab)
 
     return question_vocab
+
 
 def vocab_to_module_text(program_vocab):
     """_Find[blue] -> (find, blue)"""
@@ -48,7 +50,6 @@ def vocab_to_module_text(program_vocab):
 
 
 # An adaptation of the original code for parsing SHAPES queries
-
 def extract_parse(p):
     if isinstance(p, sexpdata.Symbol):
         return p.value()
@@ -180,6 +181,7 @@ def main(shapes_data, size, programs):
                    'text_arg_to_idx': text_arg_to_idx,
                    },
                   dst)
+
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()

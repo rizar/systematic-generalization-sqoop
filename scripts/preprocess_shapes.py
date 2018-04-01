@@ -169,16 +169,17 @@ def main(shapes_data, size, programs):
 
 
     (program_token_to_module_text,
-     text_token_to_idx,
-     text_arg_to_idx) = vocab_to_module_text(program_vocab)
+     module_token_to_idx,
+     text_token_to_idx) = vocab_to_module_text(program_vocab)
 
     with open('vocab.json', 'w') as dst:
         json.dump({'question_token_to_idx': question_vocab,
                    'program_token_to_idx': program_vocab,
                    'program_token_arity': {name: _arity(name) for name in program_vocab},
                    'answer_token_to_idx': {'false': 0, 'true': 1},
-                   'program_token_to_module_arg': program_token_to_module_arg,
-                   'text_arg_to_idx': text_arg_to_idx,
+                   'program_token_to_module_text': program_token_to_module_text,
+                   'module_token_to_idx': module_token_to_idx,
+                   'text_token_to_idx': text_token_to_idx,
                    },
                   dst)
 

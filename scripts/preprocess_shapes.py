@@ -32,9 +32,15 @@ def vocab_to_module_text(program_vocab):
     module_tokens = set()
     for token in program_vocab:
         if token.startswith('_'):
-            module, text = token.split('[')
-            module = module[1:].lower()
-            text = text[:-1]
+            if '[' not in token:
+                # _And
+                module = token[1:]
+                text = None
+            else:
+                # _Find[blue]
+                module, text = token.split('[')
+                module = module[1:].lower()
+                text = text[:-1]
             program_token_to_module_text[token] = (module, text)
             text_tokens.add(text)
             module_tokens.add(module)

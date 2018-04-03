@@ -33,6 +33,9 @@ class FiLMGen(nn.Module):
     module_dim=128,
     parameter_efficient=False,
     debug_every=float('inf'),
+    
+    taking_context = False,
+    
   ):
     super(FiLMGen, self).__init__()
     self.encoder_type = encoder_type
@@ -49,6 +52,9 @@ class FiLMGen(nn.Module):
     self.NULL = null_token
     self.START = start_token
     self.END = end_token
+    
+    self.taking_context = taking_context
+    
     if self.bidirectional:
       if decoder_type != 'linear':
         raise(NotImplementedError)
@@ -97,6 +103,9 @@ class FiLMGen(nn.Module):
   def before_rnn(self, x, replace=0):
     N, T = x.size()
     idx = torch.LongTensor(N).fill_(T - 1)
+    
+    #mask to specify non-null tokens
+    mask = torch.FloatTensor(N, T).zero_()
 
     # Find the last non-null element in each sequence.
     x_cpu = x.cpu()
@@ -105,28 +114,39 @@ class FiLMGen(nn.Module):
         if x_cpu.data[i, t] != self.NULL and x_cpu.data[i, t + 1] == self.NULL:
           idx[i] = t
           break
+    
+    for i in range(N):
+      for t in range(T):
+        if x_cpu.data[i, t] not in [self.NULL]:
+          mask[i, t] = 1.
+    
     idx = idx.type_as(x.data)
     x[x.data == self.NULL] = replace
-    return x, Variable(idx)
+    return x, Variable(idx), mask
 
   def encoder(self, x):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)
-    x, idx = self.before_rnn(x)  # Tokenized word sequences (questions), end index
+    x, idx, mask = self.before_rnn(x)  # Tokenized word sequences (questions), end index
     embed = self.encoder_embed(x)
     h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
 
     if self.encoder_type == 'lstm':
       c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
-      out, _ = self.encoder_rnn(embed, (h0, c0))
+      out, (hn, _) = self.encoder_rnn(embed, (h0, c0))
     elif self.encoder_type == 'gru':
-      out, _ = self.encoder_rnn(embed, h0)
+      out, hn = self.encoder_rnn(embed, h0)
+      
+    hn = 
 
     # Pull out the hidden state for the last non-null value in each input
     idx = idx.view(N, 1, 1).expand(N, 1, H_full)
-    return out.gather(1, idx).view(N, H_full)
+    return out.gather(1, idx).view(N, H_full), out, hn, mask
 
   def decoder(self, encoded, dims, h0=None, c0=None):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = dims
+    
+    if self.decoder_tye == 'none':
+      return self.
 
     if self.decoder_type == 'linear':
       # (N x H) x (H x T_out*V_out) -> (N x T_out*V_out) -> N x T_out x V_out
@@ -154,7 +174,10 @@ class FiLMGen(nn.Module):
   def forward(self, x):
     if self.debug_every <= -2:
       pdb.set_trace()
-    encoded = self.encoder(x)
+    encoded, whole_context, last_vector, mask = self.encoder(x)
+    
+    
+    
     film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
     film = self.modify_output(film_pre_mod, gamma_option=self.gamma_option,
                               gamma_shift=self.gamma_baseline)

@@ -257,7 +257,7 @@ class RTFiLMedNet(nn.Module):
     feats = self.stem(x)
     if save_activations:
       self.feats = feats
-    N, _, H, W = feats.size()
+    #N, _, H, W = feats.size()
 
     final_module_output, _ = self._forward_modules(feats, gammas, betas, cond_maps, batch_coords, save_activations, 0, 1)
 

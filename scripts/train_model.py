@@ -36,6 +36,12 @@ from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
 
+
+def parse_list(input_):
+  if input_ == None:
+    return []
+  return list(map(int, input_.split(',')))
+
 # Input data
 parser.add_argument('--data_dir', default='data')
 parser.add_argument('--train_question_h5', default='train_questions.h5')
@@ -74,6 +80,7 @@ parser.add_argument('--rnn_dropout', default=0, type=float)
 
 # Module net / FiLMedNet options
 parser.add_argument('--module_stem_num_layers', default=2, type=int)
+parser.add_argument('--module_stem_subsample_layers', default=None, type=parse_list)
 parser.add_argument('--module_stem_batchnorm', default=0, type=int)
 parser.add_argument('--module_dim', default=128, type=int)
 parser.add_argument('--module_residual', default=1, type=int)
@@ -577,6 +584,7 @@ def get_execution_engine(args):
       'feature_dim': parse_int_list(args.feature_dim),
       'stem_batchnorm': args.module_stem_batchnorm == 1,
       'stem_num_layers': args.module_stem_num_layers,
+      'stem_subsample_layers': args.module_stem_subsample_layers,
       'module_dim': args.module_dim,
       'module_residual': args.module_residual == 1,
       'module_batchnorm': args.module_batchnorm == 1,

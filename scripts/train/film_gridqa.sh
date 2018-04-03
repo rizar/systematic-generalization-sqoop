@@ -14,7 +14,8 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --batch_size 64 \
   --use_coords 1 \
   --module_stem_batchnorm 1 \
-  --module_stem_num_layers 1 \
+  --module_stem_num_layers 4 \
+  --module_stem_subsample_layers 1\
   --module_batchnorm 1 \
   --classifier_batchnorm 1 \
   --bidirectional 0 \

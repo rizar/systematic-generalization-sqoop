@@ -70,19 +70,23 @@ class Flatten(nn.Module):
 
 
 def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
-    kernel_size=3, stride=1, padding=None):
+               kernel_size=3, stride=1, padding=None, subsample_layers=None):
   layers = []
   prev_dim = feature_dim
   if padding is None:  # Calculate default padding when None provided
     if kernel_size % 2 == 0:
       raise(NotImplementedError)
     padding = kernel_size // 2
+  if subsample_layers is None:
+    subsample_layers = []
   for i in range(num_layers):
     layers.append(nn.Conv2d(prev_dim, module_dim, kernel_size=kernel_size, stride=stride,
                             padding=padding))
     if with_batchnorm:
       layers.append(nn.BatchNorm2d(module_dim))
     layers.append(nn.ReLU(inplace=True))
+    if i in subsample_layers:
+      layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
     prev_dim = module_dim
   return nn.Sequential(*layers)
 

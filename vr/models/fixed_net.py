@@ -4,9 +4,7 @@ import torch.nn as nn
 from vr.models.module_net import ModuleNet
 
 # TODO(mnoukhov)
-# text arg to idx
-# module to module name?
-# passing text as input to modules
+# batchnorm?
 
 class Find(nn.Module):
   # Input:
@@ -87,23 +85,22 @@ class Answer(nn.Module):
 class FixedModuleNet(ModuleNet):
   def __init__(self,
                vocab,
-               input_dim=(1024, 14, 14),
+               feature_dim=(1024, 14, 14),
                stem_num_layers=2,
                stem_batchnorm=False,
-               image_dim=128,
-               batchnorm=False,
+               module_dim=128,
+               module_batchnorm=False,
                verbose=True):
     super(ModuleNet, self).__init__()
 
-    input_C, input_H, input_W = input_dim
+    input_C, input_H, input_W = feature_dim
     self.stem = build_stem(input_C,
-                            image_dim,
-                            num_layers=stem_num_layers,
-                            with_batchnorm=stem_batchnorm)
+                           module_dim,
+                           num_layers=stem_num_layers,
+                           with_batchnorm=stem_batchnorm)
     if verbose:
       print('Here is my stem:')
       print(self.stem)
-
 
     if verbose:
       print('Here is my classifier:')
@@ -118,23 +115,20 @@ class FixedModuleNet(ModuleNet):
     self.num_answer = len(vocab['answer_idx_to_token'])
     self.text_dim = len(vocab['text_arg_to_idx'])
 
-    self.function_modules = {
+    self.name_to_module = {
       'and': And(),
       'answer': Answer(self.num_answer),
-      'find': Find(image_dim, self.text_dim),
+      'find': Find(module_dim, self.text_dim),
       'transform': Transform(self.text_dim),
     }
-
-    # hard-coding the number of image/att inputs
-    self.function_modules_num_inputs = {
+    self.name_to_num_inputs = {
       'and': 2,
       'answer': 1,
       'find': 1,
       'transform': 1,
     }
-
-    for name, module in function_modules:
-      self.add_module(fn_str, mod)
+    for name, module in name_to_module:
+      self.add_module(name, module)
 
     self.save_module_outputs = False
 
@@ -159,12 +153,12 @@ class FixedModuleNet(ModuleNet):
       self.used_fns[i, j] = 1
 
     j += 1
-    module = self.function_modules[fn_str]
+    module_name, input_text = self.vocab['program_to_module_text'].get(fn_str, (None, None))
+    module = self.name_to_module[fn_str]
 
     if fn_str == 'scene':
       module_inputs = [feats[i:i+1]]
     else:
-      module_name = self.
       num_inputs = self.function_modules_num_inputs[module_name]
       module_inputs = []
       while len(module_inputs) < num_inputs:
@@ -184,6 +178,7 @@ class FixedModuleNet(ModuleNet):
     final_module_outputs = []
     self.used_fns = torch.Tensor(program.size()).fill_(0)
     for i in range(N):
+      __import__('pdb').set_trace()
       cur_output, _ = self._forward_modules_ints_helper(feats, program, i, 0)
       final_module_outputs.append(cur_output)
     self.used_fns = self.used_fns.type_as(program.data).float()
@@ -198,7 +193,7 @@ class FixedModuleNet(ModuleNet):
 
     if type(program) is list or type(program) is tuple:
       final_module_outputs = self._forward_modules_json(feats, program)
-    elif type(program) is Variable and program.dim() == 2:
+    elif type(program) is torch.Variable and program.dim() == 2:
       final_module_outputs = self._forward_modules_ints(feats, program)
     elif torch.is_tensor(program) and program.dim() == 3:
       final_module_outputs = self._forward_modules_probs(feats, program)

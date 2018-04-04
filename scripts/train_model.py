@@ -80,7 +80,7 @@ parser.add_argument('--rnn_dropout', default=0, type=float)
 
 # Module net / FiLMedNet options
 parser.add_argument('--module_stem_num_layers', default=2, type=int)
-parser.add_argument('--module_stem_subsample_layers', default=None, type=parse_list)
+parser.add_argument('--module_stem_subsample_layers', default=[], type=parse_list)
 parser.add_argument('--module_stem_batchnorm', default=0, type=int)
 parser.add_argument('--module_dim', default=128, type=int)
 parser.add_argument('--module_residual', default=1, type=int)

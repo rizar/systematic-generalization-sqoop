@@ -253,7 +253,7 @@ def train_loop(args, train_loader, val_loader):
                                 weight_decay=args.weight_decay)
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE']:
+  if args.model_type in ['RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Fixed']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     ee_optimizer = optim_method(execution_engine.parameters(),
                                 lr=args.learning_rate,
@@ -323,7 +323,7 @@ def train_loop(args, train_loader, val_loader):
         loss = program_generator(questions_var, programs_var)
         loss.backward()
         pg_optimizer.step()
-      elif args.model_type in ['EE', 'FixedNet']:
+      elif args.model_type in ['EE', 'Fixed']:
         # Train execution engine with ground-truth programs
         ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, programs_var)
@@ -429,6 +429,7 @@ def train_loop(args, train_loader, val_loader):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
+
 
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
@@ -649,7 +650,15 @@ def get_execution_engine(args):
       kwargs['condition_method'] = args.condition_method
       kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
       ee = RTFiLMedNet(**kwargs)
-    elif args.model_type == 'EE-Fixed':
+    elif args.model_type == 'Fixed':
+      kwargs = {
+        'vocab': vocab,
+        'feature_dim': parse_int_list(args.feature_dim),
+        'stem_batchnorm': args.module_stem_batchnorm == 1,
+        'stem_num_layers': args.module_stem_num_layers,
+        'module_dim': args.module_dim,
+        'module_batchnorm': args.module_batchnorm == 1,
+      }
       ee = FixedModuleNet(**kwargs)
     else:
       ee = ModuleNet(**kwargs)

@@ -44,13 +44,18 @@ class MAC(nn.Module):
                module_dropout=0,
                module_input_proj=1,
                module_kernel_size=3,
-               classifier_proj_dim=512,
-               classifier_downsample='maxpool2',
+               
+               #the boolean variables to decide wehther to share params betweens the MAC cells in the model for
+               #the input units, control units, read units and write units respectively
+               sharing_params_patterns=[0,1,0,0],
+               
+               #classifier_proj_dim=512,
+               #classifier_downsample='maxpool2',
                classifier_fc_layers=(1024,),
                classifier_batchnorm=False,
                classifier_dropout=0,
-               condition_method='bn-film',
-               condition_pattern=[],
+               #condition_method='bn-film',
+               #condition_pattern=[],
                #use_gamma=True,
                #use_beta=True,
                use_coords=1,
@@ -68,18 +73,20 @@ class MAC(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
-    self.module_num_layers = module_num_layers
+    #self.module_num_layers = module_num_layers
     self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
-    self.condition_method = condition_method
-    self.use_gamma = use_gamma
-    self.use_beta = use_beta
+    #self.condition_method = condition_method
+    #self.use_gamma = use_gamma
+    #self.use_beta = use_beta
     self.use_coords_freq = use_coords
     self.debug_every = debug_every
     self.print_verbose_every = print_verbose_every
 
     # Initialize helper variables
     self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
+    
+    '''
     self.condition_pattern = condition_pattern
     if len(condition_pattern) == 0:
       self.condition_pattern = []
@@ -87,9 +94,15 @@ class MAC(nn.Module):
         self.condition_pattern.append(self.condition_method != 'concat')
     else:
       self.condition_pattern = [i > 0 for i in self.condition_pattern]
+    '''
+      
     self.extra_channel_freq = self.use_coords_freq
+    
+    '''
     self.block = FiLMedResBlock
     self.num_cond_maps = 2 * self.module_dim if self.condition_method == 'concat' else 0
+    '''
+    
     self.fwd_count = 0
     self.num_extra_channels = 2 if self.use_coords_freq > 0 else 0
     if self.debug_every <= -1:
@@ -97,8 +110,9 @@ class MAC(nn.Module):
     module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     self.coords = coord_map((module_H, module_W))
-    self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
-    self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
+    
+    #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
+    #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
@@ -208,6 +222,48 @@ class MAC(nn.Module):
       pdb.set_trace()
     return out
 
+
+
+class ControlUnit(nn.Module):
+  def __init__(self, common_dim):
+    super(ControlUnit, self).__init__()
+    self.common_dim = common_dim
+    
+    self.control_question_transformer = nn.Linear(2 * common_dim, common_dim) #Eq (c1)
+    
+    self.score_transformer = nn.Linear(common_dim, 1) # Eq (c2.1)
+    
+    init_modules(self.modules())
+    
+    def forward(self, pre_control, question, context, mask):
+      
+      #pre_control (Nxd), question (Nxd), context(NxLxd), mask(NxL)
+      
+      # N x d
+      control_question = self.control_question_transformer(torch.cat([pre_control, question], 1)) #Eq (c1)
+      
+      #Eq (c2.1)
+      scores = self.score_transformer(context * control_question.unsqueeze(1)).squeeze(2)  #NxLxd -> NxLx1 -> NxL
+      
+      #Eq (c2.2) : softmax
+      scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to elimiate null tokens
+      scores = scores / scores.sum(1, keepdim=True) #NxL
+      
+      #Eq (c2.3)
+      control = (context * scores.unsqueeze(1)).sum(1) #Nxd
+      
+      return control
+
+class InputUnit(nn.Module):
+  def __init__(self, common_dim):
+    super(InputUnit, self).__init__()
+    self.common_dim = common_dim
+    self.question_transformer = nn.Linear(2 * common_dim, common_dim)
+    
+    init_modules(self.modules())
+    
+    def forward(self, question):
+      return self.question_transformer(question) #Section 2.1
 
 class FiLMedResBlock(nn.Module):
   def __init__(self, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,

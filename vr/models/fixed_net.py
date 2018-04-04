@@ -1,6 +1,7 @@
 import torch
 import torch.nn as nn
 
+from vr.models.layers import build_stem
 from vr.models.module_net import ModuleNet
 
 # TODO(mnoukhov)
@@ -14,8 +15,8 @@ class Find(nn.Module):
   #   image_att: [N, 1, H, W]
   def __init__(self, image_dim, text_dim, map_dim=500):
     super().__init__()
-    self.conv2d = nn.Conv2d(image_dim, self.map_dim, 1)
-    self.linear = nn.Linear(text_dim, self.map_dim)
+    self.conv2d = nn.Conv2d(image_dim, map_dim, 1)
+    self.linear = nn.Linear(text_dim, map_dim)
     self.conv3d = nn.Conv3d(map_dim, 1, 1)
 
   def forward(self, images, text):
@@ -102,18 +103,9 @@ class FixedModuleNet(ModuleNet):
       print('Here is my stem:')
       print(self.stem)
 
-    if verbose:
-      print('Here is my classifier:')
-      print(self.classifier)
-
-    self.stem_times = []
-    self.module_times = []
-    self.classifier_times = []
-    self.timing = False
-
     self.vocab = vocab
     self.num_answer = len(vocab['answer_idx_to_token'])
-    self.text_dim = len(vocab['text_arg_to_idx'])
+    self.text_dim = len(vocab['text_token_to_idx'])
 
     self.name_to_module = {
       'and': And(),
@@ -127,80 +119,39 @@ class FixedModuleNet(ModuleNet):
       'find': 1,
       'transform': 1,
     }
-    for name, module in name_to_module:
+    for name, module in self.name_to_module.items():
       self.add_module(name, module)
 
     self.save_module_outputs = False
 
   def _forward_modules_ints_helper(self, feats, program, i, j):
-    used_fn_j = True
-
     if j < program.size(1):
       fn_idx = program.data[i, j]
       fn_str = self.vocab['program_idx_to_token'][fn_idx]
     else:
-      used_fn_j = False
-      fn_str = 'scene'
+      raise IndexError('malformed program')
 
-    if fn_str == '<NULL>':
-      used_fn_j = False
-      fn_str = 'scene'
-    elif fn_str == '<START>':
+    if fn_str == '<START>':
       used_fn_j = False
       return self._forward_modules_ints_helper(feats, program, i, j + 1)
+    elif fn_str in ['<NULL>', '<END>']:
+      used_fn_j = False
+      raise ValueError('reached area out of program')
 
-    if used_fn_j:
-      self.used_fns[i, j] = 1
+    self.used_fns[i, j] = 1
 
     j += 1
-    module_name, input_text = self.vocab['program_to_module_text'].get(fn_str, (None, None))
-    module = self.name_to_module[fn_str]
-
     if fn_str == 'scene':
-      module_inputs = [feats[i:i+1]]
+      output = feats[i].unsqueeze(0)
     else:
-      num_inputs = self.function_modules_num_inputs[module_name]
+      module_name, input_text = self.vocab['program_token_to_module_text'][fn_str]
+      module = self.name_to_module[module_name]
+      num_inputs = self.name_to_num_inputs[module_name]
       module_inputs = []
-      while len(module_inputs) < num_inputs:
-        cur_input, j = self._forward_modules_ints_helper(feats, program, i, j)
-        module_inputs.append(cur_input)
+      for _ in range(num_inputs):
+        module_input, j = self._forward_modules_ints_helper(feats, program, i, j)
+        module_inputs.append(module_input)
 
-    module_output = module(*module_inputs)
-    return module_output, j
+      output = module(*module_inputs)
 
-  def _forward_modules_ints(self, feats, program):
-    """
-    feats: FloatTensor of shape (N, C, H, W) giving features for each image
-    program: LongTensor of shape (N, L) giving a prefix-encoded program for
-      each image.
-    """
-    N = feats.size(0)
-    final_module_outputs = []
-    self.used_fns = torch.Tensor(program.size()).fill_(0)
-    for i in range(N):
-      __import__('pdb').set_trace()
-      cur_output, _ = self._forward_modules_ints_helper(feats, program, i, 0)
-      final_module_outputs.append(cur_output)
-    self.used_fns = self.used_fns.type_as(program.data).float()
-    final_module_outputs = torch.cat(final_module_outputs, 0)
-    return final_module_outputs
-
-  def forward(self, x, program):
-    N = x.size(0)
-    assert N == len(program)
-
-    feats = self.stem(x)
-
-    if type(program) is list or type(program) is tuple:
-      final_module_outputs = self._forward_modules_json(feats, program)
-    elif type(program) is torch.Variable and program.dim() == 2:
-      final_module_outputs = self._forward_modules_ints(feats, program)
-    elif torch.is_tensor(program) and program.dim() == 3:
-      final_module_outputs = self._forward_modules_probs(feats, program)
-    else:
-      raise ValueError('Unrecognized program format')
-
-    # After running modules for each input, concatenat the outputs from the
-    # final module and run the classifier.
-    out = self.classifier(final_module_outputs)
-    return out
+    return output, j

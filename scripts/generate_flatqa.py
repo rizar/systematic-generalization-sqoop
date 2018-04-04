@@ -41,7 +41,8 @@ COLOR2RGB = [('red', (255, 0, 0)),
              ('gray', (128, 128, 128))]
 COLOR2RGB = collections.OrderedDict(COLOR2RGB)
 COLORS = list(COLOR2RGB.keys())
-SHAPES = ['square', 'circle', 'triangle', 'cross', 'hbar', 'vbar']
+SHAPES = ['square', 'empty_square', 'circle',
+          'triangle', 'empty_triangle', 'cross', 'bar']
 MIN_OBJECT_SIZE = 8
 
 
@@ -52,24 +53,35 @@ def draw_object(shape, color, surf):
   if width < MIN_OBJECT_SIZE:
     raise ValueError("too small, can't draw")
   rgb = COLOR2RGB[color]
+
   if shape == 'square':
-    pygame.draw.rect(surf, rgb, pygame.Rect(2, 2, width - 4, height - 4))
+      pygame.draw.rect(surf, rgb, pygame.Rect(0, 0, width, height))
   elif shape == 'circle':
-    pygame.draw.circle(surf, rgb, (width // 2, height // 2), width // 4 + 1)
+      pygame.draw.circle(surf, rgb, (width // 2, height // 2), width // 2)
   elif shape == 'triangle':
-    polygon = [(width // 4, height // 4),
-        (width // 2, height - height // 4),
-        (width - width // 4, height // 4)]
-    pygame.draw.polygon(surf, rgb, polygon)
+      polygon = [(0, 0),
+                  (width // 2, height - 1),
+                  (width - 1, 0)]
+      pygame.draw.polygon(surf, rgb, polygon)
+  elif shape == 'empty_triangle':
+      polygon = [(0, 0),
+                  (width // 2, height - 1),
+                  (width - 1, 0)]
+      pygame.draw.polygon(surf, rgb, polygon, width // 4 - 1)
+  elif shape == 'empty_square':
+      thickness = width // 4 - 1
+      polygon = [(thickness - 1, thickness - 1),
+                  (width - thickness, thickness - 1),
+                  (width - thickness, height - thickness),
+                  (thickness - 1, height - thickness)]
+      pygame.draw.polygon(surf, rgb, polygon, thickness)
   elif shape == 'cross':
-      pygame.draw.line(surf, rgb, (1, 1), (width - 2, height - 3), 2)
-      pygame.draw.line(surf, rgb, (width - 2, 1), (1, height - 3), 2)
-  elif shape == 'hbar':
-      pygame.draw.line(surf, rgb, (1, height // 2 - 1), (width - 2, height // 2 - 1), 2)
-  elif shape == 'vbar':
-      pygame.draw.line(surf, rgb, (width // 2 - 1, 1), (width // 2 - 1, height - 2), 2)
+      pygame.draw.line(surf, rgb, (0, 0), (width - 1, height - 1), width // 4)
+      pygame.draw.line(surf, rgb, (width - 1, 0), (0, height - 1), width // 4)
+  elif shape == 'bar':
+      pygame.draw.line(surf, rgb, (0, height // 2), (width - 1, height // 2), width // 4)
   else:
-    raise ValueError()
+      raise ValueError()
 
 
 def get_object_bitmap(shape, color, size):
@@ -322,9 +334,12 @@ def main():
     val_object_allowed = test_object_allowed = ExcludeRedSquare(
       inverse=True, restrict_scene=False)
 
-  generate_dataset('train', 50, args.train, 1, train_object_allowed, save_vocab=True)
-  generate_dataset('val', 50, args.val, 2, val_object_allowed)
-  generate_dataset('test', 50, args.test, 3, test_object_allowed)
+  generate_dataset('train', args.image_size,
+                   args.train, 1, train_object_allowed, save_vocab=True)
+  generate_dataset('val', args.image_size,
+                   args.val, 2, val_object_allowed)
+  generate_dataset('test', args.image_size,
+                   args.test, 3, test_object_allowed)
 
 
 if __name__ == '__main__':
@@ -335,6 +350,7 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=100,
                       help="Size of the test set")
+  parser.add_argument('--image-size', type=int, default=50)
   parser.add_argument('--split', type=str,
                       choices=('none', 'CoGenT', 'diagonal', 'leave1out'),
                       help="The split to use")

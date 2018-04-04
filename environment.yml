@@ -8,3 +8,6 @@ dependencies:
 - torchvision
 - h5py
 - scipy
+- numpy
+- tqdm
+- termcolor

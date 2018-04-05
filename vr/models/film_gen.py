@@ -126,7 +126,7 @@ class FiLMGen(nn.Module):
     
     idx = idx.type_as(x.data)
     x[x.data == self.NULL] = replace
-    return x, Variable(idx), mask
+    return x, Variable(idx), Variable(mask).type(torch.cuda.FloatTensor)
 
   def encoder(self, x):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)

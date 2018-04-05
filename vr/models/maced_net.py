@@ -331,7 +331,7 @@ class WriteUnit(nn.Module):
       gated_control = self.gated_control_transformer(controls[:,idx,:]) #N x 1
       
       #Eq (w3.2)
-      gated_control = self.non_liear(gated_control)
+      gated_control = self.non_linear(gated_control)
       res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
     
     return res_memory

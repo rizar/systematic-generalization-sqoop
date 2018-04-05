@@ -271,7 +271,7 @@ class OutputUnit(nn.Module):
       if dropout > 0:
         layers.append(nn.Dropout(p=dropout))
     
-    layers.append(hidden_units[-1], num_outputs)
+    layers.append(nn.Linear(hidden_units[-1], num_outputs))
     
     self.layers = nn.Sequential(*layers)
     

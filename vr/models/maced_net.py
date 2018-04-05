@@ -260,6 +260,7 @@ class MAC(nn.Module):
 
 class OutputUnit(nn.Module):
   def __init__(self, input_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
+    super(OutputUnit, self).__init__()
     hidden_units = [input_dim] + [h for h in hidden_units]
     
     layers = []

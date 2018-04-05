@@ -63,7 +63,7 @@ class MAC(nn.Module):
 
     self.num_modules = num_modules
     #self.module_num_layers = module_num_layers
-    self.module_batchnorm = module_batchnorm
+    #self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
     #self.condition_method = condition_method
     #self.use_gamma = use_gamma
@@ -165,8 +165,8 @@ class MAC(nn.Module):
         self.WriteUnits.append(mod)
     
     #parameters for initial memory and control vectors
-    self.init_memory = nn.Parameter(torch.zeros(N, module_dim).cuda())
-    self.init_control = nn.Parameter(torch.zeros(N, module_dim).cuda())
+    self.init_memory = nn.Parameter(torch.zeros(module_dim).cuda())
+    self.init_control = nn.Parameter(torch.zeros(module_dim).cuda())
 
     self.vocab = vocab
 
@@ -205,8 +205,8 @@ class MAC(nn.Module):
     control_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
     memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
     
-    control_storage[:,0,:] = self.init_control
-    memory_storage[:,0,:] = self.init_memory
+    control_storage[:,0,:] = self.init_control.expand(N, self.module_dim)
+    memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
     
     for fn_num in range(self.num_modules):
       inputUnit = self.InputUnits[fn_num] if isinstance(self.InputUnits, list) else self.InputUnits

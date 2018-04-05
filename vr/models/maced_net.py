@@ -413,7 +413,7 @@ class ControlUnit(nn.Module):
     scores = scores / scores.sum(1, keepdim=True) #NxL
       
     #Eq (c2.3)
-    control = (context * scores.unsqueeze(1)).sum(1) #Nxd
+    control = (context * scores.unsqueeze(2)).sum(1) #Nxd
       
     return control
 

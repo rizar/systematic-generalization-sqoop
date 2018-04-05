@@ -2,28 +2,15 @@
 
 import math
 import pprint
-from termcolor import colored
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
 
-from vr.models.layers import init_modules, GlobalAveragePool, Flatten
+from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
 import vr.programs
-
-
-class FiLM(nn.Module):
-  """
-  A Feature-wise Linear Modulation Layer from
-  'FiLM: Visual Reasoning with a General Conditioning Layer'
-  """
-  def forward(self, x, gammas, betas):
-    gammas = gammas.unsqueeze(2).unsqueeze(3).expand_as(x)
-    betas = betas.unsqueeze(2).unsqueeze(3).expand_as(x)
-    return (gammas * x) + betas
-
 
 class MAC(nn.Module):
   """Implementation of the Compositional Attention Networks from: https://openreview.net/pdf?id=S1Euwz-Rb"""
@@ -177,6 +164,9 @@ class MAC(nn.Module):
         self.add_module('WriteUnit' + str(i+1), mod)
         self.WriteUnits.append(mod)
     
+    #parameters for initial memory and control vectors
+    self.init_memory = nn.Parameter(torch.zeros(N, module_dim).cuda())
+    self.init_control = nn.Parameter(torch.zeros(N, module_dim).cuda())
 
     self.vocab = vocab
 
@@ -185,36 +175,23 @@ class MAC(nn.Module):
                                  with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
 
     init_modules(self.modules())
-    
-    
-    ##########################################
 
-  def forward(self, x, film, save_activations=False):
+  def forward(self, x, ques, save_activations=False):
     # Initialize forward pass and externally viewable activations
     self.fwd_count += 1
     if save_activations:
       self.feats = None
-      self.module_outputs = []
+      self.control_outputs = []
+      self.memory_outputs = []
       self.cf_input = None
 
+    '''
     if self.debug_every <= -2:
       pdb.set_trace()
+    '''
+    
+    q_context, q_rep, q_mask = ques
 
-    # Prepare FiLM layers
-    gammas = None
-    betas = None
-    if self.condition_method == 'concat':
-      # Use parameters usually used to condition via FiLM instead to condition via concatenation
-      cond_params = film[:,:,:2*self.module_dim]
-      cond_maps = cond_params.unsqueeze(3).unsqueeze(4).expand(cond_params.size() + x.size()[-2:])
-    else:
-      gammas, betas = torch.split(film[:,:,:2*self.module_dim], self.module_dim, dim=-1)
-      if not self.use_gamma:
-        gammas = self.default_weight.expand_as(gammas)
-      if not self.use_beta:
-        betas = self.default_bias.expand_as(betas)
-
-    # Propagate up image features CNN
     batch_coords = None
     if self.use_coords_freq > 0:
       batch_coords = self.coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.coords.size())))
@@ -224,41 +201,61 @@ class MAC(nn.Module):
     if save_activations:
       self.feats = feats
     N, _, H, W = feats.size()
-
-    # Propagate up the network from low-to-high numbered blocks
-    module_inputs = Variable(torch.zeros(feats.size()).unsqueeze(1).expand(
-      N, self.num_modules, self.module_dim, H, W)).type(torch.cuda.FloatTensor)
-    module_inputs[:,0] = feats
+    
+    control_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
+    memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
+    
+    control_storage[:,0,:] = self.init_control
+    memory_storage[:,0,:] = self.init_memory
+    
     for fn_num in range(self.num_modules):
-      if self.condition_method == 'concat':
-        layer_output = self.function_modules[fn_num](module_inputs[:,fn_num],
-          extra_channels=batch_coords, cond_maps=cond_maps[:,fn_num])
-      else:
-        layer_output = self.function_modules[fn_num](module_inputs[:,fn_num],
-          gammas[:,fn_num,:], betas[:,fn_num,:], batch_coords)
-
-      # Store for future computation
+      inputUnit = self.InputUnits[fn_num] if isinstance(self.InputUnits, list) else self.InputUnits
+      controlUnit = self.ControlUnits[fn_num] if isinstance(self.ControlUnits, list) else self.ControlUnits
+      readUnit = self.ReadUnits[fn_num] if isinstance(self.ReadUnits, list) else self.ReadUnits
+      writeUnit = self.WriteUnits[fn_num] if isinstance(self.WriteUnits, list) else self.WriteUnits
+      
+      #compute question representation specific to this cell
+      q_rep_i = inputUnit(q_rep) # N x d
+      
+      #compute control at the current step
+      control_i = controlUnit(control_storage[:,fn_num,:], q_rep_i, q_context, q_mask)
       if save_activations:
-        self.module_outputs.append(layer_output)
-      if fn_num == (self.num_modules - 1):
-        final_module_output = layer_output
-      else:
-        module_inputs_updated = module_inputs.clone()
-        module_inputs_updated[:,fn_num+1] = module_inputs_updated[:,fn_num+1] + layer_output
-        module_inputs = module_inputs_updated
+        self.control_outputs.append(control_i)
+      control_updated = control_storage.clone()
+      control_updated[:,(fn_num+1),:] = control_updated[:,(fn_num+1),:] + control_i
+      control_storage = control_updated
+      
+      #compute read at the current step
+      read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats)
+      
+      #compute write memeory at the current step
+      forward(self, memories, controls, current_read, idx)
+      memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
+      if save_activations:
+        self.memory_outputs.append(memory_i)
 
-    if self.debug_every <= -2:
-      pdb.set_trace()
+      if fn_num == (self.num_modules - 1):
+        final_module_output = memory_i
+      else:
+        memory_updated = memory_storage.clone()
+        memory_updated[:,(fn_num+1),:] = memory_updated[:,(fn_num+1),:] + memory_i
+        memory_storage = memory_updated
 
     # Run the final classifier over the resultant, post-modulated features.
+    '''
     if self.use_coords_freq > 0:
       final_module_output = torch.cat([final_module_output, batch_coords], 1)
+    '''
+    final_module_output = torch.cat([q_rep, final_module_output], 1)
+    
     if save_activations:
       self.cf_input = final_module_output
     out = self.classifier(final_module_output)
-
+    
+    '''
     if ((self.fwd_count % self.debug_every) == 0) or (self.debug_every <= -1):
       pdb.set_trace()
+    '''
     return out
 
 class OutputUnit(nn.Module):
@@ -277,6 +274,8 @@ class OutputUnit(nn.Module):
     layers.append(hidden_units[-1], num_outputs)
     
     self.layers = nn.Sequential(*layers)
+    
+    init_modules(self.modules())
   
   def forward(self, x):
     return self.layers(x)

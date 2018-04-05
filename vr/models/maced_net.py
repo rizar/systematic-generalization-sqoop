@@ -229,7 +229,6 @@ class MAC(nn.Module):
       read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats)
       
       #compute write memeory at the current step
-      forward(self, memories, controls, current_read, idx)
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
       if save_activations:
         self.memory_outputs.append(memory_i)

@@ -267,7 +267,7 @@ class OutputUnit(nn.Module):
       layers.append(nn.Linear(nin, nout))
       if with_batchnorm:
         layers.append(nn.BatchNorm1d(nout))
-      layes.append(nn.ReLU(inplace=True))
+      layes.append(nn.ELU(inplace=True)) #ReLU
       if dropout > 0:
         layers.append(nn.Dropout(p=dropout))
     

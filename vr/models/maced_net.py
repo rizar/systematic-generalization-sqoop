@@ -37,17 +37,19 @@ class MAC(nn.Module):
                
                #module_num_layers=1,
                module_dim=128,
-               module_residual=True,
+               #module_residual=True,
                #module_intermediate_batchnorm=False,
-               module_batchnorm=False,
-               module_batchnorm_affine=False,
-               module_dropout=0,
-               module_input_proj=1,
-               module_kernel_size=3,
+               #module_batchnorm=False,
+               #module_batchnorm_affine=False,
+               #module_dropout=0,
+               #module_input_proj=1,
+               #module_kernel_size=3,
                
                #the boolean variables to decide wehther to share params betweens the MAC cells in the model for
                #the input units, control units, read units and write units respectively
-               sharing_params_patterns=[0,1,0,0],
+               sharing_params_patterns=(0,1,0,0),
+               use_self_attention=1, 
+               use_memory_gate=1,
                
                #classifier_proj_dim=512,
                #classifier_downsample='maxpool2',
@@ -79,6 +81,11 @@ class MAC(nn.Module):
     #self.condition_method = condition_method
     #self.use_gamma = use_gamma
     #self.use_beta = use_beta
+    
+    self.sharing_params_patterns = [True if p == 1 else 0 for p in sharing_params_patterns]
+    self.use_self_attention = use_self_attention == 1
+    self.use_memory_gate = use_memory_gate == 1
+    
     self.use_coords_freq = use_coords
     self.debug_every = debug_every
     self.print_verbose_every = print_verbose_every
@@ -119,36 +126,68 @@ class MAC(nn.Module):
     self.stem = build_stem(stem_feature_dim, module_dim,
                            num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
                            kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding)
+    
+    
+    #Define units
+    if self.sharing_params_patterns[0]:
+      mod = InputUnit(module_dim)
+      self.add_module('InputUnit', mod)
+      self.InputUnits = mod
+    else:
+      self.InputUnits = []
+      for i in range(self.num_modules):
+        mod = InputUnit(module_dim)
+        self.add_module('InputUnit' + str(i+1), mod)
+        self.InputUnits.append(mod)
+    
+    if self.sharing_params_patterns[1]:
+      mod = ControlUnit(module_dim)
+      self.add_module('ControlUnit', mod)
+      self.ControlUnits = mod
+    else:
+      self.ControlUnits = []
+      for i in range(self.num_modules):
+        mod = ControlUnit(module_dim)
+        self.add_module('ControlUnit' + str(i+1), mod)
+        self.ControlUnits.append(mod)
+    
+    if self.sharing_params_patterns[2]:
+      mod = ReadUnit(module_dim)
+      self.add_module('ReadUnit', mod)
+      self.ReadUnits = mod
+    else:
+      self.ReadUnits = []
+      for i in range(self.num_modules):
+        mod = ReadUnit(module_dim)
+        self.add_module('ReadUnit' + str(i+1), mod)
+        self.ReadUnits.append(mod)
+    
+    if self.sharing_params_patterns[3]:
+      mod = WriteUnit(module_dim, 
+                      use_self_attention=self.use_self_attention,
+                      use_memory_gate=self.use_memory_gate)
+      self.add_module('WriteUnit', mod)
+      self.WriteUnits = mod
+    else:
+      self.WriteUnits = []
+      for i in range(self.num_modules):
+        mod = WriteUnit(module_dim, 
+                        use_self_attention=self.use_self_attention,
+                        use_memory_gate=self.use_memory_gate)
+        self.add_module('WriteUnit' + str(i+1), mod)
+        self.WriteUnits.append(mod)
+    
 
-    # Initialize FiLMed network body
-    self.function_modules = {}
     self.vocab = vocab
-    for fn_num in range(self.num_modules):
-      with_cond = self.condition_pattern[self.module_num_layers * fn_num:
-                                          self.module_num_layers * (fn_num + 1)]
-      mod = self.block(module_dim, with_residual=module_residual,
-                       with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
-                       with_cond=with_cond,
-                       dropout=module_dropout,
-                       num_extra_channels=self.num_extra_channels,
-                       extra_channel_freq=self.extra_channel_freq,
-                       with_input_proj=module_input_proj,
-                       num_cond_maps=self.num_cond_maps,
-                       kernel_size=module_kernel_size,
-                       batchnorm_affine=module_batchnorm_affine,
-                       num_layers=self.module_num_layers,
-                       condition_method=condition_method,
-                       debug_every=self.debug_every)
-      self.add_module(str(fn_num), mod)
-      self.function_modules[fn_num] = mod
 
     # Initialize output classifier
-    self.classifier = build_classifier(module_dim + self.num_extra_channels, module_H, module_W,
-                                       num_answers, classifier_fc_layers, classifier_proj_dim,
-                                       classifier_downsample, with_batchnorm=classifier_batchnorm,
-                                       dropout=classifier_dropout)
+    self.classifier = OutputUnit(3*module_dim, classifier_fc_layers, num_answers,
+                                 with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
 
     init_modules(self.modules())
+    
+    
+    ##########################################
 
   def forward(self, x, film, save_activations=False):
     # Initialize forward pass and externally viewable activations
@@ -222,7 +261,131 @@ class MAC(nn.Module):
       pdb.set_trace()
     return out
 
+class OutputUnit(nn.Module):
+  def __init__(self, input_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
+    hidden_units = [input_dim] + hidden_units
+    
+    layers = []
+    for nin, nout in zip(hidden_units, hidden_units[1:]):
+      layers.append(nn.Linear(nin, nout))
+      if with_batchnorm:
+        layers.append(nn.BatchNorm1d(nout))
+      layes.append(nn.ReLU(inplace=True))
+      if dropout > 0:
+        layers.append(nn.Dropout(p=dropout))
+    
+    layers.append(hidden_units[-1], num_outputs)
+    
+    self.layers = nn.Sequential(*layers)
+  
+  def forward(self, x):
+    return self.layers(x)
 
+class WriteUnit(nn.Module):
+  def __init__(self, common_dim, use_self_attention=False, use_memory_gate=False):
+    super(WriteUnit, self).__init__()
+    self.common_dim = common_dim
+    self.use_self_attention = use_self_attention
+    self.use_memory_gate = use_memory_gate
+    
+    self.control_memory_transfomer = nn.Linear(2 * common_dim, common_dim) #Eq (w1)
+    
+    if use_self_attention:
+      self.control_transformer = nn.Linear(common_dim, 1) #Eq (w2.1)
+      self.acc_memory_transformer = nn.Linear(common_dim, common_dim, bias=False)
+      self.pre_memory_transformer = nn.Linear(common_dim, common_dim) #Eq (w2.3)
+    
+    if use_memory_gate:
+      self.gated_control_transformer = nn.Linear(common_dim, 1) #Eq (w3.1)
+      self.non_linear = nn.Sigmoid()
+    
+    init_modules(self.modules())
+    
+  def forward(self, memories, controls, current_read, idx):
+    #memories (N x num_cell x d), controls (N x num_cell x d), current_read (N x d), idx (int starting from 1)
+    
+    #Eq (w1)
+    res_memory = self.control_memory_transfomer( torch.cat([current_read, memories[:,idx-1,:]], 1) ) #N x d
+    
+    if self.use_self_attention:
+      current_control = controls[:,idx,:] # N x d
+      if idx > 1:
+        #Eq (w2.1)
+        previous_controls = controls[:,1:idx,:] # N x (idx-1) x d
+        cscores = previous_controls * current_control.unsqueeze(1) # N x (idx-1) x d
+        cscores = self.control_transformer(cscores).squeeze(2) # N x (idx -1)
+        cscores = torch.exp(cscores - cscores.max(1, keepdim=True)[0]) # N x (idx -1)
+        cscores = cscores / cscores.sum(1, keepdim=True) # N x (idx -1)
+        
+        #Eq (w2.2)
+        previous_memories = memories[:,1:idx,:] #N x (idx-1) x d
+        acc_memory = (previous_memories * cscores.unsqueeze(2)).sum(1) # N x d
+        
+        #Eq (w2.3)
+        res_memory = self.acc_memory_transformer(acc_memory) + self.pre_memory_transformer(res_memory)
+      else:
+        #Eq (w2.3) as there is no m_i^{sa} in this case
+        res_memory = self.pre_memory_transformer(res_memory)
+    
+    if self.use_memory_gate:
+      #Eq (w3.1)
+      gated_control = self.gated_control_transformer(controls[:,idx,:]) #N x 1
+      
+      #Eq (w3.2)
+      gated_control = self.non_liear(gated_control)
+      res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
+    
+    return res_memory
+      
+
+class ReadUnit(nn.Module):
+  def __init__(self, common_dim):
+    super(ReadUnit, self).__init__()
+    self.common_dim = common_dim
+    
+    #Eq (r1)
+    self.pre_memory_transformer = nn.Linear(common_dim, common_dim)
+    self.image_element_transformer = nn.Linear(common_dim, common_dim)
+    
+    #Eq (r2)
+    self.intermediate_transformer = nn.Linear(2 * common_dim, common_dim)
+    
+    #Eq (r3.1)
+    self.read_attention_transformer = nn.Linear(common_dim, 1)
+    
+    init_modules(self.modules())
+    
+  def forward(self, pre_memory, current_control, image):
+      
+    #pre_memory(Nxd), current_control(Nxd), image(NxdxHxW)
+      
+    image = image.transpose(1,2).transpose(2,3) #NXHxWxd
+      
+    #Eq (r1)
+    trans_image = self.image_element_transformer(image) #NxHxWxd
+    trans_pre_memory = self.pre_memory_transformer(pre_memory) #Nxd
+    trans_pre_memory = trans_pre_memory.unsqueeze(1).unsqueeze(2).expand(trans_image.size()) #NxHxWxd
+    intermediate = trans_pre_memory * trans_image #NxHxWxd
+      
+    #Eq (r2)
+    trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, image], 3)) #NxHxWxd
+      
+    #Eq (r3.1)
+    trans_current_control = current_control.unsqueeze(1).unsqueeze(2).expand(trans_intermediate.size()) #NxHxWxd
+    scores = self.read_attention_transformer(trans_current_control * trans_intermediate).squeeze(3) #NxHxWx1 -> NxHxW
+      
+    #Eq (r3.2): softmax
+    rscores = scores.view(scores.shape[0], -1) #N x (H*W)
+    rscores = torch.exp(rscores - rscores.max(1, keepdim=True)[0])
+    rscores = rscores / rscores.sum(1, keepdim=True)
+    scores = rscores.view(scores.shape) #NxHxW
+      
+    #Eq (r3.3)
+    readrep = image * scores.unsqueeze(3)
+    readrep = readrep.view(readrep.shape[0], -1, readrep.shape[-1]) #N x (H*W) x d
+    readrep = readrep.sum(1) #N x d
+      
+    return readrep
 
 class ControlUnit(nn.Module):
   def __init__(self, common_dim):
@@ -235,24 +398,24 @@ class ControlUnit(nn.Module):
     
     init_modules(self.modules())
     
-    def forward(self, pre_control, question, context, mask):
+  def forward(self, pre_control, question, context, mask):
       
-      #pre_control (Nxd), question (Nxd), context(NxLxd), mask(NxL)
+    #pre_control (Nxd), question (Nxd), context(NxLxd), mask(NxL)
       
-      # N x d
-      control_question = self.control_question_transformer(torch.cat([pre_control, question], 1)) #Eq (c1)
+    # N x d
+    control_question = self.control_question_transformer(torch.cat([pre_control, question], 1)) #Eq (c1)
       
-      #Eq (c2.1)
-      scores = self.score_transformer(context * control_question.unsqueeze(1)).squeeze(2)  #NxLxd -> NxLx1 -> NxL
+    #Eq (c2.1)
+    scores = self.score_transformer(context * control_question.unsqueeze(1)).squeeze(2)  #NxLxd -> NxLx1 -> NxL
       
-      #Eq (c2.2) : softmax
-      scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to elimiate null tokens
-      scores = scores / scores.sum(1, keepdim=True) #NxL
+    #Eq (c2.2) : softmax
+    scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to elimiate null tokens
+    scores = scores / scores.sum(1, keepdim=True) #NxL
       
-      #Eq (c2.3)
-      control = (context * scores.unsqueeze(1)).sum(1) #Nxd
+    #Eq (c2.3)
+    control = (context * scores.unsqueeze(1)).sum(1) #Nxd
       
-      return control
+    return control
 
 class InputUnit(nn.Module):
   def __init__(self, common_dim):
@@ -262,106 +425,8 @@ class InputUnit(nn.Module):
     
     init_modules(self.modules())
     
-    def forward(self, question):
-      return self.question_transformer(question) #Section 2.1
-
-class FiLMedResBlock(nn.Module):
-  def __init__(self, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
-               with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
-               with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
-               num_layers=1, condition_method='bn-film', debug_every=float('inf')):
-    if out_dim is None:
-      out_dim = in_dim
-    super(FiLMedResBlock, self).__init__()
-    self.with_residual = with_residual
-    self.with_intermediate_batchnorm = with_intermediate_batchnorm
-    self.with_batchnorm = with_batchnorm
-    self.with_cond = with_cond
-    self.dropout = dropout
-    self.extra_channel_freq = 0 if num_extra_channels == 0 else extra_channel_freq
-    self.with_input_proj = with_input_proj  # Kernel size of input projection
-    self.num_cond_maps = num_cond_maps
-    self.kernel_size = kernel_size
-    self.batchnorm_affine = batchnorm_affine
-    self.num_layers = num_layers
-    self.condition_method = condition_method
-    self.debug_every = debug_every
-
-    if self.with_input_proj % 2 == 0:
-      raise(NotImplementedError)
-    if self.kernel_size % 2 == 0:
-      raise(NotImplementedError)
-    if self.num_layers >= 2:
-      raise(NotImplementedError)
-
-    if self.condition_method == 'block-input-film' and self.with_cond[0]:
-      self.film = FiLM()
-    if self.with_input_proj:
-      self.input_proj = nn.Conv2d(in_dim + (num_extra_channels if self.extra_channel_freq >= 1 else 0),
-                                  in_dim, kernel_size=self.with_input_proj, padding=self.with_input_proj // 2)
-
-    self.conv1 = nn.Conv2d(in_dim + self.num_cond_maps +
-                           (num_extra_channels if self.extra_channel_freq >= 2 else 0),
-                            out_dim, kernel_size=self.kernel_size,
-                            padding=self.kernel_size // 2)
-    if self.condition_method == 'conv-film' and self.with_cond[0]:
-      self.film = FiLM()
-    if self.with_intermediate_batchnorm:
-      self.bn0 = nn.BatchNorm2d(in_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
-    if self.with_batchnorm:
-      self.bn1 = nn.BatchNorm2d(out_dim, affine=((not self.with_cond[0]) or self.batchnorm_affine))
-    if self.condition_method == 'bn-film' and self.with_cond[0]:
-      self.film = FiLM()
-    if dropout > 0:
-      self.drop = nn.Dropout2d(p=self.dropout)
-    if ((self.condition_method == 'relu-film' or self.condition_method == 'block-output-film')
-         and self.with_cond[0]):
-      self.film = FiLM()
-
-    init_modules(self.modules())
-
-  def forward(self, x, gammas=None, betas=None, extra_channels=None, cond_maps=None):
-    if self.debug_every <= -2:
-      pdb.set_trace()
-
-    if self.condition_method == 'block-input-film' and self.with_cond[0]:
-      x = self.film(x, gammas, betas)
-
-    # ResBlock input projection
-    if self.with_input_proj:
-      if extra_channels is not None and self.extra_channel_freq >= 1:
-        x = torch.cat([x, extra_channels], 1)
-      x = self.input_proj(x)
-      if self.with_intermediate_batchnorm:
-        x = self.bn0(x)
-      x = F.relu(x)
-    out = x
-
-    # ResBlock body
-    if cond_maps is not None:
-      out = torch.cat([out, cond_maps], 1)
-    if extra_channels is not None and self.extra_channel_freq >= 2:
-      out = torch.cat([out, extra_channels], 1)
-    out = self.conv1(out)
-    if self.condition_method == 'conv-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-    if self.with_batchnorm:
-      out = self.bn1(out)
-    if self.condition_method == 'bn-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-    if self.dropout > 0:
-      out = self.drop(out)
-    out = F.relu(out)
-    if self.condition_method == 'relu-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-
-    # ResBlock remainder
-    if self.with_residual:
-      out = x + out
-    if self.condition_method == 'block-output-film' and self.with_cond[0]:
-      out = self.film(out, gammas, betas)
-    return out
-
+  def forward(self, question):
+    return self.question_transformer(question) #Section 2.1
 
 def coord_map(shape, start=-1, end=1):
   """

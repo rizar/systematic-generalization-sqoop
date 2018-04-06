@@ -21,6 +21,7 @@ class TFiLMedNet(nn.Module):
                stem_num_layers=2,
                stem_batchnorm=False,
                stem_kernel_size=3,
+               stem_subsample_layers=None,
                stem_stride=1,
                stem_padding=None,
                num_modules=4,
@@ -91,6 +92,11 @@ class TFiLMedNet(nn.Module):
       self.print_verbose_every = 1
     module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
+    for _ in stem_subsample_layers:
+      module_H //= 2
+      module_W //= 2
+    
+    self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = coord_map((module_H, module_W))
     self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
     self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
@@ -99,7 +105,8 @@ class TFiLMedNet(nn.Module):
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(stem_feature_dim, module_dim,
                            num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding)
+                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+                           subsample_layers=stem_subsample_layers)
 
     # Initialize Tfilmed network body
     self.function_modules = {}
@@ -300,11 +307,13 @@ class TFiLMedNet(nn.Module):
         betas = self.default_bias.expand_as(betas)
 
     # Propagate up image features CNN
+    stem_batch_coords = None
     batch_coords = None
     if self.use_coords_freq > 0:
+      stem_batch_coords = self.stem_coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.stem_coords.size())))
       batch_coords = self.coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.coords.size())))
     if self.stem_use_coords:
-      x = torch.cat([x, batch_coords], 1)
+      x = torch.cat([x, stem_batch_coords], 1)
     feats = self.stem(x)
     if save_activations:
       self.feats = feats

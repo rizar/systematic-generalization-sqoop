@@ -27,6 +27,9 @@ import json
 import logging
 import time
 import math
+import PIL
+import PIL.Image
+import io
 
 logger = logging.getLogger(__name__)
 
@@ -202,8 +205,9 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   before = time.time()
   with h5py.File(prefix + '_questions.h5', 'w') as dst_questions,\
        h5py.File(prefix + '_features.h5', 'w') as dst_features:
+    features_dtype = h5py.special_dtype(vlen=numpy.dtype('uint8'))
     features_dataset = dst_features.create_dataset(
-      'features', (num_examples, 3, args.image_size, args.image_size), dtype=numpy.float32)
+      'features', (num_examples,), dtype=features_dtype)
     questions_dataset = dst_questions.create_dataset(
       'questions', (num_examples, max_question_len), dtype=numpy.int64)
     programs_dataset = dst_questions.create_dataset(
@@ -248,7 +252,12 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
       program = ['<START>', 'And', shape, 'scene', color, 'scene', '<END>']
 
       scenes.append(scene)
-      features_dataset[i] = surf2array(surface).transpose(2, 0, 1) / 255.0
+      buffer_ = io.BytesIO()
+      image = PIL.Image.fromarray(surf2array(surface))
+      image.save(buffer_, format='png')
+      buffer_.seek(0)
+
+      features_dataset[i] = numpy.frombuffer(buffer_.read(), dtype='uint8')
       questions_dataset[i] = [question_vocab[w] for w in question]
       programs_dataset[i] = [program_vocab[w] for w in program]
       answers_dataset[i] = int(answer)

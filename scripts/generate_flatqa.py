@@ -84,10 +84,11 @@ def draw_object(shape, color, surf):
       raise ValueError()
 
 
-def get_object_bitmap(shape, color, size):
+def get_object_bitmap(shape, color, size, angle=0):
   surf = pygame.Surface((size, size))
   draw_object(shape, color, surf)
-  return surf
+  surf.set_colorkey((0, 0, 0))
+  return pygame.transform.rotate(surf, angle)
 
 
 def surf2array(surf):
@@ -97,14 +98,17 @@ def surf2array(surf):
   return arr
 
 Object = collections.namedtuple(
-  'Object', ['pos', 'size', 'shape', 'color'])
+  'Object', ['pos', 'size', 'angle', 'shape', 'color'])
 
 
 class SceneGenerator:
 
-  def __init__(self, size, num_objects, seed,
-               object_allowed):
-    self._size = size
+  def __init__(self, image_size, min_obj_size, max_obj_size, rotate,
+               num_objects, seed, object_allowed):
+    self._image_size = image_size
+    self._min_obj_size = min_obj_size
+    self._max_obj_size = max_obj_size
+    self._rotate = rotate
     self._num_objects = num_objects
     self._seed = seed
     self._rng = numpy.random.RandomState(seed)
@@ -118,7 +122,7 @@ class SceneGenerator:
     return self.generate_scene()
 
   def generate_scene(self):
-    surface = pygame.Surface((self._size, self._size))
+    surface = pygame.Surface((self._image_size, self._image_size))
     objects = []
 
     place_failures = 0
@@ -131,10 +135,14 @@ class SceneGenerator:
           break
 
       # then, select the object size
-      obj_size = self._rng.randint(MIN_OBJECT_SIZE, 2 * MIN_OBJECT_SIZE)
+      orig_obj_size = self._rng.randint(self._min_obj_size, self._max_obj_size + 1)
+      angle = self._rng.randint(0, 360) if self._rotate else 0
+      angle_rad = angle / 180 * math.pi
+      # the rotation typically changes the size
+      obj_size = math.ceil(orig_obj_size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
 
       min_center = obj_size / 2 + 1
-      max_center = self._size - obj_size / 2 - 1
+      max_center = self._image_size - obj_size / 2 - 1
       placed = False
       for attempt in range(10):
         x = self._rng.randint(min_center, max_center)
@@ -149,10 +157,8 @@ class SceneGenerator:
             break
 
         if not overlap:
-          objects.append(Object(pos=(x, y), size=obj_size,
+          objects.append(Object(pos=(x, y), size=orig_obj_size, angle=angle,
                                 shape=shape, color=color))
-          bitmap = get_object_bitmap(shape, color, obj_size)
-          surface.blit(source=bitmap, dest=(x - obj_size / 2, y - obj_size / 2))
           placed = True
           break
 
@@ -163,11 +169,19 @@ class SceneGenerator:
           # generation from scratch
           return self.generate_scene()
 
+    for obj in objects:
+      bitmap = get_object_bitmap(obj.shape, obj.color, obj.size, obj.angle)
+      surface.blit(source=bitmap,
+                   dest=(obj.pos[0] - obj.size / 2, obj.pos[1] - obj.size / 2))
+
     return objects, surface
 
 
-def generate_dataset(prefix, size, num_examples, seed, object_allowed, save_vocab=False):
-  sg = SceneGenerator(size=size, num_objects=5, seed=1, object_allowed=object_allowed)
+def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
+  sg = SceneGenerator(image_size=args.image_size,
+                      min_obj_size=args.min_obj_size, max_obj_size=args.max_obj_size,
+                      rotate=args.rotate,
+                      num_objects=5, seed=1, object_allowed=object_allowed)
 
   max_question_len = 5
   max_program_len = 7
@@ -189,7 +203,7 @@ def generate_dataset(prefix, size, num_examples, seed, object_allowed, save_voca
   with h5py.File(prefix + '_questions.h5', 'w') as dst_questions,\
        h5py.File(prefix + '_features.h5', 'w') as dst_features:
     features_dataset = dst_features.create_dataset(
-      'features', (num_examples, 3, size, size), dtype=numpy.float32)
+      'features', (num_examples, 3, args.image_size, args.image_size), dtype=numpy.float32)
     questions_dataset = dst_questions.create_dataset(
       'questions', (num_examples, max_question_len), dtype=numpy.int64)
     programs_dataset = dst_questions.create_dataset(
@@ -202,6 +216,8 @@ def generate_dataset(prefix, size, num_examples, seed, object_allowed, save_voca
     rng = numpy.random.RandomState(seed)
     i = 0
     for scene, surface in sg:
+      if i and i % 1000 == 0:
+        print(i)
       if i == num_examples:
         break
 
@@ -334,12 +350,9 @@ def main():
     val_object_allowed = test_object_allowed = ExcludeRedSquare(
       inverse=True, restrict_scene=False)
 
-  generate_dataset('train', args.image_size,
-                   args.train, 1, train_object_allowed, save_vocab=True)
-  generate_dataset('val', args.image_size,
-                   args.val, 2, val_object_allowed)
-  generate_dataset('test', args.image_size,
-                   args.test, 3, test_object_allowed)
+  generate_dataset('train', args.train, 1, train_object_allowed, save_vocab=True)
+  generate_dataset('val', args.val, 2, val_object_allowed)
+  generate_dataset('test', args.test, 3, test_object_allowed)
 
 
 if __name__ == '__main__':
@@ -351,6 +364,9 @@ if __name__ == '__main__':
   parser.add_argument('--test', type=int, default=100,
                       help="Size of the test set")
   parser.add_argument('--image-size', type=int, default=50)
+  parser.add_argument('--min-obj-size', type=int, default=8)
+  parser.add_argument('--max-obj-size', type=int, default=16)
+  parser.add_argument('--rotate', type=int, default=1)
   parser.add_argument('--split', type=str,
                       choices=('none', 'CoGenT', 'diagonal', 'leave1out'),
                       help="The split to use")

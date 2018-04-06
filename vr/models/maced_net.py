@@ -296,6 +296,7 @@ class WriteUnit(nn.Module):
     
     if use_memory_gate:
       self.gated_control_transformer = nn.Linear(common_dim, 1) #Eq (w3.1)
+      #self.gated_control_transformer.bias.data.fill_(-1)
       self.non_linear = nn.Sigmoid()
     
     init_modules(self.modules())

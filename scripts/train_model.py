@@ -799,7 +799,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
         if program_pred_str == program_str:
           num_correct += 1
         num_samples += 1
-    elif args.model_type == 'EE':
+    elif args.model_type in ['EE', 'Fixed']:
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
       programs_pred = program_generator.reinforce_sample(

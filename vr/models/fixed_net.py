@@ -1,10 +1,14 @@
 import torch
-import torch.nn as nn
+from torch import nn
+from torch.nn import functional as F
+from torch.autograd import Variable
 
 from vr.models.layers import build_stem
 from vr.models.module_net import ModuleNet
 
 # TODO(mnoukhov)
+# program idx -> text idx
+# program idx -> module
 # batchnorm?
 
 class Find(nn.Module):
@@ -15,19 +19,17 @@ class Find(nn.Module):
   #   image_att: [N, 1, H, W]
   def __init__(self, image_dim, text_dim, map_dim=500):
     super().__init__()
-    self.conv2d = nn.Conv2d(image_dim, map_dim, 1)
-    self.linear = nn.Linear(text_dim, map_dim)
-    self.conv3d = nn.Conv3d(map_dim, 1, 1)
+    self.conv1 = nn.Conv2d(image_dim, map_dim, 1)
+    self.embed = nn.Embedding(text_dim, map_dim)
+    self.conv2 = nn.Conv2d(map_dim, 1, 1)
+    self.map_dim = map_dim
 
-  def forward(self, images, text):
-    image_mapped = self.conv2d(images)
+  def forward(self, text, images):
+    image_mapped = self.conv1(images)
+    text_mapped = self.embed(text).view(-1, self.map_dim, 1, 1)
 
-    text_mapped = self.linear(text)
-    text_reshape = text_mapped.unsqueeze(2).unsqueeze(2)
-
-    mult_norm = torch.norm(image_mapped * text_reshape, p=2, dim=1)
-    out = self.conv3d(mult_norm)
-    return out
+    mult_norm = F.normalize(image_mapped * text_mapped, p=2, dim=1)
+    return self.conv2(mult_norm)
 
 
 class Transform(nn.Module):
@@ -38,19 +40,17 @@ class Transform(nn.Module):
   #   image_att: [N, 1, H, W]
   def __init__(self, text_dim, map_dim=500, kernel_size=3):
     super().__init__()
-    self.conv2d = nn.Conv2d(1, map_dim, kernel_size)
-    self.linear = nn.Linear(text_dim, map_dim)
-    self.conv3d = nn.Conv3d(map_dim, 1, 1)
+    self.conv1 = nn.Conv2d(1, map_dim, 1)
+    self.embed = nn.Embedding(text_dim, map_dim)
+    self.conv2 = nn.Conv2d(map_dim, 1, 1)
+    self.map_dim = map_dim
 
-  def forward(self, image_att, text):
-    image_att_mapped = self.conv2d(image_att)
+  def forward(self, text, image_att):
+    image_att_mapped = self.conv1(image_att)
+    text_mapped = self.embed(text).view(-1, self.map_dim, 1, 1)
 
-    text_mapped = self.linear(text)
-    text_reshape = text_mapped.unsqueeze(2).unsqueeze(2)
-
-    mult_norm = torch.norm(image_att_mapped * text_reshape, p=2, dim=1)
-    out = self.conv3d(mult_norm)
-    return out
+    mult_norm = F.normalize(image_att_mapped * text_mapped, p=2, dim=1)
+    return self.conv2(mult_norm)
 
 
 class And(nn.Module):
@@ -60,8 +60,7 @@ class And(nn.Module):
   # Output:
   #   att_grid_and: [N, 1, H, W]
   def forward(self, att1, att2):
-    min_, _ = torch.min(att1, att2)
-    return min_
+    return torch.min(att1, att2)
 
 
 class Answer(nn.Module):
@@ -74,13 +73,12 @@ class Answer(nn.Module):
     self.linear = nn.Linear(3, num_answers)
 
   def forward(self, att):
-    att_min, _ = att.min(dim=3).min(dim=2)
-    att_mean, _ = att.mean(dim=3).mean(dim=2)
-    att_max, _ = att.max(dim=3).max(dim=2)
+    att_min = att.min(dim=-1)[0].min(dim=-1)[0]
+    att_max = att.max(dim=-1)[0].max(dim=-1)[0]
+    att_mean = att.mean(dim=-1).mean(dim=-1)
     att_reduced = torch.cat((att_min, att_mean, att_max), dim=1)
 
-    out = self.linear(att_reduced)
-    return out
+    return self.linear(att_reduced)
 
 
 class FixedModuleNet(ModuleNet):
@@ -99,19 +97,21 @@ class FixedModuleNet(ModuleNet):
                            module_dim,
                            num_layers=stem_num_layers,
                            with_batchnorm=stem_batchnorm)
+    self.classifier = lambda x: x
+
     if verbose:
       print('Here is my stem:')
       print(self.stem)
 
-    self.vocab = vocab
-    self.num_answer = len(vocab['answer_idx_to_token'])
-    self.text_dim = len(vocab['text_token_to_idx'])
-
+    self.program_idx_to_token = vocab['program_idx_to_token']
+    self.answer_to_idx = vocab['answer_idx_to_token']
+    self.text_token_to_idx = vocab['text_token_to_idx']
+    self.program_token_to_module_text = vocab['program_token_to_module_text']
     self.name_to_module = {
       'and': And(),
-      'answer': Answer(self.num_answer),
-      'find': Find(module_dim, self.text_dim),
-      'transform': Transform(self.text_dim),
+      'answer': Answer(len(self.answer_to_idx)),
+      'find': Find(module_dim, len(self.text_token_to_idx)),
+      'transform': Transform(len(self.text_token_to_idx)),
     }
     self.name_to_num_inputs = {
       'and': 2,
@@ -119,6 +119,7 @@ class FixedModuleNet(ModuleNet):
       'find': 1,
       'transform': 1,
     }
+
     for name, module in self.name_to_module.items():
       self.add_module(name, module)
 
@@ -127,7 +128,7 @@ class FixedModuleNet(ModuleNet):
   def _forward_modules_ints_helper(self, feats, program, i, j):
     if j < program.size(1):
       fn_idx = program.data[i, j]
-      fn_str = self.vocab['program_idx_to_token'][fn_idx]
+      fn_str = self.program_idx_to_token[fn_idx]
     else:
       raise IndexError('malformed program')
 
@@ -144,10 +145,18 @@ class FixedModuleNet(ModuleNet):
     if fn_str == 'scene':
       output = feats[i].unsqueeze(0)
     else:
-      module_name, input_text = self.vocab['program_token_to_module_text'][fn_str]
+      module_name, text_token = self.program_token_to_module_text[fn_str]
       module = self.name_to_module[module_name]
       num_inputs = self.name_to_num_inputs[module_name]
       module_inputs = []
+
+      if text_token is not None:
+        # very ugly
+        input_text = torch.LongTensor([self.text_token_to_idx[text_token]]).unsqueeze(0)
+        if program.is_cuda:
+          input_text = input_text.cuda()
+        module_inputs.append(Variable(input_text))
+
       for _ in range(num_inputs):
         module_input, j = self._forward_modules_ints_helper(feats, program, i, j)
         module_inputs.append(module_input)

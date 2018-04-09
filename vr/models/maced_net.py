@@ -113,7 +113,7 @@ class MAC(nn.Module):
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(stem_feature_dim, module_dim,
                            num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding)
+                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding, acceptEvenKernel=True)
     
     
     #Define units

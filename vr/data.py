@@ -7,7 +7,9 @@
 # LICENSE file in the root directory of this source tree.
 
 import numpy as np
+import PIL.Image
 import h5py
+import io
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
@@ -89,6 +91,8 @@ class ClevrDataset(Dataset):
       image = torch.FloatTensor(np.asarray(image, dtype=np.float32))
 
     feats = self.feature_h5['features'][image_idx]
+    if feats.ndim == 1:
+     feats = np.array(PIL.Image.open(io.BytesIO(feats))).transpose(2, 0, 1) / 255.0
     feats = torch.FloatTensor(np.asarray(feats, dtype=np.float32))
 
     program_json = None

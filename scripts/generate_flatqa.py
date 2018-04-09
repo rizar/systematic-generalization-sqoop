@@ -44,8 +44,8 @@ COLOR2RGB = [('red', (255, 0, 0)),
              ('gray', (128, 128, 128))]
 COLOR2RGB = collections.OrderedDict(COLOR2RGB)
 COLORS = list(COLOR2RGB.keys())
-SHAPES = ['square', 'empty_square', 'circle',
-          'triangle', 'empty_triangle', 'cross', 'bar']
+SHAPES = ['square', 'triangle', 'circle', 'cross',
+          'empty_square', 'empty_triangle', 'bar']
 MIN_OBJECT_SIZE = 8
 
 
@@ -106,8 +106,11 @@ Object = collections.namedtuple(
 
 class SceneGenerator:
 
-  def __init__(self, image_size, min_obj_size, max_obj_size, rotate,
+  def __init__(self, shapes, colors,
+               image_size, min_obj_size, max_obj_size, rotate,
                num_objects, seed, object_allowed):
+    self._shapes = shapes
+    self._colors = colors
     self._image_size = image_size
     self._min_obj_size = min_obj_size
     self._max_obj_size = max_obj_size
@@ -132,8 +135,8 @@ class SceneGenerator:
     while len(objects) < self._num_objects:
       # first, select which object to draw by rejection sampling
       while True:
-        shape = self._rng.choice(SHAPES)
-        color = self._rng.choice(COLORS)
+        shape = self._rng.choice(self._shapes)
+        color = self._rng.choice(self._colors)
         if self._object_allowed((shape, color), 'generate'):
           break
 
@@ -181,7 +184,11 @@ class SceneGenerator:
 
 
 def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
-  sg = SceneGenerator(image_size=args.image_size,
+  shapes = SHAPES[:args.num_shapes]
+  colors = COLORS[:args.num_colors]
+
+  sg = SceneGenerator(shapes=shapes, colors=colors,
+                      image_size=args.image_size,
                       min_obj_size=args.min_obj_size, max_obj_size=args.max_obj_size,
                       rotate=args.rotate,
                       num_objects=5, seed=1, object_allowed=object_allowed)
@@ -190,13 +197,11 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   max_program_len = 7
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
-                    + sorted(list(COLOR2RGB))
-                    + SHAPES)
+                    + colors + shapes)
   question_vocab = {word: i for i, word in enumerate(question_words)}
 
   program_words = (['<NULL>', '<START>', '<END>', 'scene', 'And']
-                   + sorted(list(COLOR2RGB))
-                   + SHAPES)
+                   + colors + shapes)
   program_vocab = {word: i for i, word in enumerate(program_words)}
 
   scenes = []
@@ -237,8 +242,8 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
         # sample an allowed (shape, color) pair that is not present in the picture
         # if failed 10 times, try another scene
         for attempt in range(11):
-          shape = rng.choice(SHAPES)
-          color = rng.choice(COLORS)
+          shape = rng.choice(shapes)
+          color = rng.choice(colors)
           if not object_allowed((shape, color), 'ask'):
             continue
           found = any((shape, color) == (obj.shape, obj.color)
@@ -376,6 +381,8 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=100,
                       help="Size of the test set")
+  parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
+  parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)
   parser.add_argument('--max-obj-size', type=int, default=15)

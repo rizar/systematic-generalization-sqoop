@@ -70,11 +70,11 @@ class Flatten(nn.Module):
 
 
 def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
-               kernel_size=3, stride=1, padding=None, subsample_layers=None):
+               kernel_size=3, stride=1, padding=None, subsample_layers=None, acceptEvenKernel=False):
   layers = []
   prev_dim = feature_dim
   if padding is None:  # Calculate default padding when None provided
-    if kernel_size % 2 == 0:
+    if kernel_size % 2 == 0 and not acceptEvenKernel:
       raise(NotImplementedError)
     padding = kernel_size // 2
   if subsample_layers is None:

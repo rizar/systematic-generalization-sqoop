@@ -1,6 +1,8 @@
 #!/bin/bash
 
+source ~/.bashrc
 source activate nmn
+echo $PWD
 export PYTHONPATH="$PYTHONPATH:$PWD"
 
 python -m scripts.train_model \

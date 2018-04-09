@@ -359,9 +359,13 @@ def main():
     val_object_allowed = test_object_allowed = ExcludeRedSquare(
       inverse=True, restrict_scene=False)
 
+  with open('args.txt', 'w') as dst:
+    print(args, file=dst)
+
   generate_dataset('train', args.train, 1, train_object_allowed, save_vocab=True)
   generate_dataset('val', args.val, 2, val_object_allowed)
   generate_dataset('test', args.test, 3, test_object_allowed)
+
 
 
 if __name__ == '__main__':
@@ -372,9 +376,9 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=100,
                       help="Size of the test set")
-  parser.add_argument('--image-size', type=int, default=50)
-  parser.add_argument('--min-obj-size', type=int, default=8)
-  parser.add_argument('--max-obj-size', type=int, default=16)
+  parser.add_argument('--image-size', type=int, default=64)
+  parser.add_argument('--min-obj-size', type=int, default=10)
+  parser.add_argument('--max-obj-size', type=int, default=15)
   parser.add_argument('--rotate', type=int, default=1)
   parser.add_argument('--split', type=str,
                       choices=('none', 'CoGenT', 'diagonal', 'leave1out'),

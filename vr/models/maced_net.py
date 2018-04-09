@@ -7,6 +7,7 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
+import math
 
 from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
@@ -103,7 +104,7 @@ class MAC(nn.Module):
       self.print_verbose_every = 1
     module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    self.coords = coord_map((module_H, module_W))
+    self.coords = sincos_coord_map((module_H, module_W))
     
     #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
     #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
@@ -332,7 +333,7 @@ class WriteUnit(nn.Module):
       gated_control = self.gated_control_transformer(controls[:,idx,:]) #N x 1
       
       #Eq (w3.2)
-      gated_control = self.non_linear(gated_control)
+      gated_control = self.non_linear(gated_control-1)
       res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
     
     return res_memory
@@ -438,4 +439,21 @@ def coord_map(shape, start=-1, end=1):
   y_coord_row = torch.linspace(start, end, steps=m).type(torch.cuda.FloatTensor)
   x_coords = x_coord_row.unsqueeze(0).expand(torch.Size((m, n))).unsqueeze(0)
   y_coords = y_coord_row.unsqueeze(1).expand(torch.Size((m, n))).unsqueeze(0)
+  return Variable(torch.cat([x_coords, y_coords], 0))
+
+def sincos_coord_map(shape, p_h=1., p_w=1.):
+  m, n = shape
+  x_coords = torch.zeros(m,n)
+  y_coords = torch.zeros(m,n)
+  
+  for i in range(m):
+    for j in range(n):
+      icoord = i if i % 2 == 0 else i-1
+      jcoord = j if j % 2 == 0 else j-1
+      x_coords[i, j] = math.sin(1.0 * i / (10000. ** (1.0 * jcoord / p_h)))
+      y_coords[i, j] = math.cos(1.0 * j / (10000. ** (1.0 * icoord / p_w)))
+  
+  x_coords = x_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
+  y_coords = y_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
+  
   return Variable(torch.cat([x_coords, y_coords], 0))

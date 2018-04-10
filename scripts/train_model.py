@@ -37,7 +37,7 @@ from vr.models import (ModuleNet,
                        RTFiLMedNet,
                        FiLMGen,
                        MAC,
-                       FixedModuleNet)
+                       HeteroModuleNet)
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
@@ -72,7 +72,7 @@ parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Fixed', 'MAC'])
+  choices=['RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -306,7 +306,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                 weight_decay=args.weight_decay)
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Fixed']:
+  if args.model_type in ['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     ee_optimizer = optim_method(execution_engine.parameters(),
                                 lr=args.learning_rate,
@@ -385,7 +385,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = program_generator(questions_var, programs_var)
         loss.backward()
         pg_optimizer.step()
-      elif args.model_type in ['EE', 'Fixed']:
+      elif args.model_type in ['EE', 'Hetero']:
         # Train execution engine with ground-truth programs
         ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, programs_var)
@@ -752,7 +752,7 @@ def get_execution_engine(args):
                 'print_verbose_every': args.print_verbose_every,
                 }
       ee = MAC(**kwargs)
-    elif args.model_type == 'Fixed':
+    elif args.model_type == 'Hetero':
       kwargs = {
         'vocab': vocab,
         'feature_dim': parse_int_list(args.feature_dim),
@@ -761,7 +761,7 @@ def get_execution_engine(args):
         'module_dim': args.module_dim,
         'module_batchnorm': args.module_batchnorm == 1,
       }
-      ee = FixedModuleNet(**kwargs)
+      ee = HeteroModuleNet(**kwargs)
     else:
       ee = ModuleNet(**kwargs)
   ee.cuda()
@@ -862,7 +862,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
         if program_pred_str == program_str:
           num_correct += 1
         num_samples += 1
-    elif args.model_type in ['EE', 'Fixed']:
+    elif args.model_type in ['EE', 'Hetero']:
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
       programs_pred = program_generator.reinforce_sample(

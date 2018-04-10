@@ -7,7 +7,7 @@ export PYTHONPATH="$PYTHONPATH:$PWD"
 
 python -m scripts.train_model \
     --data_dir /data/milatmp1/noukhovm/nmn-iwp/data/shapes_dataset \
-    --model_type Fixed \
+    --model_type Hetero \
     --checkpoint_every 100 \
     --record_loss_every 100 \
     --num_val_samples 149991 \

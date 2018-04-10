@@ -1,3 +1,8 @@
+"""Heterogenous ModuleNet as done originally in Hu et al
+
+TODO:
+- batchnorm?
+"""
 import torch
 from torch import nn
 from torch.nn import functional as F
@@ -5,11 +10,6 @@ from torch.autograd import Variable
 
 from vr.models.layers import build_stem
 from vr.models.module_net import ModuleNet
-
-# TODO(mnoukhov)
-# program idx -> text idx
-# program idx -> module
-# batchnorm?
 
 class Find(nn.Module):
   # Input:
@@ -81,7 +81,7 @@ class Answer(nn.Module):
     return self.linear(att_reduced)
 
 
-class FixedModuleNet(ModuleNet):
+class HeteroModuleNet(ModuleNet):
   def __init__(self,
                vocab,
                feature_dim=(1024, 14, 14),

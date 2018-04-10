@@ -202,7 +202,11 @@ class MAC(nn.Module):
     
     q_context, q_rep, q_mask = ques
     
-    if dropout_mask_question_rep is not None: q_rep = q_rep * dropout_mask_question_rep
+    if dropout_mask_question_rep is not None:
+      q_rep = q_rep * dropout_mask_question_rep
+    
+    if isTest and self.module_dropout > 0.:
+      q_rep = (1. - self.module_dropout) * q_rep
 
     batch_coords = None
     if self.use_coords_freq > 0:
@@ -244,6 +248,7 @@ class MAC(nn.Module):
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
       #dropout
       if dropout_mask_cell is not None: memory_i = memory_i * dropout_mask_cell
+      if isTest and self.module_dropout > 0.: memory_i = (1. - self.module_dropout) * memory_i
       if save_activations:
         self.memory_outputs.append(memory_i)
 

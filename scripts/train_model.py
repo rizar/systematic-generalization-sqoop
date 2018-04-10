@@ -189,7 +189,15 @@ def main(args):
 
   vocab = utils.load_vocab(args.vocab_json)
 
+  def rsync(src, dst):
+    os.system("rsync -vrz --progress {} {}".format(src, dst))
+
+  def rsync_copy_if_not_exists(src, dst):
+    if not os.path.exists(dst):
+      rsync(src, dst)
+
   if args.use_local_copies == 1:
+    # version for MILA, copy only if doesn't exist
     if os.path.exists('/Tmpfast'):
       tmp = '/Tmpfast/'
     else:
@@ -200,14 +208,25 @@ def main(args):
       os.mkdir(tmp + 'bahdanau/clevr')
     root = tmp + 'bahdanau/clevr/'
 
-    def rsync_copy_if_not_exists(src, dst):
-      if not os.path.exists(dst):
-        os.system("rsync -vrz --progress {} {}".format(src, dst))
-
     rsync_copy_if_not_exists(args.train_question_h5, root + 'train_questions.h5')
     rsync_copy_if_not_exists(args.train_features_h5, root + 'train_features.h5')
     rsync_copy_if_not_exists(args.val_question_h5, root + 'val_questions.h5')
     rsync_copy_if_not_exists(args.val_features_h5, root + 'val_features.h5')
+    args.train_question_h5 = root + 'train_questions.h5'
+    args.train_features_h5 = root + 'train_features.h5'
+    args.val_question_h5 = root + 'val_questions.h5'
+    args.val_features_h5 = root + 'val_features.h5'
+
+  if args.use_local_copies == 2:
+    tmp = os.environ['SLURM_TMPDIR']
+    jobid = os.environ['SLURM_JOB_ID']
+    root = os.path.join(tmp, str(jobid))
+    os.mkdir(root)
+
+    rsync(args.train_question_h5, root + 'train_questions.h5')
+    rsync(args.train_features_h5, root + 'train_features.h5')
+    rsync(args.val_question_h5, root + 'val_questions.h5')
+    rsync(args.val_features_h5, root + 'val_features.h5')
     args.train_question_h5 = root + 'train_questions.h5'
     args.train_features_h5 = root + 'train_features.h5'
     args.val_question_h5 = root + 'val_questions.h5'
@@ -678,11 +697,11 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
-                
+
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
-                
+
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,

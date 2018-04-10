@@ -748,6 +748,7 @@ def get_execution_engine(args):
                 'stem_num_layers': args.module_stem_num_layers,
                 'stem_batchnorm': args.module_stem_batchnorm == 1,
                 'stem_kernel_size': args.module_stem_kernel_size,
+                'stem_subsample_layers': args.module_stem_subsample_layers,
                 'stem_stride': args.module_stem_stride,
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,

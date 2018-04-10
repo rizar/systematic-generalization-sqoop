@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
 import math
-from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal
+from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
 #from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
@@ -20,6 +20,7 @@ class MAC(nn.Module):
                stem_num_layers=2,
                stem_batchnorm=False,
                stem_kernel_size=3,
+               stem_subsample_layers=None,
                stem_stride=1,
                stem_padding=None,
                num_modules=12,
@@ -106,6 +107,11 @@ class MAC(nn.Module):
       self.print_verbose_every = 1
     module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
+    for _ in stem_subsample_layers:
+      module_H //= 2
+      module_W //= 2
+    
+    self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = sincos_coord_map((module_H, module_W))
     
     #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
@@ -115,7 +121,8 @@ class MAC(nn.Module):
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(stem_feature_dim, module_dim,
                            num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding, acceptEvenKernel=True)
+                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+                           subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
     
     
     #Define units
@@ -189,8 +196,8 @@ class MAC(nn.Module):
       self.cf_input = None
     
     if not isTest and self.module_dropout > 0.:
-      dropout_mask_cell = Variable(torch.Tensor(N, self.module_dim).fill_(self.module_dropout).bernoulli_())
-      dropout_mask_question_rep = Variable(torch.Tensor(N, 2*self.module_dim).fill_(self.module_dropout).bernoulli_())
+      dropout_mask_cell = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      dropout_mask_question_rep = Variable(torch.Tensor(x.size(0), 2*self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
     else:
       dropout_mask_cell = None
       dropout_mask_question_rep = None
@@ -202,13 +209,19 @@ class MAC(nn.Module):
     
     q_context, q_rep, q_mask = ques
     
-    if dropout_mask_question_rep: q_rep = q_rep * dropout_mask_question_rep
-
+    if dropout_mask_question_rep is not None:
+      q_rep = q_rep * dropout_mask_question_rep
+    
+    if isTest and self.module_dropout > 0.:
+      q_rep = (1. - self.module_dropout) * q_rep
+    
+    stem_batch_coords = None
     batch_coords = None
     if self.use_coords_freq > 0:
+      stem_batch_coords = self.stem_coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.stem_coords.size())))
       batch_coords = self.coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.coords.size())))
     if self.stem_use_coords:
-      x = torch.cat([x, batch_coords], 1)
+      x = torch.cat([x, stem_batch_coords], 1)
     feats = self.stem(x)
     if save_activations:
       self.feats = feats
@@ -243,7 +256,8 @@ class MAC(nn.Module):
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
       #dropout
-      if dropout_mask_cell: memory_i = memory_i * dropout_mask_cell
+      if dropout_mask_cell is not None: memory_i = memory_i * dropout_mask_cell
+      if isTest and self.module_dropout > 0.: memory_i = (1. - self.module_dropout) * memory_i
       if save_activations:
         self.memory_outputs.append(memory_i)
 
@@ -482,4 +496,4 @@ def init_modules(modules, init='uniform'):
   for m in modules:
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
-      m.bias.data.fill_(0.)
+      if m.bias is not None: constant(m.bias, 0.)

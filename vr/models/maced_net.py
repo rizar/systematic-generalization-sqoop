@@ -189,8 +189,8 @@ class MAC(nn.Module):
       self.cf_input = None
     
     if not isTest and self.module_dropout > 0.:
-      dropout_mask_cell = Variable(torch.Tensor(N, self.module_dim).fill_(self.module_dropout).bernoulli_())
-      dropout_mask_question_rep = Variable(torch.Tensor(N, 2*self.module_dim).fill_(self.module_dropout).bernoulli_())
+      dropout_mask_cell = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(self.module_dropout).bernoulli_())
+      dropout_mask_question_rep = Variable(torch.Tensor(x.size(0), 2*self.module_dim).fill_(self.module_dropout).bernoulli_())
     else:
       dropout_mask_cell = None
       dropout_mask_question_rep = None

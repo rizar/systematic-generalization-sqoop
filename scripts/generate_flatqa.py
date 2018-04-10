@@ -183,6 +183,14 @@ class SceneGenerator:
     return objects, surface
 
 
+def shape_module(shape):
+  return "Shape[{}]".format(shape)
+
+
+def color_module(color):
+  return "Color[{}]".format(color)
+
+
 def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
@@ -201,7 +209,8 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   question_vocab = {word: i for i, word in enumerate(question_words)}
 
   program_words = (['<NULL>', '<START>', '<END>', 'scene', 'And']
-                   + colors + shapes)
+                   + [color_module(color) for color in colors]
+                   + [shape_module(shape) for shape in shapes])
   program_vocab = {word: i for i, word in enumerate(program_words)}
 
   scenes = []
@@ -254,7 +263,8 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
           continue
 
       question = ["is", "there", "a"] + [color, shape]
-      program = ['<START>', 'And', shape, 'scene', color, 'scene', '<END>']
+      program = ['<START>', 'And', shape_module(shape), 'scene',
+                 color_module(color), 'scene', '<END>']
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
@@ -274,6 +284,17 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   with open(prefix + '_scenes.json', 'w') as dst:
     json.dump(scenes, dst, indent=2)
 
+  answer_token_to_idx = {'false': 0, 'true': 1}
+  module_token_to_idx = {'Color': 0, 'Shape': 1, 'And': 2}
+  program_token_to_module_text = {}
+  text_token_to_idx = {}
+  for color in colors:
+    program_token_to_module_text[color_module(color)] = ['Color', color]
+  for shape in shapes:
+    program_token_to_module_text[shape_module(shape)] = ['Shape', shape]
+  for idx, word in enumerate(colors + shapes):
+    text_token_to_idx[word] = idx
+
   if save_vocab:
     def arity(token):
       if token == 'And':
@@ -287,8 +308,10 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
                 'program_token_to_idx': program_vocab,
                 'program_token_arity':
                     {name: arity(name) for name in program_vocab},
-                  'answer_token_to_idx':
-                    {'false': 0, 'true': 1}},
+                'answer_token_to_idx': answer_token_to_idx,
+                'program_token_to_module_text': program_token_to_module_text,
+                'module_token_to_idx': module_token_to_idx,
+                'text_token_to_idx': text_token_to_idx},
                 dst)
 
 

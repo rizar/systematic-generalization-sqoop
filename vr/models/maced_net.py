@@ -482,4 +482,4 @@ def init_modules(modules, init='uniform'):
   for m in modules:
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
-      if m.bias: constant(m.bias, 0.)
+      if m.bias is not None: constant(m.bias, 0.)

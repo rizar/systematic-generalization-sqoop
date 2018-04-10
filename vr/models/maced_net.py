@@ -202,7 +202,7 @@ class MAC(nn.Module):
     
     q_context, q_rep, q_mask = ques
     
-    if dropout_mask_question_rep: q_rep = q_rep * dropout_mask_question_rep
+    if dropout_mask_question_rep is not None: q_rep = q_rep * dropout_mask_question_rep
 
     batch_coords = None
     if self.use_coords_freq > 0:
@@ -243,7 +243,7 @@ class MAC(nn.Module):
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
       #dropout
-      if dropout_mask_cell: memory_i = memory_i * dropout_mask_cell
+      if dropout_mask_cell is not None: memory_i = memory_i * dropout_mask_cell
       if save_activations:
         self.memory_outputs.append(memory_i)
 

@@ -25,10 +25,19 @@ import torch.nn.functional as F
 
 import vr.utils
 import vr.preprocess
-from vr.data import ClevrDataset, ClevrDataLoader
-from vr.models import (ModuleNet, Seq2Seq, LstmModel, CnnLstmModel,
-                       CnnLstmSaModel, FiLMedNet, TFiLMedNet, RTFiLMedNet,
-                       FiLMGen, MAC, FixedModuleNet)
+from vr.data import (ClevrDataset,
+                     ClevrDataLoader)
+from vr.models import (ModuleNet,
+                       Seq2Seq,
+                       LstmModel,
+                       CnnLstmModel,
+                       CnnLstmSaModel,
+                       FiLMedNet,
+                       TFiLMedNet,
+                       RTFiLMedNet,
+                       FiLMGen,
+                       MAC,
+                       FixedModuleNet)
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()

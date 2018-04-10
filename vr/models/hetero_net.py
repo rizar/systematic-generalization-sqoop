@@ -92,24 +92,13 @@ class HeteroModuleNet(ModuleNet):
                verbose=True):
     super(ModuleNet, self).__init__()
 
-    input_C, input_H, input_W = feature_dim
-    self.stem = build_stem(input_C,
-                           module_dim,
-                           num_layers=stem_num_layers,
-                           with_batchnorm=stem_batchnorm)
-    self.classifier = lambda x: x
-
-    if verbose:
-      print('Here is my stem:')
-      print(self.stem)
-
     self.program_idx_to_token = vocab['program_idx_to_token']
     self.answer_to_idx = vocab['answer_idx_to_token']
     self.text_token_to_idx = vocab['text_token_to_idx']
     self.program_token_to_module_text = vocab['program_token_to_module_text']
     self.name_to_module = {
       'and': And(),
-      'answer': Answer(len(self.answer_to_idx)),
+      'answer': lambda x: x,
       'find': Find(module_dim, len(self.text_token_to_idx)),
       'transform': Transform(len(self.text_token_to_idx)),
     }
@@ -120,26 +109,37 @@ class HeteroModuleNet(ModuleNet):
       'transform': 1,
     }
 
+    input_C, input_H, input_W = feature_dim
+    self.stem = build_stem(input_C,
+                           module_dim,
+                           num_layers=stem_num_layers,
+                           with_batchnorm=stem_batchnorm)
+
+    self.classifier = Answer(len(self.answer_to_idx))
+
+    if verbose:
+      print('Here is my stem:')
+      print(self.stem)
+      print('Here is my classifier:')
+      print(self.classifier)
+
     for name, module in self.name_to_module.items():
-      self.add_module(name, module)
+      if name != 'answer':
+        self.add_module(name, module)
 
     self.save_module_outputs = False
 
   def _forward_modules_ints_helper(self, feats, program, i, j):
-    if j < program.size(1):
-      fn_idx = program.data[i, j]
-      fn_str = self.program_idx_to_token[fn_idx]
-    else:
-      raise IndexError('malformed program')
+    if j >= program.size(1):
+      raise IndexError('malformed program, reached index', j)
+
+    fn_idx = program.data[i, j]
+    fn_str = self.program_idx_to_token[fn_idx]
 
     if fn_str == '<START>':
-      used_fn_j = False
       return self._forward_modules_ints_helper(feats, program, i, j + 1)
     elif fn_str in ['<NULL>', '<END>']:
-      used_fn_j = False
-      raise ValueError('reached area out of program')
-
-    self.used_fns[i, j] = 1
+      raise IndexError('reached area out of program ', fn_str)
 
     j += 1
     if fn_str == 'scene':

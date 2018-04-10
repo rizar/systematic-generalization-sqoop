@@ -8,8 +8,9 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
 import math
+from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal
 
-from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
+#from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
 import vr.programs
 
@@ -441,7 +442,7 @@ def coord_map(shape, start=-1, end=1):
   y_coords = y_coord_row.unsqueeze(1).expand(torch.Size((m, n))).unsqueeze(0)
   return Variable(torch.cat([x_coords, y_coords], 0))
 
-def sincos_coord_map(shape, p_h=1., p_w=1.):
+def sincos_coord_map(shape, p_h=64., p_w=64.):
   m, n = shape
   x_coords = torch.zeros(m,n)
   y_coords = torch.zeros(m,n)
@@ -457,3 +458,16 @@ def sincos_coord_map(shape, p_h=1., p_w=1.):
   y_coords = y_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
   
   return Variable(torch.cat([x_coords, y_coords], 0))
+
+
+def init_modules(modules, init='uniform'):
+  if init.lower() == 'normal':
+    init_params = xavier_normal
+  elif init.lower() == 'uniform':
+    init_params = xavier_uniform
+  else:
+    return
+  for m in modules:
+    if isinstance(m, (nn.Conv2d, nn.Linear)):
+      init_params(m.weight)
+      m.bias.data.fill_(0.)

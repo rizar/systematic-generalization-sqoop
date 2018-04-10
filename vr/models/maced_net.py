@@ -30,7 +30,7 @@ class MAC(nn.Module):
                #module_intermediate_batchnorm=False,
                #module_batchnorm=False,
                #module_batchnorm_affine=False,
-               #module_dropout=0,
+               module_dropout=0,
                #module_input_proj=1,
                #module_kernel_size=3,
                
@@ -64,6 +64,7 @@ class MAC(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
+    self.module_dropout = module_dropout
     #self.module_num_layers = module_num_layers
     #self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
@@ -178,7 +179,7 @@ class MAC(nn.Module):
 
     init_modules(self.modules())
 
-  def forward(self, x, ques, save_activations=False):
+  def forward(self, x, ques, isTest=False, save_activations=False):
     # Initialize forward pass and externally viewable activations
     self.fwd_count += 1
     if save_activations:
@@ -186,13 +187,22 @@ class MAC(nn.Module):
       self.control_outputs = []
       self.memory_outputs = []
       self.cf_input = None
-
+    
+    if not isTest and self.module_dropout > 0.:
+      dropout_mask_cell = Variable(torch.Tensor(N, self.module_dim).fill_(self.module_dropout).bernoulli_())
+      dropout_mask_question_rep = Variable(torch.Tensor(N, 2*self.module_dim).fill_(self.module_dropout).bernoulli_())
+    else:
+      dropout_mask_cell = None
+      dropout_mask_question_rep = None
+    
     '''
     if self.debug_every <= -2:
       pdb.set_trace()
     '''
     
     q_context, q_rep, q_mask = ques
+    
+    if dropout_mask_question_rep: q_rep = q_rep * dropout_mask_question_rep
 
     batch_coords = None
     if self.use_coords_freq > 0:
@@ -232,6 +242,8 @@ class MAC(nn.Module):
       
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
+      #dropout
+      if dropout_mask_cell: memory_i = memory_i * dropout_mask_cell
       if save_activations:
         self.memory_outputs.append(memory_i)
 

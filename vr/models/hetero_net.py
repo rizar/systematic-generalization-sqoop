@@ -97,7 +97,7 @@ class HeteroModuleNet(ModuleNet):
                            module_dim,
                            num_layers=stem_num_layers,
                            with_batchnorm=stem_batchnorm)
-    self.classifier = lambda x: x
+    self.classifier = Answer(len(self.answer_to_idx))
 
     if verbose:
       print('Here is my stem:')
@@ -109,7 +109,7 @@ class HeteroModuleNet(ModuleNet):
     self.program_token_to_module_text = vocab['program_token_to_module_text']
     self.name_to_module = {
       'and': And(),
-      'answer': Answer(len(self.answer_to_idx)),
+      'answer': lambda x: x,
       'find': Find(module_dim, len(self.text_token_to_idx)),
       'transform': Transform(len(self.text_token_to_idx)),
     }
@@ -126,20 +126,16 @@ class HeteroModuleNet(ModuleNet):
     self.save_module_outputs = False
 
   def _forward_modules_ints_helper(self, feats, program, i, j):
-    if j < program.size(1):
-      fn_idx = program.data[i, j]
-      fn_str = self.program_idx_to_token[fn_idx]
-    else:
-      raise IndexError('malformed program')
+    if j >= program.size(1):
+      raise IndexError('malformed program, reached index', j)
+
+    fn_idx = program.data[i, j]
+    fn_str = self.program_idx_to_token[fn_idx]
 
     if fn_str == '<START>':
-      used_fn_j = False
       return self._forward_modules_ints_helper(feats, program, i, j + 1)
     elif fn_str in ['<NULL>', '<END>']:
-      used_fn_j = False
-      raise ValueError('reached area out of program')
-
-    self.used_fns[i, j] = 1
+      raise IndexError('reached area out of program ', fn_str)
 
     j += 1
     if fn_str == 'scene':

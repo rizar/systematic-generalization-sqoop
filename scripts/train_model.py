@@ -733,6 +733,7 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
+                'module_dropout': args.module_dropout,
                 
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
@@ -852,12 +853,15 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       programs_pred = program_generator.reinforce_sample(
                           questions_var, argmax=True)
       scores = execution_engine(feats_var, programs_pred)
-    elif args.model_type == 'FiLM' or args.model_type == 'RTfilm' or args.model_type == 'MAC':
+    elif args.model_type == 'FiLM' or args.model_type == 'RTfilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred)
     elif args.model_type == 'Tfilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred, programs_var)
+    elif args.model_type == 'MAC':
+      programs_pred = program_generator(questions_var)
+      scores = execution_engine(feats_var, programs_pred, isTest=True)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
 

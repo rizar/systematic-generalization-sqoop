@@ -8,7 +8,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
 import math
-from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal
+from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
 #from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
@@ -482,4 +482,4 @@ def init_modules(modules, init='uniform'):
   for m in modules:
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
-      m.bias.fill_(0.)
+      constant(m.bias, 0.)

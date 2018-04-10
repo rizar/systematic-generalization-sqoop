@@ -289,7 +289,7 @@ def main(args):
 
 
 def train_loop(args, train_loader, val_loader, valB_loader=None):
-  vocab = utils.load_vocab(args.vocab_json)
+  vocab = vr.utils.load_vocab(args.vocab_json)
   program_generator, pg_kwargs, pg_optimizer = None, None, None
   execution_engine, ee_kwargs, ee_optimizer = None, None, None
   baseline_model, baseline_kwargs, baseline_optimizer = None, None, None

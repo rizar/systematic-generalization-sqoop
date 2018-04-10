@@ -44,8 +44,8 @@ COLOR2RGB = [('red', (255, 0, 0)),
              ('gray', (128, 128, 128))]
 COLOR2RGB = collections.OrderedDict(COLOR2RGB)
 COLORS = list(COLOR2RGB.keys())
-SHAPES = ['square', 'empty_square', 'circle',
-          'triangle', 'empty_triangle', 'cross', 'bar']
+SHAPES = ['square', 'triangle', 'circle', 'cross',
+          'empty_square', 'empty_triangle', 'bar']
 MIN_OBJECT_SIZE = 8
 
 
@@ -106,8 +106,11 @@ Object = collections.namedtuple(
 
 class SceneGenerator:
 
-  def __init__(self, image_size, min_obj_size, max_obj_size, rotate,
+  def __init__(self, shapes, colors,
+               image_size, min_obj_size, max_obj_size, rotate,
                num_objects, seed, object_allowed):
+    self._shapes = shapes
+    self._colors = colors
     self._image_size = image_size
     self._min_obj_size = min_obj_size
     self._max_obj_size = max_obj_size
@@ -132,8 +135,8 @@ class SceneGenerator:
     while len(objects) < self._num_objects:
       # first, select which object to draw by rejection sampling
       while True:
-        shape = self._rng.choice(SHAPES)
-        color = self._rng.choice(COLORS)
+        shape = self._rng.choice(self._shapes)
+        color = self._rng.choice(self._colors)
         if self._object_allowed((shape, color), 'generate'):
           break
 
@@ -180,8 +183,20 @@ class SceneGenerator:
     return objects, surface
 
 
+def shape_module(shape):
+  return "Shape[{}]".format(shape)
+
+
+def color_module(color):
+  return "Color[{}]".format(color)
+
+
 def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
-  sg = SceneGenerator(image_size=args.image_size,
+  shapes = SHAPES[:args.num_shapes]
+  colors = COLORS[:args.num_colors]
+
+  sg = SceneGenerator(shapes=shapes, colors=colors,
+                      image_size=args.image_size,
                       min_obj_size=args.min_obj_size, max_obj_size=args.max_obj_size,
                       rotate=args.rotate,
                       num_objects=5, seed=1, object_allowed=object_allowed)
@@ -190,13 +205,12 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   max_program_len = 7
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
-                    + sorted(list(COLOR2RGB))
-                    + SHAPES)
+                    + colors + shapes)
   question_vocab = {word: i for i, word in enumerate(question_words)}
 
   program_words = (['<NULL>', '<START>', '<END>', 'scene', 'And']
-                   + sorted(list(COLOR2RGB))
-                   + SHAPES)
+                   + [color_module(color) for color in colors]
+                   + [shape_module(shape) for shape in shapes])
   program_vocab = {word: i for i, word in enumerate(program_words)}
 
   scenes = []
@@ -237,8 +251,8 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
         # sample an allowed (shape, color) pair that is not present in the picture
         # if failed 10 times, try another scene
         for attempt in range(11):
-          shape = rng.choice(SHAPES)
-          color = rng.choice(COLORS)
+          shape = rng.choice(shapes)
+          color = rng.choice(colors)
           if not object_allowed((shape, color), 'ask'):
             continue
           found = any((shape, color) == (obj.shape, obj.color)
@@ -249,7 +263,8 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
           continue
 
       question = ["is", "there", "a"] + [color, shape]
-      program = ['<START>', 'And', shape, 'scene', color, 'scene', '<END>']
+      program = ['<START>', 'And', shape_module(shape), 'scene',
+                 color_module(color), 'scene', '<END>']
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
@@ -269,6 +284,17 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   with open(prefix + '_scenes.json', 'w') as dst:
     json.dump(scenes, dst, indent=2)
 
+  answer_token_to_idx = {'false': 0, 'true': 1}
+  module_token_to_idx = {'Color': 0, 'Shape': 1, 'And': 2}
+  program_token_to_module_text = {}
+  text_token_to_idx = {}
+  for color in colors:
+    program_token_to_module_text[color_module(color)] = ['Color', color]
+  for shape in shapes:
+    program_token_to_module_text[shape_module(shape)] = ['Shape', shape]
+  for idx, word in enumerate(colors + shapes):
+    text_token_to_idx[word] = idx
+
   if save_vocab:
     def arity(token):
       if token == 'And':
@@ -282,8 +308,10 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
                 'program_token_to_idx': program_vocab,
                 'program_token_arity':
                     {name: arity(name) for name in program_vocab},
-                  'answer_token_to_idx':
-                    {'false': 0, 'true': 1}},
+                'answer_token_to_idx': answer_token_to_idx,
+                'program_token_to_module_text': program_token_to_module_text,
+                'module_token_to_idx': module_token_to_idx,
+                'text_token_to_idx': text_token_to_idx},
                 dst)
 
 
@@ -376,6 +404,8 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=100,
                       help="Size of the test set")
+  parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
+  parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)
   parser.add_argument('--max-obj-size', type=int, default=15)

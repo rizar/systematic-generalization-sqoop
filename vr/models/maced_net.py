@@ -7,8 +7,10 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
+import math
+from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal
 
-from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
+#from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
 import vr.programs
 
@@ -28,7 +30,7 @@ class MAC(nn.Module):
                #module_intermediate_batchnorm=False,
                #module_batchnorm=False,
                #module_batchnorm_affine=False,
-               #module_dropout=0,
+               module_dropout=0,
                #module_input_proj=1,
                #module_kernel_size=3,
                
@@ -62,6 +64,7 @@ class MAC(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
+    self.module_dropout = module_dropout
     #self.module_num_layers = module_num_layers
     #self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
@@ -103,7 +106,7 @@ class MAC(nn.Module):
       self.print_verbose_every = 1
     module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
     module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    self.coords = coord_map((module_H, module_W))
+    self.coords = sincos_coord_map((module_H, module_W))
     
     #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
     #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
@@ -112,7 +115,7 @@ class MAC(nn.Module):
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(stem_feature_dim, module_dim,
                            num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding)
+                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding, acceptEvenKernel=True)
     
     
     #Define units
@@ -176,7 +179,7 @@ class MAC(nn.Module):
 
     init_modules(self.modules())
 
-  def forward(self, x, ques, save_activations=False):
+  def forward(self, x, ques, isTest=False, save_activations=False):
     # Initialize forward pass and externally viewable activations
     self.fwd_count += 1
     if save_activations:
@@ -184,13 +187,22 @@ class MAC(nn.Module):
       self.control_outputs = []
       self.memory_outputs = []
       self.cf_input = None
-
+    
+    if not isTest and self.module_dropout > 0.:
+      dropout_mask_cell = Variable(torch.Tensor(N, self.module_dim).fill_(self.module_dropout).bernoulli_())
+      dropout_mask_question_rep = Variable(torch.Tensor(N, 2*self.module_dim).fill_(self.module_dropout).bernoulli_())
+    else:
+      dropout_mask_cell = None
+      dropout_mask_question_rep = None
+    
     '''
     if self.debug_every <= -2:
       pdb.set_trace()
     '''
     
     q_context, q_rep, q_mask = ques
+    
+    if dropout_mask_question_rep: q_rep = q_rep * dropout_mask_question_rep
 
     batch_coords = None
     if self.use_coords_freq > 0:
@@ -230,6 +242,8 @@ class MAC(nn.Module):
       
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
+      #dropout
+      if dropout_mask_cell: memory_i = memory_i * dropout_mask_cell
       if save_activations:
         self.memory_outputs.append(memory_i)
 
@@ -296,6 +310,7 @@ class WriteUnit(nn.Module):
     
     if use_memory_gate:
       self.gated_control_transformer = nn.Linear(common_dim, 1) #Eq (w3.1)
+      #self.gated_control_transformer.bias.data.fill_(-1)
       self.non_linear = nn.Sigmoid()
     
     init_modules(self.modules())
@@ -331,7 +346,7 @@ class WriteUnit(nn.Module):
       gated_control = self.gated_control_transformer(controls[:,idx,:]) #N x 1
       
       #Eq (w3.2)
-      gated_control = self.non_linear(gated_control)
+      gated_control = self.non_linear(gated_control-1)
       res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
     
     return res_memory
@@ -438,3 +453,33 @@ def coord_map(shape, start=-1, end=1):
   x_coords = x_coord_row.unsqueeze(0).expand(torch.Size((m, n))).unsqueeze(0)
   y_coords = y_coord_row.unsqueeze(1).expand(torch.Size((m, n))).unsqueeze(0)
   return Variable(torch.cat([x_coords, y_coords], 0))
+
+def sincos_coord_map(shape, p_h=64., p_w=64.):
+  m, n = shape
+  x_coords = torch.zeros(m,n)
+  y_coords = torch.zeros(m,n)
+  
+  for i in range(m):
+    for j in range(n):
+      icoord = i if i % 2 == 0 else i-1
+      jcoord = j if j % 2 == 0 else j-1
+      x_coords[i, j] = math.sin(1.0 * i / (10000. ** (1.0 * jcoord / p_h)))
+      y_coords[i, j] = math.cos(1.0 * j / (10000. ** (1.0 * icoord / p_w)))
+  
+  x_coords = x_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
+  y_coords = y_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
+  
+  return Variable(torch.cat([x_coords, y_coords], 0))
+
+
+def init_modules(modules, init='uniform'):
+  if init.lower() == 'normal':
+    init_params = xavier_normal
+  elif init.lower() == 'uniform':
+    init_params = xavier_uniform
+  else:
+    return
+  for m in modules:
+    if isinstance(m, (nn.Conv2d, nn.Linear)):
+      init_params(m.weight)
+      m.bias.data.fill_(0.)

@@ -17,7 +17,8 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --module_stem_batchnorm 1 \
   --module_stem_num_layers 2 \
   --module_stem_kernel_size 3 \
-  --module_dim 128 \
+  --module_dropout 0.85 \
+  --module_dim 512 \
   --num_modules 12 \
   --mac_sharing_params_patterns 0,1,0,0 \
   --mac_use_self_attention 1 \
@@ -27,7 +28,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --weight_decay 1e-5 \
   --rnn_num_layers 1 \
   --rnn_wordvec_dim 300 \
-  --rnn_hidden_dim 128 \
+  --rnn_hidden_dim 512 \
   --rnn_dropout 0 \
   --rnn_output_batchnorm 0 \
   --classifier_fc_dims 1024 \

@@ -48,6 +48,10 @@ parser.add_argument('--train_question_h5', default='train_questions.h5')
 parser.add_argument('--train_features_h5', default='train_features.h5')
 parser.add_argument('--val_question_h5', default='val_questions.h5')
 parser.add_argument('--val_features_h5', default='val_features.h5')
+
+parser.add_argument('--valB_question_h5', default=None)
+parser.add_argument('--valB_features_h5', default=None)
+
 parser.add_argument('--feature_dim', default='1024,14,14')
 parser.add_argument('--vocab_json', default='vocab.json')
 
@@ -180,6 +184,11 @@ def main(args):
     args.train_features_h5 = os.path.join(args.data_dir, args.train_features_h5)
     args.val_question_h5 = os.path.join(args.data_dir, args.val_question_h5)
     args.val_features_h5 = os.path.join(args.data_dir, args.val_features_h5)
+
+    if args.valB_question_h5 and args.valB_features_h5:
+      args.valB_question_h5 = os.path.join(args.data_dir, args.valB_question_h5)
+      args.valB_features_h5 = os.path.join(args.data_dir, args.valB_features_h5)
+
     args.vocab_json = os.path.join(args.data_dir, args.vocab_json)
   if not args.checkpoint_path:
     if 'SLURM_JOB_ID' in os.environ:
@@ -216,6 +225,12 @@ def main(args):
     args.train_features_h5 = root + 'train_features.h5'
     args.val_question_h5 = root + 'val_questions.h5'
     args.val_features_h5 = root + 'val_features.h5'
+
+    if args.valB_question_h5 and args.valB_features_h5:
+      rsync_copy_if_not_exists(args.valB_question_h5, root + 'valB_questions.h5')
+      rsync_copy_if_not_exists(args.valB_features_h5, root + 'valB_features.h5')
+      args.valB_question_h5 = root + 'valB_questions.h5'
+      args.valB_features_h5 = root + 'valB_features.h5'
 
   if args.use_local_copies == 2:
     tmp = os.environ['SLURM_TMPDIR']
@@ -258,9 +273,26 @@ def main(args):
     'num_workers': args.loader_num_workers,
   }
 
-  with ClevrDataLoader(**train_loader_kwargs) as train_loader, \
-       ClevrDataLoader(**val_loader_kwargs) as val_loader:
-    train_loop(args, train_loader, val_loader)
+  if args.valB_question_h5 and args.valB_features_h5:
+    valB_loader_kwargs = {
+      'question_h5': args.valB_question_h5,
+      'feature_h5': args.valB_features_h5,
+      'vocab': vocab,
+      'batch_size': args.batch_size,
+      'question_families': question_families,
+      'max_samples': args.num_val_samples,
+      'num_workers': args.loader_num_workers,
+    }
+
+  if args.valB_question_h5 and args.valB_features_h5:
+    with ClevrDataLoader(**train_loader_kwargs) as train_loader, \
+         ClevrDataLoader(**val_loader_kwargs) as val_loader, \
+         ClevrDataLoader(**valB_loader_kwargs) as valB_loader:
+      train_loop(args, train_loader, val_loader, valB_loader)
+  else:
+    with ClevrDataLoader(**train_loader_kwargs) as train_loader, \
+         ClevrDataLoader(**val_loader_kwargs) as val_loader:
+      train_loop(args, train_loader, val_loader)
 
   if args.use_local_copies == 1 and args.cleanup_local_copies == 1:
     os.remove('/tmp/train_questions.h5')
@@ -269,7 +301,7 @@ def main(args):
     os.remove('/tmp/val_features.h5')
 
 
-def train_loop(args, train_loader, val_loader):
+def train_loop(args, train_loader, val_loader, valB_loader=None):
   vocab = utils.load_vocab(args.vocab_json)
   program_generator, pg_kwargs, pg_optimizer = None, None, None
   execution_engine, ee_kwargs, ee_optimizer = None, None, None
@@ -312,18 +344,27 @@ def train_loop(args, train_loader, val_loader):
     'train_accs': [], 'val_accs': [], 'val_accs_ts': [],
     'best_val_acc': -1, 'model_t': 0,
   }
+
+  if valB_loader:
+    stats['valB_accs'] = []
+    stats['valB_accs_ts'] = []
+    stats['bestB_val_acc'] = []
+
   t, epoch, reward_moving_average = 0, 0, 0
 
   set_mode('train', [program_generator, execution_engine, baseline_model])
 
   print('train_loader has %d samples' % len(train_loader.dataset))
   print('val_loader has %d samples' % len(val_loader.dataset))
+  if valB_loader:
+    print('valB_loader has %d samples' % len(valB_loader.dataset))
 
   num_checkpoints = 0
   epoch_start_time = 0.0
   epoch_total_time = 0.0
   train_pass_total_time = 0.0
   val_pass_total_time = 0.0
+  valB_pass_total_time = 0.0
   running_loss = 0.0
   while t < args.num_iterations:
     if (epoch > 0) and (args.time == 1):
@@ -504,8 +545,22 @@ def train_loop(args, train_loader, val_loader):
         stats['val_accs'].append(val_acc)
         stats['val_accs_ts'].append(t)
 
+        if valB_loader:
+          start=time.time()
+          valB_acc = check_accuracy(args, program_generator, execution_engine,
+                                    baseline_model, valB_loader)
+          if args.time == 1:
+            valB_pass_time = (time.time() - start)
+            valB_pass_total_time += valB_pass_time
+            print(colored('VAL B PASS AVG TIME:   ' + str(valB_pass_total_time / num_checkpoints), 'cyan'))
+            print(colored('Val B Pass Time        : ' + str(valB_pass_time), 'cyan'))
+          print('val B accuracy is ', valB_acc)
+          stats['valB_accs'].append(valB_acc)
+          stats['valB_accs_ts'].append(t)
+
         if val_acc > stats['best_val_acc']:
           stats['best_val_acc'] = val_acc
+          if valB_loader: stats['bestB_val_acc'] = valB_acc
           stats['model_t'] = t
           best_pg_state = get_state(program_generator)
           best_ee_state = get_state(execution_engine)
@@ -697,7 +752,7 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
-
+                'module_dropout': args.module_dropout,
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
@@ -816,12 +871,15 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       programs_pred = program_generator.reinforce_sample(
                           questions_var, argmax=True)
       scores = execution_engine(feats_var, programs_pred)
-    elif args.model_type == 'FiLM' or args.model_type == 'RTfilm' or args.model_type == 'MAC':
+    elif args.model_type == 'FiLM' or args.model_type == 'RTfilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred)
     elif args.model_type == 'Tfilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred, programs_var)
+    elif args.model_type == 'MAC':
+      programs_pred = program_generator(questions_var)
+      scores = execution_engine(feats_var, programs_pred, isTest=True)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
 

@@ -17,6 +17,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --module_stem_batchnorm 1 \
   --module_stem_num_layers 2 \
   --module_stem_kernel_size 3 \
+  --module_dropout 0.85 \
   --module_dim 512 \
   --num_modules 12 \
   --mac_sharing_params_patterns 0,1,0,0 \

@@ -292,7 +292,10 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
     program_token_to_module_text[color_module(color)] = ['Color', color]
   for shape in shapes:
     program_token_to_module_text[shape_module(shape)] = ['Shape', shape]
-  for idx, word in enumerate(colors + shapes):
+  program_token_to_module_text['And'] = ('And', 'null')
+  for module in ['<START>', '<END>', '<NULL>']:
+    program_token_to_module_text[module] = ('null', 'null')
+  for idx, word in enumerate(['null'] + colors + shapes):
     text_token_to_idx[word] = idx
 
   if save_vocab:

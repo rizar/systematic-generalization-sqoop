@@ -482,4 +482,4 @@ def init_modules(modules, init='uniform'):
   for m in modules:
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
-      m.bias.data.fill_(0.)
+      m.bias.fill_(0.)

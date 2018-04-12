@@ -8,3 +8,5 @@ dependencies:
 - torchvision
 - h5py
 - scipy
+- pip:
+        - pygame

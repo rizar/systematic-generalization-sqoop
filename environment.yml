@@ -10,3 +10,6 @@ dependencies:
 - scipy
 - pip:
         - pygame
+- numpy
+- tqdm
+- termcolor

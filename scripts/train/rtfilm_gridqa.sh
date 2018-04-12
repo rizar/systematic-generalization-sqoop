@@ -5,6 +5,7 @@ THIS_SCRIPT_DIR=`dirname $0`
 python $THIS_SCRIPT_DIR/../train_model.py \
   --model_type RTfilm \
   --feature_dim=3,64,64 \
+  --num_iterations 20000 \
   --checkpoint_every 100 \
   --record_loss_every 10 \
   --num_val_samples 1000 \

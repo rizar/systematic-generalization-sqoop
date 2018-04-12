@@ -1,29 +1,12 @@
 #!/bin/bash
-# ---------------------------------------------------------------------
-# SLURM script for a multi-step job on a Compute Canada cluster. 
-# ---------------------------------------------------------------------
-#SBATCH --account=rpp-bengioy
-##SBATCH --cpus-per-task=1
-#SBATCH --gres=gpu:1
-#SBATCH --time=24:0:0
-#SBATCH --mem=8G
-#SBATCH --array=1-1   # Run a 10-job array, one job at a time.
-#SBATCH --output=logs/mac2-%j.out
-# ---------------------------------------------------------------------
 
-## setrpaths.sh --path ~/.conda/envs/nmn
-
-export PYTHONUNBUFFERED=1
-source activate nmn
-argm='mac2-'
-name=$argm`python getJobID.py`
-PYTHONPATH=/home/thiennh/project/thiennh/projects/nmn-iwp python scripts/train_model.py \
+python $NMN/scripts/train_model.py \
   --data_dir /home/thiennh/project/thiennh/datasets/clevr \
   --model_type MAC \
   --num_iterations 20000000 \
   --print_verbose_every 20000000 \
   --checkpoint_every 11000 \
-  --checkpoint_path logs/$name.pt \
+  --checkpoint_path logs/$SLURM_JOB_ID.pt \
   --record_loss_every 100 \
   --num_val_samples 149991 \
   --optimizer Adam \

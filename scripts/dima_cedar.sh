@@ -1,9 +1,8 @@
 #!/usr/bin/env bash
 
-set -x
-
 export PYTHONUNBUFFERED=1
-export PYTHONPATH=$PYTHONPATH:$HOME/Dist/nmn-iwp
+export NMN=$HOME/Dist/nmn-iwp
+export PYTHONPATH=$PYTHONPATH:$NMN
 source activate nmn
 
 "$@"

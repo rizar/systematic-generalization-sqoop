@@ -73,7 +73,7 @@ class MAC(nn.Module):
     #self.use_gamma = use_gamma
     #self.use_beta = use_beta
 
-    self.sharing_params_patterns = [True if p == 1 else 0 for p in sharing_params_patterns]
+    self.sharing_params_patterns = [True if p == 1 else False for p in sharing_params_patterns]
     self.use_self_attention = use_self_attention == 1
     self.use_memory_gate = use_memory_gate == 1
 

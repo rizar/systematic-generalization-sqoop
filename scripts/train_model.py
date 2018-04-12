@@ -6,32 +6,38 @@
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
 
-import sys
-import os
-import time
-
 import argparse
-import pdb as pdb
 import json
+import os
+import pdb
 import random
 import shutil
-from termcolor import colored
+import sys
 import time
 
+import h5py
+import numpy as np
+from termcolor import colored
 import torch
 torch.backends.cudnn.enabled = True
 from torch.autograd import Variable
 import torch.nn.functional as F
-import numpy as np
-import h5py
 
-import vr.utils as utils
+import vr.utils
 import vr.preprocess
-from vr.data import ClevrDataset, ClevrDataLoader
-from vr.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
-from vr.models import FiLMedNet, TFiLMedNet, RTFiLMedNet, MAC
-from vr.models import FiLMGen
-
+from vr.data import (ClevrDataset,
+                     ClevrDataLoader)
+from vr.models import (ModuleNet,
+                       Seq2Seq,
+                       LstmModel,
+                       CnnLstmModel,
+                       CnnLstmSaModel,
+                       FiLMedNet,
+                       TFiLMedNet,
+                       RTFiLMedNet,
+                       FiLMGen,
+                       MAC,
+                       HeteroModuleNet)
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
@@ -66,7 +72,7 @@ parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA'])
+  choices=['RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -178,25 +184,25 @@ def main(args):
     name, ext = os.path.splitext(args.checkpoint_path)
     num = random.randint(1, 1000000)
     args.checkpoint_path = '%s_%06d%s' % (name, num, ext)
+  elif not args.checkpoint_path:
+    if 'SLURM_JOB_ID' in os.environ:
+      args.checkpoint_path = os.environ['SLURM_JOB_ID'] + '.pt'
+    else:
+      raise Exception('checkpoint path not defined')
   print('Will save checkpoints to %s' % args.checkpoint_path)
+
   if args.data_dir:
     args.train_question_h5 = os.path.join(args.data_dir, args.train_question_h5)
     args.train_features_h5 = os.path.join(args.data_dir, args.train_features_h5)
     args.val_question_h5 = os.path.join(args.data_dir, args.val_question_h5)
     args.val_features_h5 = os.path.join(args.data_dir, args.val_features_h5)
-    
+
     if args.valB_question_h5 and args.valB_features_h5:
       args.valB_question_h5 = os.path.join(args.data_dir, args.valB_question_h5)
       args.valB_features_h5 = os.path.join(args.data_dir, args.valB_features_h5)
-    
-    args.vocab_json = os.path.join(args.data_dir, args.vocab_json)
-  if not args.checkpoint_path:
-    if 'SLURM_JOB_ID' in os.environ:
-      args.checkpoint_path = os.environ['SLURM_JOB_ID'] + '.pt'
-    else:
-      raise NotImplementedError()
 
-  vocab = utils.load_vocab(args.vocab_json)
+    args.vocab_json = os.path.join(args.data_dir, args.vocab_json)
+  vocab = vr.utils.load_vocab(args.vocab_json)
 
   if args.use_local_copies == 1:
     if os.path.exists('/Tmpfast'):
@@ -221,7 +227,7 @@ def main(args):
     args.train_features_h5 = root + 'train_features.h5'
     args.val_question_h5 = root + 'val_questions.h5'
     args.val_features_h5 = root + 'val_features.h5'
-    
+
     if args.valB_question_h5 and args.valB_features_h5:
       rsync_copy_if_not_exists(args.valB_question_h5, root + 'valB_questions.h5')
       rsync_copy_if_not_exists(args.valB_features_h5, root + 'valB_features.h5')
@@ -253,7 +259,7 @@ def main(args):
     'max_samples': args.num_val_samples,
     'num_workers': args.loader_num_workers,
   }
-  
+
   if args.valB_question_h5 and args.valB_features_h5:
     valB_loader_kwargs = {
       'question_h5': args.valB_question_h5,
@@ -283,7 +289,7 @@ def main(args):
 
 
 def train_loop(args, train_loader, val_loader, valB_loader=None):
-  vocab = utils.load_vocab(args.vocab_json)
+  vocab = vr.utils.load_vocab(args.vocab_json)
   program_generator, pg_kwargs, pg_optimizer = None, None, None
   execution_engine, ee_kwargs, ee_optimizer = None, None, None
   baseline_model, baseline_kwargs, baseline_optimizer = None, None, None
@@ -300,7 +306,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                 weight_decay=args.weight_decay)
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE']:
+  if args.model_type in ['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     ee_optimizer = optim_method(execution_engine.parameters(),
                                 lr=args.learning_rate,
@@ -325,12 +331,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     'train_accs': [], 'val_accs': [], 'val_accs_ts': [],
     'best_val_acc': -1, 'model_t': 0,
   }
-  
+
   if valB_loader:
     stats['valB_accs'] = []
     stats['valB_accs_ts'] = []
     stats['bestB_val_acc'] = []
-  
+
   t, epoch, reward_moving_average = 0, 0, 0
 
   set_mode('train', [program_generator, execution_engine, baseline_model])
@@ -379,7 +385,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = program_generator(questions_var, programs_var)
         loss.backward()
         pg_optimizer.step()
-      elif args.model_type == 'EE':
+      elif args.model_type in ['EE', 'Hetero']:
         # Train execution engine with ground-truth programs
         ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, programs_var)
@@ -486,6 +492,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
 
+
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
         avg_loss = running_loss / args.record_loss_every
@@ -525,7 +532,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         stats['train_accs'].append(train_acc)
         stats['val_accs'].append(val_acc)
         stats['val_accs_ts'].append(t)
-        
+
         if valB_loader:
           start=time.time()
           valB_acc = check_accuracy(args, program_generator, execution_engine,
@@ -589,9 +596,9 @@ def get_state(m):
 
 
 def get_program_generator(args):
-  vocab = utils.load_vocab(args.vocab_json)
+  vocab = vr.utils.load_vocab(args.vocab_json)
   if args.program_generator_start_from is not None:
-    pg, kwargs = utils.load_program_generator(
+    pg, kwargs = vr.utils.load_program_generator(
       args.program_generator_start_from, model_type=args.model_type)
     cur_vocab_size = pg.encoder_embed.weight.size(0)
     if cur_vocab_size != len(vocab['question_token_to_idx']):
@@ -636,9 +643,9 @@ def get_program_generator(args):
 
 
 def get_execution_engine(args):
-  vocab = utils.load_vocab(args.vocab_json)
+  vocab = vr.utils.load_vocab(args.vocab_json)
   if args.execution_engine_start_from is not None:
-    ee, kwargs = utils.load_execution_engine(
+    ee, kwargs = vr.utils.load_execution_engine(
       args.execution_engine_start_from, model_type=args.model_type)
   else:
     kwargs = {
@@ -735,11 +742,9 @@ def get_execution_engine(args):
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
                 'module_dropout': args.module_dropout,
-                
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
-                
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,
@@ -748,6 +753,16 @@ def get_execution_engine(args):
                 'print_verbose_every': args.print_verbose_every,
                 }
       ee = MAC(**kwargs)
+    elif args.model_type == 'Hetero':
+      kwargs = {
+        'vocab': vocab,
+        'feature_dim': parse_int_list(args.feature_dim),
+        'stem_batchnorm': args.module_stem_batchnorm == 1,
+        'stem_num_layers': args.module_stem_num_layers,
+        'module_dim': args.module_dim,
+        'module_batchnorm': args.module_batchnorm == 1,
+      }
+      ee = HeteroModuleNet(**kwargs)
     else:
       ee = ModuleNet(**kwargs)
   ee.cuda()
@@ -755,9 +770,9 @@ def get_execution_engine(args):
   return ee, kwargs
 
 def get_baseline_model(args):
-  vocab = utils.load_vocab(args.vocab_json)
+  vocab = vr.utils.load_vocab(args.vocab_json)
   if args.baseline_start_from is not None:
-    model, kwargs = utils.load_baseline(args.baseline_start_from)
+    model, kwargs = vr.utils.load_baseline(args.baseline_start_from)
   elif args.model_type == 'LSTM':
     kwargs = {
       'vocab': vocab,
@@ -840,7 +855,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
 
     scores = None  # Use this for everything but PG
     if args.model_type == 'PG':
-      vocab = utils.load_vocab(args.vocab_json)
+      vocab = vr.utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
         program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True))
         program_pred_str = vr.preprocess.decode(program_pred, vocab['program_idx_to_token'])
@@ -848,7 +863,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
         if program_pred_str == program_str:
           num_correct += 1
         num_samples += 1
-    elif args.model_type == 'EE':
+    elif args.model_type in ['EE', 'Hetero']:
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
       programs_pred = program_generator.reinforce_sample(

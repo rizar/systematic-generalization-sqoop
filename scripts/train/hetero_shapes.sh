@@ -6,6 +6,7 @@ python -m scripts.train_model \
     --checkpoint_every 100 \
     --record_loss_every 10 \
     --num_val_samples 1000 \
+    --batch_size 256 \
     --optimizer Adam \
     --learning_rate 1e-3 \
     --weight_decay 0. \

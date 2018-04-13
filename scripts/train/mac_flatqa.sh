@@ -19,7 +19,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --module_stem_kernel_size 3 \
   --module_dropout 0. \
   --module_dim 256 \
-  --num_modules 12 \
+  --num_modules 4 \
   --mac_sharing_params_patterns 0,1,0,0 \
   --mac_use_self_attention 1 \
   --mac_use_memory_gate 1 \

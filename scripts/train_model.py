@@ -43,7 +43,7 @@ from vr.treeGenerator import TreeGenerator
 parser = argparse.ArgumentParser()
 
 
-def parse_list(input_):
+def parse_int_list(input_):
   if input_ == None:
     return []
   return list(map(int, input_.split(',')))
@@ -90,7 +90,7 @@ parser.add_argument('--rnn_dropout', default=0, type=float)
 
 # Module net / FiLMedNet options
 parser.add_argument('--module_stem_num_layers', default=2, type=int)
-parser.add_argument('--module_stem_subsample_layers', default=[], type=parse_list)
+parser.add_argument('--module_stem_subsample_layers', default=[], type=parse_int_list)
 parser.add_argument('--module_stem_batchnorm', default=0, type=int)
 parser.add_argument('--module_dim', default=128, type=int)
 parser.add_argument('--module_residual', default=1, type=int)
@@ -110,9 +110,9 @@ parser.add_argument('--gamma_option', default='linear',
   choices=['linear', 'sigmoid', 'tanh', 'exp'])
 parser.add_argument('--gamma_baseline', default=1, type=float)
 parser.add_argument('--num_modules', default=4, type=int)
-parser.add_argument('--module_stem_kernel_size', default=3, type=int)
-parser.add_argument('--module_stem_stride', default=1, type=int)
-parser.add_argument('--module_stem_padding', default=None, type=int)
+parser.add_argument('--module_stem_kernel_size', default=3, type=parse_int_list)
+parser.add_argument('--module_stem_stride', default=1, type=parse_int_list)
+parser.add_argument('--module_stem_padding', default=None, type=parse_int_list)
 parser.add_argument('--module_num_layers', default=1, type=int)  # Only mnl=1 currently implemented
 parser.add_argument('--module_batchnorm_affine', default=0, type=int)  # 1 overrides other factors
 parser.add_argument('--module_dropout', default=5e-2, type=float)
@@ -786,6 +786,9 @@ def get_execution_engine(args):
         'feature_dim': parse_int_list(args.feature_dim),
         'stem_batchnorm': args.module_stem_batchnorm == 1,
         'stem_num_layers': args.module_stem_num_layers,
+        'stem_kernel_size': args.module_stem_kernel_size,
+        'stem_stride': args.module_stem_stride,
+        'stem_padding': args.module_stem_padding,
         'module_dim': args.module_dim,
         'module_batchnorm': args.module_batchnorm == 1,
       }

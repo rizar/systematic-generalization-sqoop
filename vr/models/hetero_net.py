@@ -84,11 +84,14 @@ class Answer(nn.Module):
 class HeteroModuleNet(ModuleNet):
   def __init__(self,
                vocab,
-               feature_dim=(1024, 14, 14),
-               stem_num_layers=2,
-               stem_batchnorm=False,
-               module_dim=128,
-               module_batchnorm=False,
+               feature_dim,
+               stem_num_layers,
+               stem_kernel_size,
+               stem_stride,
+               stem_padding,
+               stem_batchnorm,
+               module_dim,
+               module_batchnorm,
                verbose=True):
     super(ModuleNet, self).__init__()
 
@@ -113,6 +116,9 @@ class HeteroModuleNet(ModuleNet):
     self.stem = build_stem(input_C,
                            module_dim,
                            num_layers=stem_num_layers,
+                           kernel_size=stem_kernel_size,
+                           stride=stem_stride,
+                           padding=stem_padding,
                            with_batchnorm=stem_batchnorm)
 
     self.classifier = Answer(len(self.answer_to_idx))

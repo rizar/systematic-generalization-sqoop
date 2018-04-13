@@ -1,19 +1,17 @@
 #!/bin/bash
 
-source ~/.bashrc
-source activate nmn
-echo $PWD
-export PYTHONPATH="$PYTHONPATH:$PWD"
-
 python -m scripts.train_model \
     --data_dir /data/milatmp1/noukhovm/nmn-iwp/data/shapes_dataset \
     --model_type Hetero \
     --checkpoint_every 100 \
-    --record_loss_every 100 \
-    --num_val_samples 149991 \
+    --record_loss_every 10 \
+    --num_val_samples 1000 \
     --optimizer Adam \
-    --learning_rate 1e-4 \
-    --weight_decay 1e-5 \
+    --learning_rate 1e-3 \
+    --weight_decay 0. \
     --feature_dim=3,30,30 \
-    --module_stem_num_layers 1 \
+    --module_stem_num_layers 2 \
+    --module_stem_kernel_size 10,1 \
+    --module_stem_stride 10,1 \
+    --module_stem_padding 0,0 \
     --module_batchnorm 1 $@

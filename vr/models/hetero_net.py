@@ -40,7 +40,9 @@ class Transform(nn.Module):
   #   image_att: [N, 1, H, W]
   def __init__(self, text_dim, map_dim=500, kernel_size=3):
     super().__init__()
-    self.conv1 = nn.Conv2d(1, map_dim, 1)
+    if kernel_size % 2 == 0:
+      raise NotImplementedError()
+    self.conv1 = nn.Conv2d(1, map_dim, kernel_size, padding=kernel_size // 2)
     self.embed = nn.Embedding(text_dim, map_dim)
     self.conv2 = nn.Conv2d(map_dim, 1, 1)
     self.map_dim = map_dim

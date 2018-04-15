@@ -68,20 +68,10 @@ class MAC(nn.Module):
     self.stem_use_coords = self.use_coords_freq
     self.extra_channel_freq = self.use_coords_freq
 
-
     self.fwd_count = 0
     self.num_extra_channels = 2 if self.use_coords_freq > 0 else 0
     if self.debug_every <= -1:
       self.print_verbose_every = 1
-    module_H = feature_dim[1] // int(np.prod(stem_stride))  # Rough calc: work for main cases
-    module_W = feature_dim[2] // int(np.prod(stem_stride))  # Rough calc: work for main cases
-    # DIMA: why do we even need to precompute coord_map???
-    for _ in stem_subsample_layers:
-      module_H //= 2
-      module_W //= 2
-
-    self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
-    self.coords = sincos_coord_map((module_H, module_W))
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
@@ -177,10 +167,10 @@ class MAC(nn.Module):
       q_rep = (1. - self.module_dropout) * q_rep
 
     stem_batch_coords = None
-    batch_coords = None
     if self.use_coords_freq > 0:
-      stem_batch_coords = self.stem_coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.stem_coords.size())))
-      batch_coords = self.coords.unsqueeze(0).expand(torch.Size((x.size(0), *self.coords.size())))
+      stem_coords = coord_map((x.size(2), x.size(3)))
+      stem_batch_coords = stem_coords.unsqueeze(0).expand(
+          torch.Size((x.size(0), *stem_coords.size())))
     if self.stem_use_coords:
       x = torch.cat([x, stem_batch_coords], 1)
     feats = self.stem(x)
@@ -230,20 +220,12 @@ class MAC(nn.Module):
         memory_storage = memory_updated
 
     # Run the final classifier over the resultant, post-modulated features.
-    '''
-    if self.use_coords_freq > 0:
-      final_module_output = torch.cat([final_module_output, batch_coords], 1)
-    '''
     final_module_output = torch.cat([q_rep, final_module_output], 1)
 
     if save_activations:
       self.cf_input = final_module_output
     out = self.classifier(final_module_output)
 
-    '''
-    if ((self.fwd_count % self.debug_every) == 0) or (self.debug_every <= -1):
-      pdb.set_trace()
-    '''
     return out
 
 class OutputUnit(nn.Module):

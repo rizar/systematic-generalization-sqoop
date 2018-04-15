@@ -6,4 +6,4 @@ export PYTHONPATH=$PYTHONPATH:$NMN
 source activate nmn
 
 # override any default checkpoint path
-"$@" --checkpoint_path=''
+"$@" --checkpoint_path='' --use_local_copies=0

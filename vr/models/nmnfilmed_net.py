@@ -181,7 +181,7 @@ class NMNFiLMedNet(nn.Module):
     filmId = self.fn_str_2_filmId[fn_str]
     module = self.function_modules[fn_str]
     if fn_str == 'scene':
-      module_inputs = [feats[i:i+1]]
+      module_inputs = feats[i:i+1]
     else:
       num_inputs = self.function_modules_num_inputs[fn_str]
       module_inputs = []

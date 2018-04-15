@@ -110,8 +110,8 @@ parser.add_argument('--gamma_option', default='linear',
   choices=['linear', 'sigmoid', 'tanh', 'exp'])
 parser.add_argument('--gamma_baseline', default=1, type=float)
 parser.add_argument('--num_modules', default=4, type=int)
-parser.add_argument('--module_stem_kernel_size', default=3, type=parse_int_list)
-parser.add_argument('--module_stem_stride', default=1, type=parse_int_list)
+parser.add_argument('--module_stem_kernel_size', default=[3], type=parse_int_list)
+parser.add_argument('--module_stem_stride', default=[1], type=parse_int_list)
 parser.add_argument('--module_stem_padding', default=None, type=parse_int_list)
 parser.add_argument('--module_num_layers', default=1, type=int)  # Only mnl=1 currently implemented
 parser.add_argument('--module_batchnorm_affine', default=0, type=int)  # 1 overrides other factors

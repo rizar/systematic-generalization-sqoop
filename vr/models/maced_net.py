@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import numpy as np
 import math
 import pprint
 import torch
@@ -16,40 +17,22 @@ import vr.programs
 
 class MAC(nn.Module):
   """Implementation of the Compositional Attention Networks from: https://openreview.net/pdf?id=S1Euwz-Rb"""
-  def __init__(self, vocab, feature_dim=(1024, 14, 14),
-               stem_num_layers=2,
-               stem_batchnorm=False,
-               stem_kernel_size=3,
-               stem_subsample_layers=None,
-               stem_stride=1,
-               stem_padding=None,
-               num_modules=12,
-
-               #module_num_layers=1,
-               module_dim=128,
-               #module_residual=True,
-               #module_intermediate_batchnorm=False,
-               #module_batchnorm=False,
-               #module_batchnorm_affine=False,
+  def __init__(self, vocab, feature_dim,
+               stem_num_layers,
+               stem_batchnorm,
+               stem_kernel_size,
+               stem_subsample_layers,
+               stem_stride,
+               stem_padding,
+               num_modules,
+               module_dim,
                module_dropout=0,
-               #module_input_proj=1,
-               #module_kernel_size=3,
-
-               #the boolean variables to decide wehther to share params betweens the MAC cells in the model for
-               #the input units, control units, read units and write units respectively
                sharing_params_patterns=(0,1,0,0),
                use_self_attention=1,
                use_memory_gate=1,
-
-               #classifier_proj_dim=512,
-               #classifier_downsample='maxpool2',
                classifier_fc_layers=(1024,),
                classifier_batchnorm=False,
                classifier_dropout=0,
-               #condition_method='bn-film',
-               #condition_pattern=[],
-               #use_gamma=True,
-               #use_beta=True,
                use_coords=1,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
@@ -82,40 +65,23 @@ class MAC(nn.Module):
     self.print_verbose_every = print_verbose_every
 
     # Initialize helper variables
-    self.stem_use_coords = (stem_stride == 1) and (self.use_coords_freq > 0)
-
-    '''
-    self.condition_pattern = condition_pattern
-    if len(condition_pattern) == 0:
-      self.condition_pattern = []
-      for i in range(self.module_num_layers * self.num_modules):
-        self.condition_pattern.append(self.condition_method != 'concat')
-    else:
-      self.condition_pattern = [i > 0 for i in self.condition_pattern]
-    '''
-
+    self.stem_use_coords = self.use_coords_freq
     self.extra_channel_freq = self.use_coords_freq
 
-    '''
-    self.block = FiLMedResBlock
-    self.num_cond_maps = 2 * self.module_dim if self.condition_method == 'concat' else 0
-    '''
 
     self.fwd_count = 0
     self.num_extra_channels = 2 if self.use_coords_freq > 0 else 0
     if self.debug_every <= -1:
       self.print_verbose_every = 1
-    module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
+    module_H = feature_dim[1] // int(np.prod(stem_stride))  # Rough calc: work for main cases
+    module_W = feature_dim[2] // int(np.prod(stem_stride))  # Rough calc: work for main cases
+    # DIMA: why do we even need to precompute coord_map???
     for _ in stem_subsample_layers:
       module_H //= 2
       module_W //= 2
 
     self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = sincos_coord_map((module_H, module_W))
-
-    #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
-    #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
@@ -201,11 +167,6 @@ class MAC(nn.Module):
     else:
       dropout_mask_cell = None
       dropout_mask_question_rep = None
-
-    '''
-    if self.debug_every <= -2:
-      pdb.set_trace()
-    '''
 
     q_context, q_rep, q_mask = ques
 

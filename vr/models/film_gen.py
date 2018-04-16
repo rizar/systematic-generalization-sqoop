@@ -168,7 +168,7 @@ class FiLMGen(nn.Module):
       if out.shape[1] < T_in:
         #zeros = Variable(torch.FloatTensor(out.shape[0], T_in - out.shape[1], out.shape[2]).fill_(0.).cuda())
         #out = torch.cat([out, zeros], 1)
-        mask = mask[:, :(out.shape[1]-T_in)]
+        mask = mask[:, :(out.shape[1]-T_in)] #The packing truncate the original length so we need to change mask to fit it
       
       hn = hn[iperm_idx]
     else:

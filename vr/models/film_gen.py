@@ -164,6 +164,11 @@ class FiLMGen(nn.Module):
       idx_out = None
       out, _ = pad_packed_sequence(out, batch_first=True)
       out = out[iperm_idx]
+      
+      if out.shape[1] < T_in:
+        zeros = Variable(torch.FloatTensor((out.shape[0], T_in - out.shape[1], out.shape[2])).fill_(0.).cuda())
+        out = torch.cat([out, zeros], 1)
+      
       hn = hn[iperm_idx]
     else:
       idx = idx.view(N, 1, 1).expand(N, 1, H_full)

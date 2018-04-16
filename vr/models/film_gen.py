@@ -5,6 +5,7 @@ import torch.cuda
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules

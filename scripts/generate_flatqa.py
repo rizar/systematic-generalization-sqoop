@@ -27,7 +27,6 @@ import time
 
 import h5py
 import numpy
-import pygame
 from PIL import Image, ImageDraw
 
 
@@ -37,6 +36,35 @@ COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
 SHAPES = ['square', 'triangle', 'circle', 'cross',
           'empty_square', 'empty_triangle', 'bar']
 MIN_OBJECT_SIZE = 8
+
+
+class Object(object):
+  def __init__(self, size, angle, pos=None, shape=None, color=None):
+    self.size = size
+    self.angle = angle
+    angle_rad = angle / 180 * math.pi
+    self.rotated_size =  math.ceil(size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
+    self.pos = pos
+    self.shape = shape
+    self.color = color
+
+  def overlap(self, other):
+    min_dist = (self.size + other.size) // 2 + 1
+    return (abs(self.pos[0] - other.pos[0]) < min_dist and
+            abs(self.pos[1] - other.pos[1]) < min_dist)
+
+
+class CustomJSONEncoder(json.JSONEncoder):
+  def default(self, obj):
+    if isinstance(obj, Object):
+      return {'size': obj.size,
+              'rotated_size': obj.rotated_size,
+              'angle': obj.angle,
+              'pos': obj.pos,
+              'shape': obj.shape,
+              'color': obj.color}
+    else:
+      return super().default(obj)
 
 
 def draw_object(draw, obj):
@@ -71,23 +99,7 @@ def draw_object(draw, obj):
   else:
     raise ValueError()
 
-  return img.rotate(obj.angle, expand=True, resample=Image.BILINEAR)
-
-
-class Object(object):
-  def __init__(self, size, angle, pos=None, shape=None, color=None):
-    self.size = size
-    self.angle = angle
-    angle_rad = angle / 180 * math.pi
-    self.rotated_size =  math.ceil(size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
-    self.pos = pos
-    self.shape = shape
-    self.color = color
-
-  def overlap(self, other):
-    min_dist = (self.size + other.size) // 2 + 1
-    return (abs(self.pos[0] - other.pos[0]) < min_dist and
-            abs(self.pos[1] - other.pos[1]) < min_dist)
+  return img.rotate(obj.angle, expand=True, resample=Image.BICUBIC)
 
 
 def draw_scene(objects):
@@ -100,20 +112,6 @@ def draw_scene(objects):
     img.paste(obj_img, obj_pos, obj_img)
 
   return img
-
-
-class CustomJSONEncoder(json.JSONEncoder):
-
-  def default(self, obj):
-    if isinstance(obj, Object):
-      return {'size': obj.size,
-              'rotated_size': obj.rotated_size,
-              'angle': obj.angle,
-              'pos': obj.pos,
-              'shape': obj.shape,
-              'color': obj.color}
-    else:
-      return super().default(obj)
 
 
 def get_random_spot(rng, objects):
@@ -244,9 +242,6 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
       scenes.append(scene)
       buffer_ = io.BytesIO()
       image = draw_scene(scene)
-      image.show()
-      if i == 3:
-        exit()
       image.save(buffer_, format='png')
       buffer_.seek(0)
 
@@ -398,4 +393,3 @@ if __name__ == '__main__':
                       "during training")
   args = parser.parse_args()
   main()
-  __import__('pdb').set_trace()

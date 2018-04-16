@@ -145,7 +145,7 @@ class FiLMGen(nn.Module):
     embed = self.encoder_embed(x)
     
     if self.taking_context:
-      embed = pack_padded_sequence(embed, seq_lengths.cpu().numpy(), batch_first=True)
+      embed = pack_padded_sequence(embed, seq_lengths.data.cpu().numpy(), batch_first=True)
     
     h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
 

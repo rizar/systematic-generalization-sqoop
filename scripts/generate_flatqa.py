@@ -17,95 +17,64 @@ The algorithm:
       - ask the question about the selected (shape, color) objects
 
 """
-import numpy
-import pygame
 import argparse
-import h5py
-import pygame
 import collections
+import io
 import json
 import logging
-import time
 import math
-import PIL
-import PIL.Image
-import io
+import time
+
+import h5py
+import numpy
+import pygame
+from PIL import Image, ImageDraw
+
 
 logger = logging.getLogger(__name__)
-
-
-COLOR2RGB = [('red', (255, 0, 0)),
-             ('green', (0, 255, 0)),
-             ('blue', (0, 0, 255)),
-             ('yellow', (255, 255, 0)),
-             ('cyan', (0, 255, 255)),
-             ('purple', (128, 0, 128)),
-             ('brown', (165, 42, 42)),
-             ('gray', (128, 128, 128))]
-COLOR2RGB = collections.OrderedDict(COLOR2RGB)
-COLORS = list(COLOR2RGB.keys())
+COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
+          'purple', 'brown', 'gray']
 SHAPES = ['square', 'triangle', 'circle', 'cross',
           'empty_square', 'empty_triangle', 'bar']
 MIN_OBJECT_SIZE = 8
 
 
-def draw_object(shape, color, surf):
-  width, height = surf.get_size()
-  if width != height:
-    raise ValueError("can only draw on square cells")
-  if width < MIN_OBJECT_SIZE:
+def draw_object(draw, obj):
+  if obj.size < MIN_OBJECT_SIZE:
     raise ValueError("too small, can't draw")
-  rgb = COLOR2RGB[color]
 
-  if shape == 'square':
-      pygame.draw.rect(surf, rgb, pygame.Rect(0, 0, width, height))
-  elif shape == 'circle':
-      pygame.draw.circle(surf, rgb, (width // 2, height // 2), width // 2)
-  elif shape == 'triangle':
-      polygon = [(0, 0),
-                  (width // 2, height - 1),
-                  (width - 1, 0)]
-      pygame.draw.polygon(surf, rgb, polygon)
-  elif shape == 'empty_triangle':
-      polygon = [(0, 0),
-                  (width // 2, height - 1),
-                  (width - 1, 0)]
-      pygame.draw.polygon(surf, rgb, polygon, width // 4 - 1)
-  elif shape == 'empty_square':
-      thickness = width // 4 - 1
-      polygon = [(thickness - 1, thickness - 1),
-                  (width - thickness, thickness - 1),
-                  (width - thickness, height - thickness),
-                  (thickness - 1, height - thickness)]
-      pygame.draw.polygon(surf, rgb, polygon, thickness)
-  elif shape == 'cross':
-      pygame.draw.line(surf, rgb, (0, 0), (width - 1, height - 1), width // 4)
-      pygame.draw.line(surf, rgb, (width - 1, 0), (0, height - 1), width // 4)
-  elif shape == 'bar':
-      pygame.draw.line(surf, rgb, (0, height // 2), (width - 1, height // 2), width // 4)
+  img = Image.new('RGBA', (obj.size, obj.size))
+  draw = ImageDraw.Draw(img)
+  width, height = (obj.size, obj.size)
+
+  if obj.shape == 'square':
+    draw.rectangle([(0, 0), (width, height)], fill=obj.color)
+  elif obj.shape == 'circle':
+    draw.ellipse([(0, 0), (width, height)], fill=obj.color)
+  elif obj.shape == 'triangle':
+    polygon = [(0, 0),
+               (width // 2, height - 1),
+               (width - 1, 0)]
+    draw.polygon(polygon, fill=obj.color)
+  elif obj.shape == 'empty_triangle':
+    polygon = [(0, 0),
+               (width // 2, height - 1),
+               (width - 1, 0)]
+    draw.polygon(polygon, outline=obj.color)
+  elif obj.shape == 'empty_square':
+    draw.rectangle([(0, 0), (width-1, height-1)], outline=obj.color)
+  elif obj.shape == 'cross':
+    draw.rectangle([(width // 3, 0), (2 * width // 3, height)], fill=obj.color)
+    draw.rectangle([(0, height // 3), (width, 2 * height // 3)], fill=obj.color)
+  elif obj.shape == 'bar':
+    draw.rectangle([(0, height // 3), (width, 2 * height // 3)], fill=obj.color)
   else:
-      raise ValueError()
+    raise ValueError()
+
+  return img.rotate(obj.angle, expand=True, resample=Image.BILINEAR)
 
 
-def get_object_bitmap(shape, color, size, angle=0):
-  surf = pygame.Surface((size, size))
-  draw_object(shape, color, surf)
-  surf.set_colorkey((0, 0, 0))
-  return pygame.transform.rotate(surf, angle)
-
-
-def surf2array(surf):
-  arr = pygame.surfarray.array3d(surf)
-  arr = arr.transpose(1, 0, 2)
-  arr = arr[::-1, :, :]
-  return arr
-
-Object = collections.namedtuple(
-  'Object', ['pos', 'size', 'rotated_size', 'angle', 'shape', 'color'])
-
-
-class Object:
-
+class Object(object):
   def __init__(self, size, angle, pos=None, shape=None, color=None):
     self.size = size
     self.angle = angle
@@ -116,17 +85,21 @@ class Object:
     self.color = color
 
   def overlap(self, other):
-    min_dist = (self.rotated_size + other.rotated_size) + 1
-    return abs(self.pos[0] - other.pos[0]) + abs(self.pos[1] - other.pos[1]) < min_dist
+    min_dist = (self.size + other.size) // 2 + 1
+    return (abs(self.pos[0] - other.pos[0]) < min_dist and
+            abs(self.pos[1] - other.pos[1]) < min_dist)
 
 
 def draw_scene(objects):
-  surface = pygame.Surface((args.image_size, args.image_size))
+  img = Image.new('RGB', (args.image_size, args.image_size))
+  draw = ImageDraw.Draw(img)
   for obj in objects:
-    bitmap = get_object_bitmap(obj.shape, obj.color, obj.size, obj.angle)
-    surface.blit(source=bitmap,
-                 dest=(obj.pos[0] - obj.size / 2, obj.pos[1] - obj.size / 2))
-  return surface
+    obj_img = draw_object(draw, obj)
+    obj_pos = (obj.pos[0] - obj.rotated_size // 2,
+               obj.pos[1] - obj.rotated_size // 2)
+    img.paste(obj_img, obj_pos, obj_img)
+
+  return img
 
 
 class CustomJSONEncoder(json.JSONEncoder):
@@ -150,20 +123,18 @@ def get_random_spot(rng, objects):
   angle = rng.randint(0, 360) if args.rotate else 0
   obj = Object(size, angle)
 
-  min_center = obj.rotated_size / 2 + 1
-  max_center = args.image_size - obj.rotated_size / 2 - 1
-  placed = False
+  min_center = obj.rotated_size // 2 + 1
+  max_center = args.image_size - obj.rotated_size // 2 - 1
   for attempt in range(10):
     x = rng.randint(min_center, max_center)
     y = rng.randint(min_center, max_center)
     obj.pos = (x, y)
 
-    # check if there is no overlap between bounding squares
-    if any([obj.overlap(other) for other in objects]):
-      continue
-    return obj
-
-  return None
+    # make sure there is no overlap between bounding squares
+    if not any([obj.overlap(other) for other in objects]):
+      return obj
+  else:
+    return None
 
 
 def shape_module(shape):
@@ -172,6 +143,7 @@ def shape_module(shape):
 
 def color_module(color):
   return "Color[{}]".format(color)
+
 
 def generate_scene(rng, shapes, colors, object_allowed):
   objects = []
@@ -221,7 +193,7 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
 
   # generate questions
   before = time.time()
-  with h5py.File(prefix + '_questions.h5', 'w') as dst_questions,\
+  with h5py.File(prefix + '_questions.h5', 'w') as dst_questions, \
        h5py.File(prefix + '_features.h5', 'w') as dst_features:
     features_dtype = h5py.special_dtype(vlen=numpy.dtype('uint8'))
     features_dataset = dst_features.create_dataset(
@@ -236,12 +208,9 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
       'image_idxs', (num_examples,), dtype=numpy.int64)
 
     rng = numpy.random.RandomState(seed)
-    i = 0
-    while True:
+    for i in range(num_examples):
       if i and i % 1000 == 0:
         print(i)
-      if i == num_examples:
-        break
 
       scene = generate_scene(rng, shapes, colors, object_allowed)
 
@@ -274,8 +243,10 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
-      surface = draw_scene(scene)
-      image = PIL.Image.fromarray(surf2array(surface))
+      image = draw_scene(scene)
+      image.show()
+      if i == 3:
+        exit()
       image.save(buffer_, format='png')
       buffer_.seek(0)
 
@@ -285,7 +256,6 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
       answers_dataset[i] = int(answer)
       image_idxs_dataset[i] = i
 
-      i += 1
   print("{} examples per second".format((time.time() - before) / num_examples))
 
   with open(prefix + '_scenes.json', 'w') as dst:
@@ -315,13 +285,13 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
         return 1
     with open('vocab.json', 'w') as dst:
       json.dump({'question_token_to_idx': question_vocab,
-                'program_token_to_idx': program_vocab,
-                'program_token_arity':
-                    {name: arity(name) for name in program_vocab},
-                'answer_token_to_idx': answer_token_to_idx,
-                'program_token_to_module_text': program_token_to_module_text,
-                'module_token_to_idx': module_token_to_idx,
-                'text_token_to_idx': text_token_to_idx},
+                 'program_token_to_idx': program_vocab,
+                 'program_token_arity': {
+                   name: arity(name) for name in program_vocab},
+                 'answer_token_to_idx': answer_token_to_idx,
+                 'program_token_to_module_text': program_token_to_module_text,
+                 'module_token_to_idx': module_token_to_idx,
+                 'text_token_to_idx': text_token_to_idx},
                 dst)
 
 
@@ -334,7 +304,7 @@ def main():
 
       inverse: if True, invert the output of `self.allow`
       restrict_scene: if True, make sure that excluded objects are not
-        generated
+      generated
       """
       self._inverse = inverse
       self._restrict_scene = restrict_scene
@@ -405,7 +375,6 @@ def main():
   generate_dataset('test', args.test, 3, test_object_allowed)
 
 
-
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
   parser.add_argument('--train', type=int, default=1000,
@@ -426,6 +395,7 @@ if __name__ == '__main__':
                       help="The split to use")
   parser.add_argument('--restrict-scene', type=int, default=1,
                       help="Make sure that held-out objects do not appeat in the scene"
-                            "during training")
+                      "during training")
   args = parser.parse_args()
   main()
+  __import__('pdb').set_trace()

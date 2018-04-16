@@ -133,7 +133,7 @@ class FiLMGen(nn.Module):
     x, idx, mask = self.before_rnn(x)  # Tokenized word sequences (questions), end index
     
     if self.taking_context:
-      lengths = torch.LongTensor(idx.shape).fill_(1) + idx.data
+      lengths = torch.LongTensor(idx.shape).fill_(1) + idx.data.cpu()
       lengths = Variable(lengths.cuda())
       seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
       iperm_idx = torch.LongTensor(perm_idx.shape).fill_(0).cuda()

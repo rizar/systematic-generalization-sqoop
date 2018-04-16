@@ -144,13 +144,14 @@ class FiLMGen(nn.Module):
     
     embed = self.encoder_embed(x)
     
-    if self.taking_context:
-      embed = pack_padded_sequence(embed, seq_lengths.data.cpu().numpy(), batch_first=True)
-    
     h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
-
     if self.encoder_type == 'lstm':
       c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
+    
+    if self.taking_context:
+      embed = pack_padded_sequence(embed, seq_lengths.data.cpu().numpy(), batch_first=True)
+
+    if self.encoder_type == 'lstm':
       out, (hn, _) = self.encoder_rnn(embed, (h0, c0))
     elif self.encoder_type == 'gru':
       out, hn = self.encoder_rnn(embed, h0)

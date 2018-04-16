@@ -119,3 +119,4 @@ ENV/
 
 # vim
 *.swp
+.editorconfig

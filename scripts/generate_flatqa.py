@@ -101,86 +101,69 @@ def surf2array(surf):
   return arr
 
 Object = collections.namedtuple(
-  'Object', ['pos', 'size', 'angle', 'shape', 'color'])
+  'Object', ['pos', 'size', 'rotated_size', 'angle', 'shape', 'color'])
 
 
-class SceneGenerator:
+class Object:
 
-  def __init__(self, shapes, colors,
-               image_size, min_obj_size, max_obj_size, rotate,
-               num_objects, seed, object_allowed):
-    self._shapes = shapes
-    self._colors = colors
-    self._image_size = image_size
-    self._min_obj_size = min_obj_size
-    self._max_obj_size = max_obj_size
-    self._rotate = rotate
-    self._num_objects = num_objects
-    self._seed = seed
-    self._rng = numpy.random.RandomState(seed)
-    self._object_allowed = object_allowed
+  def __init__(self, size, angle, pos=None, shape=None, color=None):
+    self.size = size
+    self.angle = angle
+    angle_rad = angle / 180 * math.pi
+    self.rotated_size =  math.ceil(size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
+    self.pos = pos
+    self.shape = shape
+    self.color = color
 
-  def __iter__(self):
-    self._rng = numpy.random.RandomState(self._seed)
-    return self
+  def overlap(self, other):
+    min_dist = (self.rotated_size + other.rotated_size) + 1
+    return abs(self.pos[0] - other.pos[0]) + abs(self.pos[1] - other.pos[1]) < min_dist
 
-  def __next__(self):
-    return self.generate_scene()
 
-  def generate_scene(self):
-    surface = pygame.Surface((self._image_size, self._image_size))
-    objects = []
+def draw_scene(objects):
+  surface = pygame.Surface((args.image_size, args.image_size))
+  for obj in objects:
+    bitmap = get_object_bitmap(obj.shape, obj.color, obj.size, obj.angle)
+    surface.blit(source=bitmap,
+                 dest=(obj.pos[0] - obj.size / 2, obj.pos[1] - obj.size / 2))
+  return surface
 
-    place_failures = 0
-    while len(objects) < self._num_objects:
-      # first, select which object to draw by rejection sampling
-      while True:
-        shape = self._rng.choice(self._shapes)
-        color = self._rng.choice(self._colors)
-        if self._object_allowed((shape, color), 'generate'):
-          break
 
-      # then, select the object size
-      orig_obj_size = self._rng.randint(self._min_obj_size, self._max_obj_size + 1)
-      angle = self._rng.randint(0, 360) if self._rotate else 0
-      angle_rad = angle / 180 * math.pi
-      # the rotation typically changes the size
-      obj_size = math.ceil(orig_obj_size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
+class CustomJSONEncoder(json.JSONEncoder):
 
-      min_center = obj_size / 2 + 1
-      max_center = self._image_size - obj_size / 2 - 1
-      placed = False
-      for attempt in range(10):
-        x = self._rng.randint(min_center, max_center)
-        y = self._rng.randint(min_center, max_center)
+  def default(self, obj):
+    if isinstance(obj, Object):
+      return {'size': obj.size,
+              'rotated_size': obj.rotated_size,
+              'angle': obj.angle,
+              'pos': obj.pos,
+              'shape': obj.shape,
+              'color': obj.color}
+    else:
+      return super().default(obj)
 
-        # check if there is no overlap between bounding squares
-        overlap = False
-        for other in objects:
-          min_dist = (obj_size + other.size) + 1
-          if (abs(x - other.pos[0]) + abs(y - other.pos[1]) < min_dist):
-            overlap = True
-            break
 
-        if not overlap:
-          objects.append(Object(pos=(x, y), size=orig_obj_size, angle=angle,
-                                shape=shape, color=color))
-          placed = True
-          break
+def get_random_spot(rng, objects):
+  """Get a spot for a new object that does not overlap with existing ones."""
+  # then, select the object size
+  size = rng.randint(args.min_obj_size, args.max_obj_size + 1)
+  angle = rng.randint(0, 360) if args.rotate else 0
+  obj = Object(size, angle)
 
-      if not placed:
-        place_failures += 1
-        if place_failures == 10:
-          # this recursive call seems to be the easiest way to just start
-          # generation from scratch
-          return self.generate_scene()
+  min_center = obj.rotated_size / 2 + 1
+  max_center = args.image_size - obj.rotated_size / 2 - 1
+  placed = False
+  for attempt in range(10):
+    x = rng.randint(min_center, max_center)
+    y = rng.randint(min_center, max_center)
+    obj.pos = (x, y)
 
-    for obj in objects:
-      bitmap = get_object_bitmap(obj.shape, obj.color, obj.size, obj.angle)
-      surface.blit(source=bitmap,
-                   dest=(obj.pos[0] - obj.size / 2, obj.pos[1] - obj.size / 2))
+    # check if there is no overlap between bounding squares
+    if any([obj.overlap(other) for other in objects]):
+      continue
+    return obj
 
-    return objects, surface
+  return None
 
 
 def shape_module(shape):
@@ -190,16 +173,36 @@ def shape_module(shape):
 def color_module(color):
   return "Color[{}]".format(color)
 
+def generate_scene(rng, shapes, colors, object_allowed):
+  objects = []
+  place_failures = 0
+  while len(objects) < args.num_objects:
+    # first, select which object to draw by rejection sampling
+    while True:
+      shape = rng.choice(shapes)
+      color = rng.choice(colors)
+      if object_allowed((shape, color), 'generate'):
+        break
+
+    new_object = get_random_spot(rng, objects)
+    if new_object is None:
+      place_failures += 1
+      if place_failures == 10:
+        # reset generation
+        objects = []
+        place_failures = 0
+      continue
+
+    new_object.shape = shape
+    new_object.color = color
+    objects.append(new_object)
+
+  return objects
+
 
 def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
-
-  sg = SceneGenerator(shapes=shapes, colors=colors,
-                      image_size=args.image_size,
-                      min_obj_size=args.min_obj_size, max_obj_size=args.max_obj_size,
-                      rotate=args.rotate,
-                      num_objects=5, seed=1, object_allowed=object_allowed)
 
   max_question_len = 5
   max_program_len = 7
@@ -213,6 +216,7 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
                    + [shape_module(shape) for shape in shapes])
   program_vocab = {word: i for i, word in enumerate(program_words)}
 
+  rng = numpy.random.RandomState(seed)
   scenes = []
 
   # generate questions
@@ -233,11 +237,13 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
 
     rng = numpy.random.RandomState(seed)
     i = 0
-    for scene, surface in sg:
+    while True:
       if i and i % 1000 == 0:
         print(i)
       if i == num_examples:
         break
+
+      scene = generate_scene(rng, shapes, colors, object_allowed)
 
       answer = i % 2
       if answer:
@@ -268,6 +274,7 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
+      surface = draw_scene(scene)
       image = PIL.Image.fromarray(surf2array(surface))
       image.save(buffer_, format='png')
       buffer_.seek(0)
@@ -282,7 +289,7 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
   print("{} examples per second".format((time.time() - before) / num_examples))
 
   with open(prefix + '_scenes.json', 'w') as dst:
-    json.dump(scenes, dst, indent=2)
+    json.dump(scenes, dst, indent=2, cls=CustomJSONEncoder)
 
   answer_token_to_idx = {'false': 0, 'true': 1}
   module_token_to_idx = {'Color': 0, 'Shape': 1, 'And': 2}
@@ -409,6 +416,7 @@ if __name__ == '__main__':
                       help="Size of the test set")
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
+  parser.add_argument('--num-objects', type=int, default=5)
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)
   parser.add_argument('--max-obj-size', type=int, default=15)

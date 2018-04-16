@@ -160,13 +160,18 @@ class FiLMGen(nn.Module):
     hn = hn.view(hn.shape[0], -1)
 
     # Pull out the hidden state for the last non-null value in each input
-    idx = idx.view(N, 1, 1).expand(N, 1, H_full)
-    idx_out = out.gather(1, idx).view(N, H_full)
-    
     if self.taking_context:
+      idx_out = None
       out, _ = pad_packed_sequence(out, batch_first=True)
       out = out[iperm_idx]
       hn = hn[iperm_idx]
+    else:
+      idx = idx.view(N, 1, 1).expand(N, 1, H_full)
+      idx_out = out.gather(1, idx).view(N, H_full)
+      
+      out = None
+      hn = None
+      
     
     return idx_out, out, hn, mask
 

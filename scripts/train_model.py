@@ -37,7 +37,8 @@ from vr.models import (ModuleNet,
                        RTFiLMedNet,
                        FiLMGen,
                        MAC,
-                       HeteroModuleNet)
+                       HeteroModuleNet,
+                       NMNFiLMedNet)
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
@@ -72,7 +73,7 @@ parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC'])
+  choices=['NMNFilm', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -326,14 +327,14 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
-  if args.model_type in ['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
+  if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
     program_generator, pg_kwargs = get_program_generator(args)
     pg_optimizer = optim_method(program_generator.parameters(),
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
+  if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     ee_optimizer = optim_method(execution_engine.parameters(),
                                 lr=args.learning_rate,
@@ -470,7 +471,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
-      elif args.model_type == 'Tfilm':
+      elif args.model_type == 'Tfilm' or args.model_type == 'NMNFilm':
         if args.set_execution_engine_eval == 1:
           set_mode('eval', [execution_engine])
         programs_pred = program_generator(questions_var)
@@ -483,7 +484,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           pdb.set_trace()
         loss.backward()
         if args.debug_every < float('inf'):
-          check_grad_num_nans(execution_engine, 'TFiLMedNet')
+          check_grad_num_nans(execution_engine, 'TFiLMedNet' if args.model_type == 'Tfilm' else 'NMNFiLMedNet')
           check_grad_num_nans(program_generator, 'FiLMGen')
 
         if args.train_program_generator == 1:
@@ -641,7 +642,7 @@ def get_program_generator(args):
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
     }
-    if args.model_type in ['FiLM', 'Tfilm', 'RTfilm', 'MAC']:
+    if args.model_type in ['NMNFilm', 'FiLM', 'Tfilm', 'RTfilm', 'MAC']:
       kwargs['parameter_efficient'] = args.program_generator_parameter_efficient == 1
       kwargs['output_batchnorm'] = args.rnn_output_batchnorm == 1
       kwargs['bidirectional'] = args.bidirectional == 1
@@ -653,9 +654,11 @@ def get_program_generator(args):
         kwargs['num_modules'] = args.num_modules
       elif args.model_type == 'Tfilm':
         kwargs['num_modules'] = args.max_program_module_arity * args.max_program_tree_depth + 1
-      else:
+      elif args.model_type == 'RTfilm':
         treeArities = TreeGenerator().gen(args.tree_type_for_RTfilm)
         kwargs['num_modules'] = len(treeArities)
+      elif args.model_type == 'NMNFilm':
+        kwargs['num_modules'] = len(vocab['program_token_to_idx'])
       if args.model_type == 'MAC':
         kwargs['taking_context'] = True
       kwargs['module_num_layers'] = args.module_num_layers
@@ -796,6 +799,26 @@ def get_execution_engine(args):
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
+    elif args.model_type == 'NMNFilm':
+      kwargs['num_modules'] = len(vocab['program_token_to_idx'])
+
+      kwargs['stem_kernel_size'] = args.module_stem_kernel_size
+      kwargs['stem_stride'] = args.module_stem_stride
+      kwargs['stem_padding'] = args.module_stem_padding
+      kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['module_intermediate_batchnorm'] = args.module_intermediate_batchnorm == 1
+      kwargs['module_batchnorm_affine'] = args.module_batchnorm_affine == 1
+      kwargs['module_dropout'] = args.module_dropout
+      kwargs['module_input_proj'] = args.module_input_proj
+      kwargs['module_kernel_size'] = args.module_kernel_size
+      kwargs['use_gamma'] = args.use_gamma == 1
+      kwargs['use_beta'] = args.use_beta == 1
+      kwargs['use_coords'] = args.use_coords
+      kwargs['debug_every'] = args.debug_every
+      kwargs['print_verbose_every'] = args.print_verbose_every
+      kwargs['condition_method'] = args.condition_method
+      kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
+      ee = NMNFiLMedNet(**kwargs)
     else:
       ee = ModuleNet(**kwargs)
   ee.cuda()
@@ -905,7 +928,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type == 'FiLM' or args.model_type == 'RTfilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred)
-    elif args.model_type == 'Tfilm':
+    elif args.model_type == 'Tfilm' or args.model_type == 'NMNFilm':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred, programs_var)
     elif args.model_type == 'MAC':

@@ -34,4 +34,4 @@ python $NMN/scripts/train_model.py \
   --classifier_batchnorm 0 \
   --classifier_dropout 0 \
   --use_local_copies 2 \
-  --program_generator_parameter_efficient 1 $@ 
+--program_generator_parameter_efficient 1 $@ 

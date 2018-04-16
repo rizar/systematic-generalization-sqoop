@@ -56,7 +56,7 @@ class MAC(nn.Module):
     #self.use_gamma = use_gamma
     #self.use_beta = use_beta
 
-    self.sharing_params_patterns = [True if p == 1 else 0 for p in sharing_params_patterns]
+    self.sharing_params_patterns = [True if p == 1 else False for p in sharing_params_patterns]
     self.use_self_attention = use_self_attention == 1
     self.use_memory_gate = use_memory_gate == 1
 
@@ -151,20 +151,20 @@ class MAC(nn.Module):
       self.memory_outputs = []
       self.cf_input = None
 
-    if not isTest and self.module_dropout > 0.:
-      dropout_mask_cell = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-      dropout_mask_question_rep = Variable(torch.Tensor(x.size(0), 2*self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-    else:
-      dropout_mask_cell = None
-      dropout_mask_question_rep = None
+    #if not isTest and self.module_dropout > 0.:
+    #  dropout_mask_cell = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    #  dropout_mask_question_rep = Variable(torch.Tensor(x.size(0), 2*self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    #else:
+    #  dropout_mask_cell = None
+    #  dropout_mask_question_rep = None
 
     q_context, q_rep, q_mask = ques
 
-    if dropout_mask_question_rep is not None:
-      q_rep = q_rep * dropout_mask_question_rep
+    #if dropout_mask_question_rep is not None:
+    #  q_rep = q_rep * dropout_mask_question_rep
 
-    if isTest and self.module_dropout > 0.:
-      q_rep = (1. - self.module_dropout) * q_rep
+    #if isTest and self.module_dropout > 0.:
+    #  q_rep = (1. - self.module_dropout) * q_rep
 
     stem_batch_coords = None
     if self.use_coords_freq > 0:
@@ -207,8 +207,8 @@ class MAC(nn.Module):
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
       #dropout
-      if dropout_mask_cell is not None: memory_i = memory_i * dropout_mask_cell
-      if isTest and self.module_dropout > 0.: memory_i = (1. - self.module_dropout) * memory_i
+      #if dropout_mask_cell is not None: memory_i = memory_i * dropout_mask_cell
+      #if isTest and self.module_dropout > 0.: memory_i = (1. - self.module_dropout) * memory_i
       if save_activations:
         self.memory_outputs.append(memory_i)
 
@@ -440,3 +440,35 @@ def init_modules(modules, init='uniform'):
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
       if m.bias is not None: constant(m.bias, 0.)
+
+class VariationalDropout(nn.Module):
+  def __init__(self, dropout=0.85, dim=None):
+    super(VariationalDropout, self).__init__()
+    
+    alpha = dropout / (1. - dropout)
+    self.dim = dim
+    self.max_alpha = alpha
+    # Initial alpha
+    log_alpha = (torch.ones(dim) * alpha).log()
+    self.log_alpha = nn.Parameter(log_alpha.cuda())
+    
+  def forward(self, x, epsilon=None, isTest=False):
+    """
+    Sample noise   e ~ N(1, alpha)
+    Multiply noise h = h_ * e
+    """
+    if not isTest:
+      # N(0,1)
+      if epsilon is None:
+        epsilon = Variable(torch.randn(x.size())).type(torch.cuda.FloatTensor)
+
+      # Clip alpha
+      self.log_alpha.data = torch.clamp(self.log_alpha.data, max=self.max_alpha)
+      alpha = self.log_alpha.exp()
+
+      # N(1, alpha)
+      epsilon = epsilon * alpha
+
+      return x * epsilon
+    else:
+      return x

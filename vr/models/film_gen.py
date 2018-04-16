@@ -131,7 +131,21 @@ class FiLMGen(nn.Module):
   def encoder(self, x):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)
     x, idx, mask = self.before_rnn(x)  # Tokenized word sequences (questions), end index
+    
+    if self.taking_context:
+      lengths = torch.LongTensor(idx.shape).fill_(1) + idx.data
+      lengths = Variable(lengths.cuda())
+      seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
+      iperm_idx = torch.LongTensor(perm_idx.shape).fill_(0).cuda()
+      for i, v in enumerate(perm_idx):
+        iperm_idx[v] = i
+      x = x[perm_idx]
+    
     embed = self.encoder_embed(x)
+    
+    if self.taking_context:
+      embed = pack_padded_sequence(embed, seq_lengths.cpu().numpy(), batch_first=True)
+    
     h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
 
     if self.encoder_type == 'lstm':
@@ -145,7 +159,14 @@ class FiLMGen(nn.Module):
 
     # Pull out the hidden state for the last non-null value in each input
     idx = idx.view(N, 1, 1).expand(N, 1, H_full)
-    return out.gather(1, idx).view(N, H_full), out, hn, mask
+    idx_out = out.gather(1, idx).view(N, H_full)
+    
+    if self.taking_context:
+      out, _ = pad_packed_sequence(out, batch_first=True)
+      out = out[iperm_idx]
+      hn = hn[iperm_idx]
+    
+    return idx_out, out, hn, mask
 
   def decoder(self, encoded, dims, h0=None, c0=None):
     

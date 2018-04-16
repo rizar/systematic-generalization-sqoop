@@ -32,19 +32,8 @@ from PIL import Image, ImageDraw
 
 
 logger = logging.getLogger(__name__)
-
-
-#TODO(mnoukhov) remove the COLOR2RGB
-COLOR2RGB = [('red', (255, 0, 0)),
-             ('green', (0, 255, 0)),
-             ('blue', (0, 0, 255)),
-             ('yellow', (255, 255, 0)),
-             ('cyan', (0, 255, 255)),
-             ('purple', (128, 0, 128)),
-             ('brown', (165, 42, 42)),
-             ('gray', (128, 128, 128))]
-COLOR2RGB = collections.OrderedDict(COLOR2RGB)
-COLORS = list(COLOR2RGB.keys())
+COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
+          'purple', 'brown', 'gray']
 SHAPES = ['square', 'triangle', 'circle', 'cross',
           'empty_square', 'empty_triangle', 'bar']
 MIN_OBJECT_SIZE = 8
@@ -75,16 +64,13 @@ def draw_object(draw, obj):
   elif obj.shape == 'empty_square':
     draw.rectangle([(0, 0), (width-1, height-1)], outline=obj.color)
   elif obj.shape == 'cross':
-    #TODO(mnoukhov): check that this is just two centered rectangle with sizes / 2
     draw.rectangle([(width // 3, 0), (2 * width // 3, height)], fill=obj.color)
     draw.rectangle([(0, height // 3), (width, 2 * height // 3)], fill=obj.color)
   elif obj.shape == 'bar':
-    #TODO(mnoukhov): check that this is just rectangle with height = height / 2
     draw.rectangle([(0, height // 3), (width, 2 * height // 3)], fill=obj.color)
   else:
     raise ValueError()
 
-  #TODO(mnoukhov): possibly resample for better images?
   return img.rotate(obj.angle, expand=True, resample=Image.BILINEAR)
 
 
@@ -104,13 +90,13 @@ class Object(object):
             abs(self.pos[1] - other.pos[1]) < min_dist)
 
 
-def draw_scene(objects, image_size):
-  img = Image.new('RGB', (self._image_size, self._image_size))
+def draw_scene(objects):
+  img = Image.new('RGB', (args.image_size, args.image_size))
   draw = ImageDraw.Draw(img)
   for obj in objects:
     obj_img = draw_object(draw, obj)
-    obj_pos = (obj_pos[0] + obj.rotated_size // 2,
-               obj_pos[1] + obj.rotated_size // 2)
+    obj_pos = (obj.pos[0] - obj.rotated_size // 2,
+               obj.pos[1] - obj.rotated_size // 2)
     img.paste(obj_img, obj_pos, obj_img)
 
   return img
@@ -186,7 +172,7 @@ def generate_scene(rng, shapes, colors, object_allowed):
   return objects
 
 
-def generate_dataset(prefix, num_examples, seed, object_allowed, image_size, save_vocab=False):
+def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
 
@@ -257,7 +243,7 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, image_size, sav
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
-      image = draw_scene(scene, image_size)
+      image = draw_scene(scene)
       image.show()
       if i == 3:
         exit()
@@ -309,7 +295,7 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, image_size, sav
                 dst)
 
 
-def main(args):
+def main():
   train_object_allowed = val_object_allowed = test_object_allowed = lambda _1, _2: True
 
   class ObjectRestriction:
@@ -384,9 +370,9 @@ def main(args):
   with open('args.txt', 'w') as dst:
     print(args, file=dst)
 
-  generate_dataset('train', args.train, 1, train_object_allowed, args.image_size, save_vocab=True)
-  generate_dataset('val', args.val, 2, val_object_allowed, args.image_size)
-  generate_dataset('test', args.test, 3, test_object_allowed, args.image_size)
+  generate_dataset('train', args.train, 1, train_object_allowed, save_vocab=True)
+  generate_dataset('val', args.val, 2, val_object_allowed)
+  generate_dataset('test', args.test, 3, test_object_allowed)
 
 
 if __name__ == '__main__':
@@ -411,4 +397,5 @@ if __name__ == '__main__':
                       help="Make sure that held-out objects do not appeat in the scene"
                       "during training")
   args = parser.parse_args()
-  main(args)
+  main()
+  __import__('pdb').set_trace()

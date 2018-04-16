@@ -19,10 +19,13 @@ import vr.programs
 
 
 class ModuleNet(nn.Module):
-  def __init__(self, vocab, feature_dim=(1024, 14, 14),
-               stem_num_layers=2,
-               stem_batchnorm=False,
-               stem_subsample_layers=None,
+  def __init__(self, vocab, feature_dim,
+               stem_num_layers,
+               stem_batchnorm,
+               stem_subsample_layers,
+               stem_kernel_size,
+               stem_stride,
+               stem_padding,
                module_dim=128,
                module_residual=True,
                module_batchnorm=False,
@@ -37,12 +40,13 @@ class ModuleNet(nn.Module):
 
     self.stem = build_stem(feature_dim[0], module_dim,
                            num_layers=stem_num_layers,
-                           with_batchnorm=stem_batchnorm,
-                           subsample_layers=stem_subsample_layers)
-    module_H, module_W = feature_dim[1], feature_dim[2]
-    for _ in stem_subsample_layers:
-      module_H //= 2
-      module_W //= 2
+                           subsample_layers=stem_subsample_layers,
+                           kernel_size=stem_kernel_size,
+                           padding=stem_padding,
+                           with_batchnorm=stem_batchnorm)
+    tmp = self.stem(Variable(torch.zeros([1, feature_dim[0], feature_dim[1], feature_dim[2]])))
+    module_H = tmp.size(2)
+    module_W = tmp.size(3)
 
     if verbose:
       print('Here is my stem:')

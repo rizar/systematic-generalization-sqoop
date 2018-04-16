@@ -3,13 +3,12 @@ channels:
 - pytorch
 - defaults
 dependencies:
-- python=3.5
+- python
 - pytorch=0.3
 - torchvision
 - h5py
-- scipy
-- pip:
-        - pygame
 - numpy
+- scipy
 - tqdm
 - termcolor
+- pillow

@@ -135,7 +135,7 @@ class FiLMGen(nn.Module):
     if self.taking_context:
       lengths = torch.LongTensor(idx.shape).fill_(1) + idx.data.cpu()
       lengths = Variable(lengths.cuda())
-      seq_lengths, perm_idx = seq_lengths.sort(0, descending=True)
+      seq_lengths, perm_idx = lengths.sort(0, descending=True)
       iperm_idx = torch.LongTensor(perm_idx.shape).fill_(0).cuda()
       for i, v in enumerate(perm_idx):
         iperm_idx[v] = i

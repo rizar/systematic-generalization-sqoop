@@ -166,8 +166,9 @@ class FiLMGen(nn.Module):
       out = out[iperm_idx]
       
       if out.shape[1] < T_in:
-        zeros = Variable(torch.FloatTensor(out.shape[0], T_in - out.shape[1], out.shape[2]).fill_(0.).cuda())
-        out = torch.cat([out, zeros], 1)
+        #zeros = Variable(torch.FloatTensor(out.shape[0], T_in - out.shape[1], out.shape[2]).fill_(0.).cuda())
+        #out = torch.cat([out, zeros], 1)
+        mask = mask[:, :(out.shape[1]-T_in)]
       
       hn = hn[iperm_idx]
     else:

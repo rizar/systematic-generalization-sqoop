@@ -138,7 +138,7 @@ class FiLMGen(nn.Module):
       seq_lengths, perm_idx = lengths.sort(0, descending=True)
       iperm_idx = torch.LongTensor(perm_idx.shape).fill_(0).cuda()
       for i, v in enumerate(perm_idx):
-        iperm_idx[v] = i
+        iperm_idx[v.data] = i
       x = x[perm_idx]
     
     embed = self.encoder_embed(x)

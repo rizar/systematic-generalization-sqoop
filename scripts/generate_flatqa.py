@@ -24,6 +24,7 @@ import json
 import logging
 import math
 import time
+from functools import partial
 
 import h5py
 import numpy
@@ -33,8 +34,8 @@ from PIL import Image, ImageDraw
 logger = logging.getLogger(__name__)
 COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
-SHAPES = ['square', 'triangle', 'circle', 'cross',
-          'empty_square', 'empty_triangle', 'bar']
+SHAPES = ['square', 'triangle',  'cross', 'bar',
+          'empty_square', 'empty_triangle', 'circle']
 MIN_OBJECT_SIZE = 8
 
 
@@ -49,7 +50,7 @@ class Object(object):
     self.color = color
 
   def overlap(self, other):
-    min_dist = (self.size + other.size) // 2 + 1
+    min_dist = (self.rotated_size + other.rotated_size) // 2 + 1
     return (abs(self.pos[0] - other.pos[0]) < min_dist and
             abs(self.pos[1] - other.pos[1]) < min_dist)
 
@@ -99,7 +100,7 @@ def draw_object(draw, obj):
   else:
     raise ValueError()
 
-  return img.rotate(obj.angle, expand=True, resample=Image.BICUBIC)
+  return img.rotate(obj.angle, expand=True, resample=Image.LINEAR)
 
 
 def draw_scene(objects):
@@ -143,23 +144,29 @@ def color_module(color):
   return "Color[{}]".format(color)
 
 
-def generate_scene(rng, shapes, colors, object_allowed):
-  objects = []
+def rejection_sample(rng, shapes, colors, restricted=[]):
+  while True:
+    shape = rng.choice(shapes)
+    color = rng.choice(colors)
+    if (shape, color) not in restricted:
+      return shape, color
+
+
+def generate_scene(rng, sample_shape_color, objects=[]):
+  orig_objects = objects
+
+  objects = list(orig_objects)
   place_failures = 0
   while len(objects) < args.num_objects:
     # first, select which object to draw by rejection sampling
-    while True:
-      shape = rng.choice(shapes)
-      color = rng.choice(colors)
-      if object_allowed((shape, color), 'generate'):
-        break
+    shape, color = sample_shape_color(purpose='generate')
 
     new_object = get_random_spot(rng, objects)
     if new_object is None:
       place_failures += 1
       if place_failures == 10:
         # reset generation
-        objects = []
+        objects = list(orig_objects)
         place_failures = 0
       continue
 
@@ -170,7 +177,7 @@ def generate_scene(rng, shapes, colors, object_allowed):
   return objects
 
 
-def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=False):
+def generate_dataset(prefix, num_examples, seed, sample_shape_color, save_vocab=False):
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
 
@@ -188,6 +195,8 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
 
   rng = numpy.random.RandomState(seed)
   scenes = []
+
+  sample_shape_color = partial(sample_shape_color, shapes=shapes, colors=colors, rng=rng)
 
   # generate questions
   before = time.time()
@@ -210,24 +219,22 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
       if i and i % 1000 == 0:
         print(i)
 
-      scene = generate_scene(rng, shapes, colors, object_allowed)
+      # choose the question
+      shape, color = sample_shape_color(purpose='ask')
 
       answer = i % 2
       if answer:
-        candidate_objects = [(obj.shape, obj.color) for obj in scene
-                             if object_allowed((obj.shape, obj.color), 'ask')]
-        if not candidate_objects:
-          # can't generate a positive question about this scene
-          continue
-        shape, color = candidate_objects[rng.randint(len(candidate_objects))]
+        # first, sample the witness object and place it
+        obj = get_random_spot(rng, [])
+        obj.shape = shape
+        obj.color = color
+        # complete the scene by sampling a random object
+        scene = generate_scene(rng, sample_shape_color, objects=[obj])
       else:
-        # sample an allowed (shape, color) pair that is not present in the picture
-        # if failed 10 times, try another scene
+        # sample a scene and check if the answer is no
+        # if failed 10 times, try another question
         for attempt in range(11):
-          shape = rng.choice(shapes)
-          color = rng.choice(colors)
-          if not object_allowed((shape, color), 'ask'):
-            continue
+          scene = generate_scene(rng, sample_shape_color)
           found = any((shape, color) == (obj.shape, obj.color)
                       for obj in scene)
           if not found:
@@ -293,81 +300,57 @@ def generate_dataset(prefix, num_examples, seed, object_allowed, save_vocab=Fals
 def main():
   train_object_allowed = val_object_allowed = test_object_allowed = lambda _1, _2: True
 
-  class ObjectRestriction:
-    def __init__(self, inverse=False, restrict_scene=True):
-      """Base class for object restrictions.
-
-      inverse: if True, invert the output of `self.allow`
-      restrict_scene: if True, make sure that excluded objects are not
-      generated
-      """
-      self._inverse = inverse
-      self._restrict_scene = restrict_scene
-    def __call__(self, obj, purpose):
-      if not self._restrict_scene and purpose == 'generate':
-        return True
-      if self._inverse:
-        return self.allow(obj, purpose)
-      else:
-        return not self.allow(obj, purpose)
-    def allow(self, obj, puprose):
-      raise NotImplementedError()
-
-
   if args.split == 'CoGenT':
-    class RestrictSquaresAndTriangles:
-      def __init__(self, square_colors, triangle_colors, test=False):
-        self._square_colors = square_colors
-        self._triangle_colors = triangle_colors
-        self._test = test
-      def __call__(self, obj, purpose):
-        shape, color = obj
-        if shape == 'square':
-          return color in self._square_colors
-        elif shape == 'triangle':
-          return color in self._triangle_colors
-        # at the test time we want to ask questions only about the special
-        # objects that were not include in the training set
-        if self._test and not purpose == 'generate':
-          return False
-        return True
-
     set1 = ['gray', 'blue', 'brown', 'yellow']
     set2 = ['red', 'green', 'purple', 'cyan']
 
-    train_object_allowed = RestrictSquaresAndTriangles(set1, set2)
-    val_object_allowed = test_object_allowed = RestrictSquaresAndTriangles(set2, set1,
-                                                                           test=True)
+    restrict = ([('square', color) for color in set1] +
+               [('triangle', color) for color in set2])
+    restrict_test = ([('square', color) for color in set2] +
+                    [('triangle', color) for color in set1])
+
+    def sample(rng, shapes, colors, test, purpose):
+      if colors != COLORS:
+        raise ValueError("can't do CoGenT with less than 8 colors")
+      if test:
+        if purpose == 'ask':
+          return restrict[rng.randint(len(restrict))]
+        return rejection_sample(rng, shapes, colors, restrict_test)
+      else:
+        return rejection_sample(rng, shapes, colors, restrict)
+    train_sample = partial(sample, test=False)
+    val_sample = test_sample = partial(sample, test=True)
+
   if args.split == 'diagonal':
-    class ExcludeDiagonal:
-      def __init__(self, test=False):
-        self._test = test
-      def __call__(self, obj, purpose):
-        shape, color = obj
-        shape_number = SHAPES.index(shape)
-        color_number = COLORS.index(color)
-        diagonal = shape_number == color_number
-        if self._test:
-          return purpose == 'generate' or diagonal
+    def sample(rng, shapes, colors, test, purpose):
+      diagonal = list(zip(shapes, colors))
+      if test:
+        if purpose == 'ask':
+          return diagonal[rng.randint(len(diagonal))]
         else:
-          return not diagonal
-    train_object_allowed = ExcludeDiagonal()
-    val_object_allowed = test_object_allowed = ExcludeDiagonal(test=True)
+          return rejection_sample(rng, shapes, colors)
+      else:
+        return rejection_sample(rng, shapes, colors, diagonal)
+    train_sample = partial(sample, test=False)
+    val_sample = test_sample = partial(sample, test=True)
 
   if args.split == 'leave1out':
-    class ExcludeRedSquare(ObjectRestriction):
-      def allow(self, obj, purpose):
-        return obj == ('square', 'red')
-    train_object_allowed = ExcludeRedSquare(restrict_scene=args.restrict_scene)
-    val_object_allowed = test_object_allowed = ExcludeRedSquare(
-      inverse=True, restrict_scene=False)
+    def sample(rng, shapes, colors, test, purpose):
+      if test:
+        if purpose == 'ask':
+          return ('square', 'red')
+        else:
+          return rejection_sample(rng, shapes, colors)
+      return rejection_sample(rng, shapes, colors, [('square', 'red')])
+    train_sample = partial(sample, test=False)
+    val_sample = test_sample = partial(sample, test=True)
 
   with open('args.txt', 'w') as dst:
     print(args, file=dst)
 
-  generate_dataset('train', args.train, 1, train_object_allowed, save_vocab=True)
-  generate_dataset('val', args.val, 2, val_object_allowed)
-  generate_dataset('test', args.test, 3, test_object_allowed)
+  generate_dataset('train', args.train, 1, train_sample, save_vocab=True)
+  generate_dataset('val', args.val, 2, val_sample)
+  generate_dataset('test', args.test, 3, test_sample)
 
 
 if __name__ == '__main__':

@@ -279,8 +279,12 @@ class OutputUnit(nn.Module):
     self.linears = []
     self.batchnorms = []
     for nin, nout in zip(hidden_units, hidden_units[1:]):
-      self.linears.append(nn.Linear(nin, nout))
-      self.batchnorms.append(nn.BatchNorm1d(nin) if with_batchnorm else None)
+      mod = nn.Linear(nin, nout)
+      self.add_module(mod)
+      self.linears.append(mod)
+      mod = nn.BatchNorm1d(nin) if with_batchnorm else None
+      if mod is not None: self.add_module(mod)
+      self.batchnorms.append(mod)
     
     self.non_linear = nn.ReLU()
 

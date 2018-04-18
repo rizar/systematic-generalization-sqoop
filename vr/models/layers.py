@@ -101,6 +101,43 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
     prev_dim = module_dim
   return nn.Sequential(*layers)
 
+def build_stem2(feature_dim, module_dim, num_layers=2, dropout=0., with_batchnorm=True,
+               kernel_size=[3], stride=[1], padding=None, subsample_layers=None, acceptEvenKernel=False):
+  layers = []
+  prev_dim = feature_dim
+
+  if len(kernel_size) == 1:
+    kernel_size = num_layers * kernel_size
+  if len(stride) == 1:
+    stride = num_layers * stride
+  if padding == None:
+    padding = num_layers * [None]
+  if len(padding) == 1:
+    padding = num_layers * padding
+
+  if subsample_layers is None:
+    subsample_layers = []
+
+  for i, cur_kernel_size, cur_stride, cur_padding in zip(range(num_layers), kernel_size, stride, padding):
+    if cur_padding is None:  # Calculate default padding when None provided
+      if cur_kernel_size % 2 == 0 and not acceptEvenKernel:
+        raise(NotImplementedError)
+      cur_padding = cur_kernel_size // 2
+    
+    if with_batchnorm:
+      layers.append(nn.BatchNorm2d(module_dim))
+    
+    if dropout > 0.:
+      layers.append(nn.Dropout2d(p=dropout))
+    
+    layers.append(nn.Conv2d(prev_dim, module_dim,
+                            kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding))
+    
+    layers.append(nn.ReLU(inplace=True))
+    if i in subsample_layers:
+      layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+    prev_dim = module_dim
+  return nn.Sequential(*layers)
 
 def build_classifier(module_C, module_H, module_W, num_answers,
                      fc_dims=[], proj_dim=None, downsample='maxpool2',

@@ -142,6 +142,14 @@ parser.add_argument('--mac_sharing_params_patterns', default='', type=str) # Lis
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 
+parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float)
+parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
+parser.add_argument('--mac_memory_dropout', default=0.15, type=float)
+parser.add_argument('--mac_read_dropout', default=0.15, type=float)
+parser.add_argument('--mac_write_dropout', default=0., type=float)
+parser.add_argument('--mac_use_prior_control_in_control_unit', default=0, type=int)
+parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
+
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
 parser.add_argument('--cnn_num_res_blocks', default=0, type=int)
@@ -661,6 +669,7 @@ def get_program_generator(args):
         kwargs['num_modules'] = len(vocab['program_token_to_idx'])
       if args.model_type == 'MAC':
         kwargs['taking_context'] = True
+        kwargs['variational_embedding_dropout'] = args.variational_embedding_dropout
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
@@ -774,7 +783,15 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
-                'module_dropout': args.module_dropout,
+                
+                #'module_dropout': args.module_dropout,
+                'question_embedding_dropout': args.mac_question_embedding_dropout,
+                'stem_dropout': args.mac_stem_dropout,
+                'memory_dropout': args.mac_memory_dropout,
+                'read_dropout': args.mac_read_dropout,
+                'write_dropout': args.mac_write_dropout,
+                'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
+                
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,

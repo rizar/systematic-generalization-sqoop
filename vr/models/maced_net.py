@@ -12,7 +12,7 @@ import math
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
 #from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
-from vr.models.layers import build_classifier, build_stem
+from vr.models.layers import build_classifier, build_stem2
 import vr.programs
 
 class MAC(nn.Module):
@@ -26,13 +26,21 @@ class MAC(nn.Module):
                stem_padding,
                num_modules,
                module_dim,
-               module_dropout=0,
-               sharing_params_patterns=(0,1,0,0),
-               use_self_attention=1,
-               use_memory_gate=1,
-               classifier_fc_layers=(1024,),
+               #module_dropout=0,
+               
+               question_embedding_dropout=0.08,
+               stem_dropout = 0.18,
+               memory_dropout = 0.15,
+               read_dropout = 0.15,
+               write_dropout = 0.,
+               use_prior_control_in_control_unit = False,
+               
+               sharing_params_patterns=(0,1,1,1),
+               use_self_attention=0,
+               use_memory_gate=0,
+               classifier_fc_layers=(512,),
                classifier_batchnorm=False,
-               classifier_dropout=0,
+               classifier_dropout=0.15,
                use_coords=1,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
@@ -48,7 +56,13 @@ class MAC(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
-    self.module_dropout = module_dropout
+    
+    #self.module_dropout = module_dropout
+    self.question_embedding_dropout = question_embedding_dropout
+    self.memory_dropout = memory_dropout
+    self.read_dropout = read_dropout
+    self.write_dropout = write_dropout
+    
     #self.module_num_layers = module_num_layers
     #self.module_batchnorm = module_batchnorm
     self.module_dim = module_dim
@@ -75,10 +89,10 @@ class MAC(nn.Module):
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
-    self.stem = build_stem(stem_feature_dim, module_dim,
-                           num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
-                           subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
+    self.stem = build_stem2(stem_feature_dim, module_dim,
+                            num_layers=stem_num_layers, dropout=stem_dropout, with_batchnorm=stem_batchnorm,
+                            kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+                            subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
 
 
     #Define units
@@ -94,13 +108,13 @@ class MAC(nn.Module):
         self.InputUnits.append(mod)
 
     if self.sharing_params_patterns[1]:
-      mod = ControlUnit(module_dim)
+      mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
       self.add_module('ControlUnit', mod)
       self.ControlUnits = mod
     else:
       self.ControlUnits = []
       for i in range(self.num_modules):
-        mod = ControlUnit(module_dim)
+        mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
         self.add_module('ControlUnit' + str(i+1), mod)
         self.ControlUnits.append(mod)
 
@@ -131,13 +145,17 @@ class MAC(nn.Module):
         self.WriteUnits.append(mod)
 
     #parameters for initial memory and control vectors
-    self.init_memory = nn.Parameter(torch.zeros(module_dim).cuda())
-    self.init_control = nn.Parameter(torch.zeros(module_dim).cuda())
+    self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
+    #self.init_control = nn.Parameter(torch.zeros(module_dim).cuda())
+    
+    #first transformation of question embeddings
+    self.init_question_transformer = nn.Linear(self.module_dim, self.module_dim)
+    self.init_question_non_linear = nn.Tanh()
 
     self.vocab = vocab
 
     # Initialize output classifier
-    self.classifier = OutputUnit(3*module_dim, classifier_fc_layers, num_answers,
+    self.classifier = OutputUnit(module_dim, classifier_fc_layers, num_answers,
                                  with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
 
     init_modules(self.modules())
@@ -159,6 +177,17 @@ class MAC(nn.Module):
     #  dropout_mask_question_rep = None
 
     q_context, q_rep, q_mask = ques
+    
+    original_q_rep = q_rep
+    
+    if not isTest and self.question_embedding_dropout > 0.:
+      dropout_mask_question_embs = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(
+        self.question_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      q_rep = (q_rep / (1. - self.question_embedding_dropout)) * dropout_mask_question_embs # div?
+    
+    init_control = q_rep
+    
+    q_rep = self.init_question_non_linear(self.init_question_transformer(q_rep))
 
     #if dropout_mask_question_rep is not None:
     #  q_rep = q_rep * dropout_mask_question_rep
@@ -181,8 +210,15 @@ class MAC(nn.Module):
     control_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
     memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
 
-    control_storage[:,0,:] = self.init_control.expand(N, self.module_dim)
+    #control_storage[:,0,:] = self.init_control.expand(N, self.module_dim)
+    control_storage[:,0,:] = init_control
     memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
+    
+    if self.memory_dropout > 0. and not isTest:
+      dropout_mask_memory = Variable(torch.Tensor(N, self.module_dim).fill_(
+        self.memory_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    else:
+      dropout_mask_memory = None
 
     for fn_num in range(self.num_modules):
       inputUnit = self.InputUnits[fn_num] if isinstance(self.InputUnits, list) else self.InputUnits
@@ -202,7 +238,8 @@ class MAC(nn.Module):
       control_storage = control_updated
 
       #compute read at the current step
-      read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats)
+      read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats, read_dropout=self.read_dropout,
+                        memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory, isTest=isTest)
 
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
@@ -220,36 +257,52 @@ class MAC(nn.Module):
         memory_storage = memory_updated
 
     # Run the final classifier over the resultant, post-modulated features.
-    final_module_output = torch.cat([q_rep, final_module_output], 1)
+    #final_module_output = torch.cat([q_rep, final_module_output], 1)
 
     if save_activations:
       self.cf_input = final_module_output
-    out = self.classifier(final_module_output)
+
+    out = self.classifier(final_module_output, original_q_rep, isTest=isTest)
 
     return out
 
 class OutputUnit(nn.Module):
-  def __init__(self, input_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
+  def __init__(self, module_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
     super(OutputUnit, self).__init__()
-    hidden_units = [input_dim] + [h for h in hidden_units]
-
-    layers = []
+    
+    self.dropout = dropout
+    
+    self.question_transformer = nn.Linear(module_dim, module_dim)
+    
+    input_dim = 2*module_dim
+    hidden_units = [input_dim] + [h for h in hidden_units] + [num_outputs]
+    self.linears = []
+    self.batchnorms = []
     for nin, nout in zip(hidden_units, hidden_units[1:]):
-      layers.append(nn.Linear(nin, nout))
-      if with_batchnorm:
-        layers.append(nn.BatchNorm1d(nout))
-      layers.append(nn.ELU(inplace=True)) #ReLU
-      if dropout > 0:
-        layers.append(nn.Dropout(p=dropout))
-
-    layers.append(nn.Linear(hidden_units[-1], num_outputs))
-
-    self.layers = nn.Sequential(*layers)
+      self.linears.append(nn.Linear(nin, nout))
+      self.batchnorms.append(nn.BatchNorm1d(nin) if with_batchnorm else None)
+    
+    self.non_linear = nn.ReLU()
 
     init_modules(self.modules())
 
-  def forward(self, x):
-    return self.layers(x)
+  def forward(self, final_memory, original_q_rep, isTest=False):
+    
+    transformed_question = self.question_transformer(original_q_rep)
+    features = torch.cat([final_memory, transformed_question], 1)
+    
+    for i, (linear, batchnorm) in enumerate(zip(self.linears, self.batchnorms)):
+      if batchnorm is not None:
+        features = batchnorm(features)
+      if not isTest and self.dropout > 0.:
+        dropout_mask = Variable(torch.Tensor(features.shape).fill_(
+        self.dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+        features = (features / (1. - self.dropout)) * dropout_mask # div?
+      features = linear(features)
+      if i < len(self.linears) - 1:
+        features = self.non_linear(features)
+    
+    return features
 
 class WriteUnit(nn.Module):
   def __init__(self, common_dim, use_self_attention=False, use_memory_gate=False):
@@ -261,6 +314,8 @@ class WriteUnit(nn.Module):
     self.control_memory_transfomer = nn.Linear(2 * common_dim, common_dim) #Eq (w1)
 
     if use_self_attention:
+      self.current_control_transformer = nn.Linear(common_dim, common_dim)
+      
       self.control_transformer = nn.Linear(common_dim, 1) #Eq (w2.1)
       self.acc_memory_transformer = nn.Linear(common_dim, common_dim, bias=False)
       self.pre_memory_transformer = nn.Linear(common_dim, common_dim) #Eq (w2.3)
@@ -280,6 +335,7 @@ class WriteUnit(nn.Module):
 
     if self.use_self_attention:
       current_control = controls[:,idx,:] # N x d
+      current_control = self.current_control_transformer(current_control) # N x d in code
       if idx > 1:
         #Eq (w2.1)
         previous_controls = controls[:,1:idx,:] # N x (idx-1) x d
@@ -323,27 +379,55 @@ class ReadUnit(nn.Module):
 
     #Eq (r3.1)
     self.read_attention_transformer = nn.Linear(common_dim, 1)
+    
+    self.non_linear = nn.ReLU()
 
     init_modules(self.modules())
 
-  def forward(self, pre_memory, current_control, image):
+  def forward(self, pre_memory, current_control, image, read_dropout=0.,
+              memory_dropout=0., dropout_mask_memory=None, isTest=False):
 
     #pre_memory(Nxd), current_control(Nxd), image(NxdxHxW)
-
+    
     image = image.transpose(1,2).transpose(2,3) #NXHxWxd
+    trans_image = image
+    
+    if not isTest and memory_dropout > 0.:
+      assert dropout_mask_memory is not None
+      pre_memory = (pre_memory / (1. - memory_dropout)) * dropout_mask_memory
+    
+    if not isTest and read_dropout > 0.:
+      dropout_mask_read_pre_memory = Variable(torch.Tensor(pre_memory.shape).fill_(
+        read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      dropout_mask_read_image = Variable(torch.Tensor(image.shape).fill_(
+        read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      
+      pre_memory = (pre_memory / (1. - read_dropout)) * dropout_mask_read_pre_memory # div?
+      trans_image = (trans_image / (1. - read_dropout)) * dropout_mask_read_image # div?
 
     #Eq (r1)
-    trans_image = self.image_element_transformer(image) #NxHxWxd
     trans_pre_memory = self.pre_memory_transformer(pre_memory) #Nxd
+    trans_image = self.image_element_transformer(trans_image) #NxHxWxd image
     trans_pre_memory = trans_pre_memory.unsqueeze(1).unsqueeze(2).expand(trans_image.size()) #NxHxWxd
     intermediate = trans_pre_memory * trans_image #NxHxWxd
 
     #Eq (r2)
-    trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, image], 3)) #NxHxWxd
+    #trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, image], 3)) #NxHxWxd
+    trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, trans_image], 3)) #NxHxWxd
+    trans_intermediate = self.non_linear(trans_intermediate)
 
     #Eq (r3.1)
     trans_current_control = current_control.unsqueeze(1).unsqueeze(2).expand(trans_intermediate.size()) #NxHxWxd
-    scores = self.read_attention_transformer(trans_current_control * trans_intermediate).squeeze(3) #NxHxWx1 -> NxHxW
+    intermediate_score = trans_current_control * trans_intermediate
+    
+    intermediate_score = self.non_linear(intermediate_score)
+    if not isTest and read_dropout > 0.:
+      dropout_mask_read_intermediate_score = Variable(torch.Tensor(intermediate_score.shape).fill_(
+        read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      
+      intermediate_score = (intermediate_score / (1. - read_dropout)) * dropout_mask_read_intermediate_score # div?
+    
+    scores = self.read_attention_transformer(intermediate_score).squeeze(3) #NxHxWx1 -> NxHxW
 
     #Eq (r3.2): softmax
     rscores = scores.view(scores.shape[0], -1) #N x (H*W)
@@ -359,11 +443,13 @@ class ReadUnit(nn.Module):
     return readrep
 
 class ControlUnit(nn.Module):
-  def __init__(self, common_dim):
+  def __init__(self, common_dim, use_prior_control_in_control_unit=False):
     super(ControlUnit, self).__init__()
     self.common_dim = common_dim
+    self.use_prior_control_in_control_unit = use_prior_control_in_control_unit
 
-    self.control_question_transformer = nn.Linear(2 * common_dim, common_dim) #Eq (c1)
+    if use_prior_control_in_control_unit:
+      self.control_question_transformer = nn.Linear(2 * common_dim, common_dim) #Eq (c1)
 
     self.score_transformer = nn.Linear(common_dim, 1) # Eq (c2.1)
 
@@ -373,8 +459,11 @@ class ControlUnit(nn.Module):
 
     #pre_control (Nxd), question (Nxd), context(NxLxd), mask(NxL)
 
-    # N x d
-    control_question = self.control_question_transformer(torch.cat([pre_control, question], 1)) #Eq (c1)
+    #Eq (c1)
+    if self.use_prior_control_in_control_unit:
+      control_question = self.control_question_transformer(torch.cat([pre_control, question], 1)) # N x d
+    else:
+      control_question = question # N x d
 
     #Eq (c2.1)
     scores = self.score_transformer(context * control_question.unsqueeze(1)).squeeze(2)  #NxLxd -> NxLx1 -> NxL
@@ -392,7 +481,7 @@ class InputUnit(nn.Module):
   def __init__(self, common_dim):
     super(InputUnit, self).__init__()
     self.common_dim = common_dim
-    self.question_transformer = nn.Linear(2 * common_dim, common_dim)
+    self.question_transformer = nn.Linear(common_dim, common_dim) # nn.Linear(2 * common_dim, common_dim)
 
     init_modules(self.modules())
 
@@ -440,35 +529,3 @@ def init_modules(modules, init='uniform'):
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
       if m.bias is not None: constant(m.bias, 0.)
-
-class VariationalDropout(nn.Module):
-  def __init__(self, dropout=0.85, dim=None):
-    super(VariationalDropout, self).__init__()
-    
-    alpha = dropout / (1. - dropout)
-    self.dim = dim
-    self.max_alpha = alpha
-    # Initial alpha
-    log_alpha = (torch.ones(dim) * alpha).log()
-    self.log_alpha = nn.Parameter(log_alpha.cuda())
-    
-  def forward(self, x, epsilon=None, isTest=False):
-    """
-    Sample noise   e ~ N(1, alpha)
-    Multiply noise h = h_ * e
-    """
-    if not isTest:
-      # N(0,1)
-      if epsilon is None:
-        epsilon = Variable(torch.randn(x.size())).type(torch.cuda.FloatTensor)
-
-      # Clip alpha
-      self.log_alpha.data = torch.clamp(self.log_alpha.data, max=self.max_alpha)
-      alpha = self.log_alpha.exp()
-
-      # N(1, alpha)
-      epsilon = epsilon * alpha
-
-      return x * epsilon
-    else:
-      return x

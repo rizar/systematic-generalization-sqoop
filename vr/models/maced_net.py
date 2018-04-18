@@ -119,13 +119,13 @@ class MAC(nn.Module):
         self.ControlUnits.append(mod)
 
     if self.sharing_params_patterns[2]:
-      mod = ReadUnit(module_dim)
+      mod = ReadUnit(module_dim, self.read_dropout)
       self.add_module('ReadUnit', mod)
       self.ReadUnits = mod
     else:
       self.ReadUnits = []
       for i in range(self.num_modules):
-        mod = ReadUnit(module_dim)
+        mod = ReadUnit(module_dim, self.read_dropout)
         self.add_module('ReadUnit' + str(i+1), mod)
         self.ReadUnits.append(mod)
 
@@ -153,7 +153,9 @@ class MAC(nn.Module):
     self.init_question_non_linear = nn.Tanh()
 
     self.vocab = vocab
-
+    
+    self.question_embedding_dropout_module = nn.Dropout(p=self.question_embedding_dropout)
+    
     # Initialize output classifier
     self.classifier = OutputUnit(module_dim, classifier_fc_layers, num_answers,
                                  with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
@@ -180,10 +182,12 @@ class MAC(nn.Module):
     
     original_q_rep = q_rep
     
-    if not isTest and self.question_embedding_dropout > 0.:
-      dropout_mask_question_embs = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(
-        self.question_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-      q_rep = (q_rep / (1. - self.question_embedding_dropout)) * dropout_mask_question_embs # div?
+    q_rep = self.question_embedding_dropout_module(q_rep)
+    
+    #if not isTest and self.question_embedding_dropout > 0.:
+    #  dropout_mask_question_embs = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(
+    #    self.question_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    #  q_rep = (q_rep / (1. - self.question_embedding_dropout)) * dropout_mask_question_embs # div?
     
     init_control = q_rep
     
@@ -238,7 +242,7 @@ class MAC(nn.Module):
       control_storage = control_updated
 
       #compute read at the current step
-      read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats, read_dropout=self.read_dropout,
+      read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats,
                         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory, isTest=isTest)
 
       #compute write memeory at the current step
@@ -287,6 +291,7 @@ class OutputUnit(nn.Module):
       self.batchnorms.append(mod)
     
     self.non_linear = nn.ReLU()
+    self.dropout_module = nn.Dropout(p=self.dropout)
 
     init_modules(self.modules())
 
@@ -298,10 +303,11 @@ class OutputUnit(nn.Module):
     for i, (linear, batchnorm) in enumerate(zip(self.linears, self.batchnorms)):
       if batchnorm is not None:
         features = batchnorm(features)
-      if not isTest and self.dropout > 0.:
-        dropout_mask = Variable(torch.Tensor(features.shape).fill_(
-        self.dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-        features = (features / (1. - self.dropout)) * dropout_mask # div?
+      #if not isTest and self.dropout > 0.:
+      #  dropout_mask = Variable(torch.Tensor(features.shape).fill_(
+      #  self.dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      #  features = (features / (1. - self.dropout)) * dropout_mask # div?
+      features = self.dropout_module(features)
       features = linear(features)
       if i < len(self.linears) - 1:
         features = self.non_linear(features)
@@ -370,9 +376,10 @@ class WriteUnit(nn.Module):
 
 
 class ReadUnit(nn.Module):
-  def __init__(self, common_dim):
+  def __init__(self, common_dim, read_dropout=0.):
     super(ReadUnit, self).__init__()
     self.common_dim = common_dim
+    self.read_dropout = read_dropout
 
     #Eq (r1)
     self.pre_memory_transformer = nn.Linear(common_dim, common_dim)
@@ -385,10 +392,11 @@ class ReadUnit(nn.Module):
     self.read_attention_transformer = nn.Linear(common_dim, 1)
     
     self.non_linear = nn.ReLU()
+    self.read_dropout_module = nn.Dropout(p=self.read_dropout)
 
     init_modules(self.modules())
 
-  def forward(self, pre_memory, current_control, image, read_dropout=0.,
+  def forward(self, pre_memory, current_control, image,
               memory_dropout=0., dropout_mask_memory=None, isTest=False):
 
     #pre_memory(Nxd), current_control(Nxd), image(NxdxHxW)
@@ -400,14 +408,17 @@ class ReadUnit(nn.Module):
       assert dropout_mask_memory is not None
       pre_memory = (pre_memory / (1. - memory_dropout)) * dropout_mask_memory
     
-    if not isTest and read_dropout > 0.:
-      dropout_mask_read_pre_memory = Variable(torch.Tensor(pre_memory.shape).fill_(
-        read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-      dropout_mask_read_image = Variable(torch.Tensor(image.shape).fill_(
-        read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    pre_memory = self.read_dropout_module(pre_memory)
+    trans_image = self.read_dropout_module(trans_image)
+    
+    #if not isTest and read_dropout > 0.:
+    #  dropout_mask_read_pre_memory = Variable(torch.Tensor(pre_memory.shape).fill_(
+    #    read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    #  dropout_mask_read_image = Variable(torch.Tensor(image.shape).fill_(
+    #    read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
       
-      pre_memory = (pre_memory / (1. - read_dropout)) * dropout_mask_read_pre_memory # div?
-      trans_image = (trans_image / (1. - read_dropout)) * dropout_mask_read_image # div?
+    #  pre_memory = (pre_memory / (1. - read_dropout)) * dropout_mask_read_pre_memory # div?
+    #  trans_image = (trans_image / (1. - read_dropout)) * dropout_mask_read_image # div?
 
     #Eq (r1)
     trans_pre_memory = self.pre_memory_transformer(pre_memory) #Nxd
@@ -425,11 +436,14 @@ class ReadUnit(nn.Module):
     intermediate_score = trans_current_control * trans_intermediate
     
     intermediate_score = self.non_linear(intermediate_score)
-    if not isTest and read_dropout > 0.:
-      dropout_mask_read_intermediate_score = Variable(torch.Tensor(intermediate_score.shape).fill_(
-        read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+    
+    intermediate_score = self.read_dropout_module(intermediate_score)
+    
+    #if not isTest and read_dropout > 0.:
+    #  dropout_mask_read_intermediate_score = Variable(torch.Tensor(intermediate_score.shape).fill_(
+    #    read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
       
-      intermediate_score = (intermediate_score / (1. - read_dropout)) * dropout_mask_read_intermediate_score # div?
+    #  intermediate_score = (intermediate_score / (1. - read_dropout)) * dropout_mask_read_intermediate_score # div?
     
     scores = self.read_attention_transformer(intermediate_score).squeeze(3) #NxHxWx1 -> NxHxW
 

@@ -125,7 +125,7 @@ def build_stem2(feature_dim, module_dim, num_layers=2, dropout=0., with_batchnor
       cur_padding = cur_kernel_size // 2
     
     if with_batchnorm:
-      layers.append(nn.BatchNorm2d(module_dim))
+      layers.append(nn.BatchNorm2d(prev_dim))
     
     if dropout > 0.:
       layers.append(nn.Dropout2d(p=dropout))

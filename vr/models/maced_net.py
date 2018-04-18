@@ -278,12 +278,12 @@ class OutputUnit(nn.Module):
     hidden_units = [input_dim] + [h for h in hidden_units] + [num_outputs]
     self.linears = []
     self.batchnorms = []
-    for nin, nout in zip(hidden_units, hidden_units[1:]):
+    for i, (nin, nout) in enumerate(zip(hidden_units, hidden_units[1:])):
       mod = nn.Linear(nin, nout)
-      self.add_module(mod)
+      self.add_module('MAC_LinearFC' + str(i), mod)
       self.linears.append(mod)
       mod = nn.BatchNorm1d(nin) if with_batchnorm else None
-      if mod is not None: self.add_module(mod)
+      if mod is not None: self.add_module('MAC_BatchNormFC' + str(i), mod)
       self.batchnorms.append(mod)
     
     self.non_linear = nn.ReLU()

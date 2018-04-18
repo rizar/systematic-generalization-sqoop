@@ -108,8 +108,8 @@ def draw_scene(objects):
   draw = ImageDraw.Draw(img)
   for obj in objects:
     obj_img = draw_object(draw, obj)
-    obj_pos = (obj.pos[0] - obj.rotated_size // 2,
-               obj.pos[1] - obj.rotated_size // 2)
+    obj_pos = (obj.pos[0] - obj_size[0] // 2,
+               obj.pos[1] - obj_size[1] // 2)
     img.paste(obj_img, obj_pos, obj_img)
 
   return img

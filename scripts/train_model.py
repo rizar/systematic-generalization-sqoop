@@ -14,6 +14,7 @@ import random
 import shutil
 import sys
 import time
+import itertools
 
 import h5py
 import numpy as np
@@ -141,6 +142,14 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 parser.add_argument('--mac_sharing_params_patterns', default='', type=str) # List of 0/1's
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
+
+parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float)
+parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
+parser.add_argument('--mac_memory_dropout', default=0.15, type=float)
+parser.add_argument('--mac_read_dropout', default=0.15, type=float)
+parser.add_argument('--mac_write_dropout', default=0., type=float)
+parser.add_argument('--mac_use_prior_control_in_control_unit', default=0, type=int)
+parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -462,15 +471,23 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         if args.debug_every < float('inf'):
           check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else 'MAC')
           check_grad_num_nans(program_generator, 'FiLMGen')
-
-        if args.train_program_generator == 1:
-          if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
-          pg_optimizer.step()
-        if args.train_execution_engine == 1:
-          if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
-          ee_optimizer.step()
+        
+        if args.model_type == 'MAC':
+          if args.train_program_generator == 1 or args.train_execution_engine == 1:
+            if args.grad_clip > 0:
+              allMacParams = itertools.chain(program_generator.parameters(), execution_engine.parameters())
+              torch.nn.utils.clip_grad_norm(allMacParams, args.grad_clip)
+            pg_optimizer.step()
+            ee_optimizer.step()
+        else:
+          if args.train_program_generator == 1:
+            if args.grad_clip > 0:
+              torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
+            pg_optimizer.step()
+          if args.train_execution_engine == 1:
+            if args.grad_clip > 0:
+              torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
+            ee_optimizer.step()
       elif args.model_type == 'Tfilm' or args.model_type == 'NMNFilm':
         if args.set_execution_engine_eval == 1:
           set_mode('eval', [execution_engine])
@@ -661,6 +678,7 @@ def get_program_generator(args):
         kwargs['num_modules'] = len(vocab['program_token_to_idx'])
       if args.model_type == 'MAC':
         kwargs['taking_context'] = True
+        kwargs['variational_embedding_dropout'] = args.variational_embedding_dropout
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
@@ -774,7 +792,15 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
-                'module_dropout': args.module_dropout,
+                
+                #'module_dropout': args.module_dropout,
+                'question_embedding_dropout': args.mac_question_embedding_dropout,
+                'stem_dropout': args.mac_stem_dropout,
+                'memory_dropout': args.mac_memory_dropout,
+                'read_dropout': args.mac_read_dropout,
+                'write_dropout': args.mac_write_dropout,
+                'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
+                
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,

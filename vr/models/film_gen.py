@@ -36,7 +36,7 @@ class FiLMGen(nn.Module):
     debug_every=float('inf'),
     
     taking_context = False,
-    
+    variational_embedding_dropout = 0.,
   ):
     super(FiLMGen, self).__init__()
     self.encoder_type = encoder_type
@@ -55,10 +55,11 @@ class FiLMGen(nn.Module):
     self.END = end_token
     
     self.taking_context = taking_context
+    self.variational_embedding_dropout = variational_embedding_dropout
     
     if self.taking_context: self.bidirectional = True
     
-    if self.bidirectional and not self.taking_context:
+    if self.bidirectional: # and not self.taking_context:
       if decoder_type != 'linear':
         raise(NotImplementedError)
       hidden_dim = (int) (hidden_dim / self.num_dir)
@@ -80,7 +81,7 @@ class FiLMGen(nn.Module):
     self.decoder_rnn = init_rnn(self.decoder_type, hidden_dim, hidden_dim, rnn_num_layers,
                                 dropout=rnn_dropout, bidirectional=self.bidirectional)
     
-    if self.taking_context: self.decoder_linear = nn.Linear(2 * hidden_dim, hidden_dim) 
+    if self.taking_context: self.decoder_linear = None #nn.Linear(2 * hidden_dim, hidden_dim) 
     else: self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
     
     if self.output_batchnorm:
@@ -129,7 +130,7 @@ class FiLMGen(nn.Module):
     x[x.data == self.NULL] = replace
     return x, Variable(idx), Variable(mask).type(torch.cuda.FloatTensor)
 
-  def encoder(self, x):
+  def encoder(self, x, isTest=False):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)
     x, idx, mask = self.before_rnn(x)  # Tokenized word sequences (questions), end index
     
@@ -148,6 +149,10 @@ class FiLMGen(nn.Module):
     if self.encoder_type == 'lstm':
       c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
     
+    if self.variational_embedding_dropout > 0. and not isTest:
+      varDrop = Variable(torch.Tensor(N, D).fill_(self.variational_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      embed = (embed / (1. - self.variational_embedding_dropout)) * varDrop.unsqueeze(1)
+      
     if self.taking_context:
       embed = pack_padded_sequence(embed, seq_lengths.data.cpu().numpy(), batch_first=True)
 
@@ -183,8 +188,8 @@ class FiLMGen(nn.Module):
 
   def decoder(self, encoded, dims, h0=None, c0=None):
     
-    if self.taking_context:
-      return self.decoder_linear(encoded)
+    #if self.taking_context:
+    #  return self.decoder_linear(encoded)
     
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = dims
     
@@ -211,13 +216,13 @@ class FiLMGen(nn.Module):
     output_shaped = linear_output.view(N, T_out, V_out)
     return output_shaped, (ht, ct)
 
-  def forward(self, x):
+  def forward(self, x, isTest=False):
     if self.debug_every <= -2:
       pdb.set_trace()
-    encoded, whole_context, last_vector, mask = self.encoder(x)
+    encoded, whole_context, last_vector, mask = self.encoder(x, isTest=isTest)
     
     if self.taking_context:
-      whole_context = self.decoder(whole_context, None)
+      #whole_context = self.decoder(whole_context, None)
       return (whole_context, last_vector, mask)
     
     film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))

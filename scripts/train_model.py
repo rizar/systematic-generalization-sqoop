@@ -147,9 +147,10 @@ parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float
 parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
 parser.add_argument('--mac_memory_dropout', default=0.15, type=float)
 parser.add_argument('--mac_read_dropout', default=0.15, type=float)
-parser.add_argument('--mac_write_dropout', default=0., type=float)
 parser.add_argument('--mac_use_prior_control_in_control_unit', default=0, type=int)
 parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
+
+parser.add_argument('--exponential_moving_average_weight', default=1., type=float)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -341,6 +342,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     pg_optimizer = optim_method(program_generator.parameters(),
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
+    
     print('Here is the conditioning network:')
     print(program_generator)
   if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
@@ -362,6 +364,17 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     print(baseline_model)
     baseline_type = args.model_type
   loss_fn = torch.nn.CrossEntropyLoss().cuda()
+  
+  if args.exponential_moving_average_weight < 1. and args.model_type == 'MAC':
+    EMA = vr.utils.EMA(args.exponential_moving_average_weight)
+    
+    for name, param in program_generator.named_parameters():
+      if param.requires_grad:
+        EMA.register('prog', name, param.data)
+    
+    for name, param in execution_engine.named_parameters():
+      if param.requires_grad:
+        EMA.register('exec', name, param.data)
 
   stats = {
     'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
@@ -479,6 +492,14 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
               torch.nn.utils.clip_grad_norm(allMacParams, args.grad_clip)
             pg_optimizer.step()
             ee_optimizer.step()
+            
+            if args.exponential_moving_average_weight < 1.:
+              for name, param in program_generator.named_parameters():
+                if param.requires_grad:
+                  param.data = EMA('prog', name, param.data)
+              for name, param in execution_engine.named_parameters():
+                if param.requires_grad:
+                  param.data = EMA('exec', name, param.data)
         else:
           if args.train_program_generator == 1:
             if args.grad_clip > 0:
@@ -798,7 +819,6 @@ def get_execution_engine(args):
                 'stem_dropout': args.mac_stem_dropout,
                 'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
-                'write_dropout': args.mac_write_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),

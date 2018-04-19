@@ -11,8 +11,7 @@ import torchvision.models
 import math
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
-#from vr.models.layers import init_modules #, GlobalAveragePool, Flatten
-from vr.models.layers import build_classifier, build_stem2
+from vr.models.layers import build_classifier
 import vr.programs
 
 class MAC(nn.Module):
@@ -32,7 +31,6 @@ class MAC(nn.Module):
                stem_dropout = 0.18,
                memory_dropout = 0.15,
                read_dropout = 0.15,
-               write_dropout = 0.,
                use_prior_control_in_control_unit = False,
                
                sharing_params_patterns=(0,1,1,1),
@@ -57,18 +55,11 @@ class MAC(nn.Module):
 
     self.num_modules = num_modules
     
-    #self.module_dropout = module_dropout
     self.question_embedding_dropout = question_embedding_dropout
     self.memory_dropout = memory_dropout
     self.read_dropout = read_dropout
-    self.write_dropout = write_dropout
-    
-    #self.module_num_layers = module_num_layers
-    #self.module_batchnorm = module_batchnorm
+
     self.module_dim = module_dim
-    #self.condition_method = condition_method
-    #self.use_gamma = use_gamma
-    #self.use_beta = use_beta
 
     self.sharing_params_patterns = [True if p == 1 else False for p in sharing_params_patterns]
     self.use_self_attention = use_self_attention == 1
@@ -89,10 +80,10 @@ class MAC(nn.Module):
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
-    self.stem = build_stem2(stem_feature_dim, module_dim,
-                            num_layers=stem_num_layers, dropout=stem_dropout, with_batchnorm=stem_batchnorm,
-                            kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
-                            subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
+    self.stem = build_stem(stem_feature_dim, module_dim,
+                           num_layers=stem_num_layers, dropout=stem_dropout, with_batchnorm=stem_batchnorm,
+                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+                           subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
 
 
     #Define units
@@ -146,7 +137,6 @@ class MAC(nn.Module):
 
     #parameters for initial memory and control vectors
     self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
-    #self.init_control = nn.Parameter(torch.zeros(module_dim).cuda())
     
     #first transformation of question embeddings
     self.init_question_transformer = nn.Linear(self.module_dim, self.module_dim)
@@ -171,33 +161,15 @@ class MAC(nn.Module):
       self.memory_outputs = []
       self.cf_input = None
 
-    #if not isTest and self.module_dropout > 0.:
-    #  dropout_mask_cell = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-    #  dropout_mask_question_rep = Variable(torch.Tensor(x.size(0), 2*self.module_dim).fill_(self.module_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-    #else:
-    #  dropout_mask_cell = None
-    #  dropout_mask_question_rep = None
-
     q_context, q_rep, q_mask = ques
     
     original_q_rep = q_rep
     
     q_rep = self.question_embedding_dropout_module(q_rep)
     
-    #if not isTest and self.question_embedding_dropout > 0.:
-    #  dropout_mask_question_embs = Variable(torch.Tensor(x.size(0), self.module_dim).fill_(
-    #    self.question_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-    #  q_rep = (q_rep / (1. - self.question_embedding_dropout)) * dropout_mask_question_embs # div?
-    
     init_control = q_rep
     
     q_rep = self.init_question_non_linear(self.init_question_transformer(q_rep))
-
-    #if dropout_mask_question_rep is not None:
-    #  q_rep = q_rep * dropout_mask_question_rep
-
-    #if isTest and self.module_dropout > 0.:
-    #  q_rep = (1. - self.module_dropout) * q_rep
 
     stem_batch_coords = None
     if self.use_coords_freq > 0:
@@ -214,7 +186,6 @@ class MAC(nn.Module):
     control_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
     memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
 
-    #control_storage[:,0,:] = self.init_control.expand(N, self.module_dim)
     control_storage[:,0,:] = init_control
     memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
     
@@ -247,9 +218,7 @@ class MAC(nn.Module):
 
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
-      #dropout
-      #if dropout_mask_cell is not None: memory_i = memory_i * dropout_mask_cell
-      #if isTest and self.module_dropout > 0.: memory_i = (1. - self.module_dropout) * memory_i
+
       if save_activations:
         self.memory_outputs.append(memory_i)
 
@@ -259,9 +228,6 @@ class MAC(nn.Module):
         memory_updated = memory_storage.clone()
         memory_updated[:,(fn_num+1),:] = memory_updated[:,(fn_num+1),:] + memory_i
         memory_storage = memory_updated
-
-    # Run the final classifier over the resultant, post-modulated features.
-    #final_module_output = torch.cat([q_rep, final_module_output], 1)
 
     if save_activations:
       self.cf_input = final_module_output
@@ -303,10 +269,6 @@ class OutputUnit(nn.Module):
     for i, (linear, batchnorm) in enumerate(zip(self.linears, self.batchnorms)):
       if batchnorm is not None:
         features = batchnorm(features)
-      #if not isTest and self.dropout > 0.:
-      #  dropout_mask = Variable(torch.Tensor(features.shape).fill_(
-      #  self.dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-      #  features = (features / (1. - self.dropout)) * dropout_mask # div?
       features = self.dropout_module(features)
       features = linear(features)
       if i < len(self.linears) - 1:
@@ -332,7 +294,6 @@ class WriteUnit(nn.Module):
 
     if use_memory_gate:
       self.gated_control_transformer = nn.Linear(common_dim, 1) #Eq (w3.1)
-      #self.gated_control_transformer.bias.data.fill_(-1)
       self.non_linear = nn.Sigmoid()
 
     init_modules(self.modules())
@@ -410,15 +371,6 @@ class ReadUnit(nn.Module):
     
     pre_memory = self.read_dropout_module(pre_memory)
     trans_image = self.read_dropout_module(trans_image)
-    
-    #if not isTest and read_dropout > 0.:
-    #  dropout_mask_read_pre_memory = Variable(torch.Tensor(pre_memory.shape).fill_(
-    #    read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-    #  dropout_mask_read_image = Variable(torch.Tensor(image.shape).fill_(
-    #    read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-      
-    #  pre_memory = (pre_memory / (1. - read_dropout)) * dropout_mask_read_pre_memory # div?
-    #  trans_image = (trans_image / (1. - read_dropout)) * dropout_mask_read_image # div?
 
     #Eq (r1)
     trans_pre_memory = self.pre_memory_transformer(pre_memory) #Nxd
@@ -438,12 +390,6 @@ class ReadUnit(nn.Module):
     intermediate_score = self.non_linear(intermediate_score)
     
     intermediate_score = self.read_dropout_module(intermediate_score)
-    
-    #if not isTest and read_dropout > 0.:
-    #  dropout_mask_read_intermediate_score = Variable(torch.Tensor(intermediate_score.shape).fill_(
-    #    read_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-      
-    #  intermediate_score = (intermediate_score / (1. - read_dropout)) * dropout_mask_read_intermediate_score # div?
     
     scores = self.read_attention_transformer(intermediate_score).squeeze(3) #NxHxWx1 -> NxHxW
 
@@ -487,7 +433,7 @@ class ControlUnit(nn.Module):
     scores = self.score_transformer(context * control_question.unsqueeze(1)).squeeze(2)  #NxLxd -> NxLx1 -> NxL
 
     #Eq (c2.2) : softmax
-    scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to elimiate null tokens
+    scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to eliminate null tokens
     scores = scores / scores.sum(1, keepdim=True) #NxL
 
     #Eq (c2.3)
@@ -499,7 +445,7 @@ class InputUnit(nn.Module):
   def __init__(self, common_dim):
     super(InputUnit, self).__init__()
     self.common_dim = common_dim
-    self.question_transformer = nn.Linear(common_dim, common_dim) # nn.Linear(2 * common_dim, common_dim)
+    self.question_transformer = nn.Linear(common_dim, common_dim)
 
     init_modules(self.modules())
 
@@ -547,3 +493,41 @@ def init_modules(modules, init='uniform'):
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
       if m.bias is not None: constant(m.bias, 0.)
+
+def build_stem(feature_dim, module_dim, num_layers=2, dropout=0., with_batchnorm=True,
+               kernel_size=[3], stride=[1], padding=None, subsample_layers=None, acceptEvenKernel=False):
+  layers = []
+  prev_dim = feature_dim
+
+  if len(kernel_size) == 1:
+    kernel_size = num_layers * kernel_size
+  if len(stride) == 1:
+    stride = num_layers * stride
+  if padding == None:
+    padding = num_layers * [None]
+  if len(padding) == 1:
+    padding = num_layers * padding
+
+  if subsample_layers is None:
+    subsample_layers = []
+
+  for i, cur_kernel_size, cur_stride, cur_padding in zip(range(num_layers), kernel_size, stride, padding):
+    if cur_padding is None:  # Calculate default padding when None provided
+      if cur_kernel_size % 2 == 0 and not acceptEvenKernel:
+        raise(NotImplementedError)
+      cur_padding = cur_kernel_size // 2
+    
+    if with_batchnorm:
+      layers.append(nn.BatchNorm2d(prev_dim))
+    
+    if dropout > 0.:
+      layers.append(nn.Dropout2d(p=dropout))
+    
+    layers.append(nn.Conv2d(prev_dim, module_dim,
+                            kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding))
+    
+    layers.append(nn.ReLU(inplace=True))
+    if i in subsample_layers:
+      layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+    prev_dim = module_dim
+  return nn.Sequential(*layers)

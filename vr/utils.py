@@ -112,6 +112,20 @@ def get_updated_args(kwargs, object_class):
   new_kwargs = {valid_arg: kwargs[valid_arg] for valid_arg in valid_args if valid_arg in kwargs}
   return new_kwargs
 
+class EMA():
+  def __init__(self, mu):
+    self.mu = mu
+    self.shadow = {}
+
+  def register(self, cat, name, val):
+    self.shadow[cat + '-' + name] = val.clone()
+
+  def __call__(self, cat, name, x):
+    name = cat + '-' + name
+    assert name in self.shadow
+    new_average = self.mu * x + (1.0 - self.mu) * self.shadow[name]
+    self.shadow[name] = new_average.clone()
+    return new_average
 
 arg_value_updates = {
   'condition_method': {

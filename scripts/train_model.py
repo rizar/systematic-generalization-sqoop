@@ -14,6 +14,7 @@ import random
 import shutil
 import sys
 import time
+import itertools
 
 import h5py
 import numpy as np
@@ -470,15 +471,23 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         if args.debug_every < float('inf'):
           check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else 'MAC')
           check_grad_num_nans(program_generator, 'FiLMGen')
-
-        if args.train_program_generator == 1:
-          if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
-          pg_optimizer.step()
-        if args.train_execution_engine == 1:
-          if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
-          ee_optimizer.step()
+        
+        if args.model_type == 'MAC':
+          if args.train_program_generator == 1 or args.train_execution_engine == 1:
+            if args.grad_clip > 0:
+              allMacParams = itertools.chain(program_generator.parameters(), execution_engine.parameters())
+              torch.nn.utils.clip_grad_norm(allMacParams, args.grad_clip)
+            pg_optimizer.step()
+            ee_optimizer.step()
+        else:
+          if args.train_program_generator == 1:
+            if args.grad_clip > 0:
+              torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
+            pg_optimizer.step()
+          if args.train_execution_engine == 1:
+            if args.grad_clip > 0:
+              torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
+            ee_optimizer.step()
       elif args.model_type == 'Tfilm' or args.model_type == 'NMNFilm':
         if args.set_execution_engine_eval == 1:
           set_mode('eval', [execution_engine])

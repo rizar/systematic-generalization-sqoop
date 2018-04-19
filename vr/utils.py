@@ -110,15 +110,15 @@ class EMA():
     self.mu = mu
     self.shadow = {}
 
-    def register(self, cat, name, val):
-      self.shadow[cat + '-' + name] = val.clone()
+  def register(self, cat, name, val):
+    self.shadow[cat + '-' + name] = val.clone()
 
-    def __call__(self, cat, name, x):
-      name = cat + '-' + name
-      assert name in self.shadow
-      new_average = self.mu * x + (1.0 - self.mu) * self.shadow[name]
-      self.shadow[name] = new_average.clone()
-      return new_average
+  def __call__(self, cat, name, x):
+    name = cat + '-' + name
+    assert name in self.shadow
+    new_average = self.mu * x + (1.0 - self.mu) * self.shadow[name]
+    self.shadow[name] = new_average.clone()
+    return new_average
 
 arg_value_updates = {
   'condition_method': {

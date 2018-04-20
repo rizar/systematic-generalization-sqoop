@@ -279,7 +279,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   ee.type(dtype)
   ee.eval()
 
-  all_scores, all_programs = [], []
+  all_scores, all_programs, all_correct = [], [], []
   all_probs = []
   all_preds = []
   num_correct, num_samples = 0, 0
@@ -354,6 +354,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     all_scores.append(scores.data.cpu().clone())
     all_probs.append(probs.data.cpu().clone())
     all_preds.append(preds.cpu().clone())
+    all_correct.append(preds == answers)
     if answers[0] is not None:
       num_correct += (preds == answers).sum()
     num_samples += preds.size(0)
@@ -365,11 +366,13 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   all_scores = torch.cat(all_scores, 0)
   all_probs = torch.cat(all_probs, 0)
   all_preds = torch.cat(all_preds, 0).squeeze().numpy()
+  all_correct = torch.cat(all_correct, 0)
   if args.output_h5 is not None:
     print('Writing output to "%s"' % args.output_h5)
     with h5py.File(args.output_h5, 'w') as fout:
       fout.create_dataset('scores', data=all_scores.numpy())
       fout.create_dataset('probs', data=all_probs.numpy())
+      fout.create_dataset('correct', data=all_correct.numpy())
       # fout.create_dataset('predicted_programs', data=all_programs.numpy())
 
   # Save FiLM params

@@ -36,7 +36,7 @@ RELATIONS = ['left_of', 'right_of', 'above', 'below']
 COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
 SHAPES = ['square', 'triangle',  'cross', 'bar',
-          'empty_square', 'empty_triangle', 'circle']
+          'empty_square', 'empty_triangle']#, 'circle']
 MIN_OBJECT_SIZE = 8
 
 

@@ -8,7 +8,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --num_iterations=20000 \
   --checkpoint_every 100 \
   --record_loss_every 10 \
-  --num_val_samples 100 \
+  --num_val_samples 1000 \
   --optimizer Adam \
   --learning_rate 1e-4 \
   --use_coords 1 \

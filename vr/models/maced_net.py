@@ -11,7 +11,7 @@ import torchvision.models
 import math
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
-from vr.models.layers import build_classifier
+from vr.models.layers import build_classifier, build_stem
 import vr.programs
 
 class MAC(nn.Module):
@@ -78,7 +78,7 @@ class MAC(nn.Module):
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(stem_feature_dim, module_dim,
-                           num_layers=stem_num_layers, dropout=stem_dropout, with_batchnorm=stem_batchnorm,
+                           num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
                            kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
                            subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
 
@@ -490,41 +490,3 @@ def init_modules(modules, init='uniform'):
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
       if m.bias is not None: constant(m.bias, 0.)
-
-def build_stem(feature_dim, module_dim, num_layers=2, dropout=0., with_batchnorm=True,
-               kernel_size=[3], stride=[1], padding=None, subsample_layers=None, acceptEvenKernel=False):
-  layers = []
-  prev_dim = feature_dim
-
-  if len(kernel_size) == 1:
-    kernel_size = num_layers * kernel_size
-  if len(stride) == 1:
-    stride = num_layers * stride
-  if padding == None:
-    padding = num_layers * [None]
-  if len(padding) == 1:
-    padding = num_layers * padding
-
-  if subsample_layers is None:
-    subsample_layers = []
-
-  for i, cur_kernel_size, cur_stride, cur_padding in zip(range(num_layers), kernel_size, stride, padding):
-    if cur_padding is None:  # Calculate default padding when None provided
-      if cur_kernel_size % 2 == 0 and not acceptEvenKernel:
-        raise(NotImplementedError)
-      cur_padding = cur_kernel_size // 2
-
-    if with_batchnorm:
-      layers.append(nn.BatchNorm2d(prev_dim))
-
-    if dropout > 0.:
-      layers.append(nn.Dropout2d(p=dropout))
-
-    layers.append(nn.Conv2d(prev_dim, module_dim,
-                            kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding))
-
-    layers.append(nn.ReLU(inplace=True))
-    if i in subsample_layers:
-      layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-    prev_dim = module_dim
-  return nn.Sequential(*layers)

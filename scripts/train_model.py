@@ -183,6 +183,7 @@ parser.add_argument('--weight_decay', default=0, type=float)
 
 # Output options
 parser.add_argument('--checkpoint_path', default='')
+parser.add_argument('--allow-resume', action='store_true')
 parser.add_argument('--randomize_checkpoint_path', type=int, default=0)
 parser.add_argument('--avoid_checkpoint_override', default=0, type=int)
 parser.add_argument('--record_loss_every', default=1, type=int)
@@ -335,21 +336,25 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   pg_best_state, ee_best_state, baseline_best_state = None, None, None
 
+  stats = {
+    'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
+    'train_accs': [], 'val_accs': [], 'val_accs_ts': [],
+    'best_val_acc': -1, 'model_t': 0, 'model_epoch': 0
+  }
+  if valB_loader:
+    stats['valB_accs'] = []
+    stats['valB_accs_ts'] = []
+    stats['bestB_val_acc'] = []
+
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
   if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
     program_generator, pg_kwargs = get_program_generator(args)
-    pg_optimizer = optim_method(program_generator.parameters(),
-                                lr=args.learning_rate,
-                                weight_decay=args.weight_decay)
-    
+
     print('Here is the conditioning network:')
     print(program_generator)
   if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
     execution_engine, ee_kwargs = get_execution_engine(args)
-    ee_optimizer = optim_method(execution_engine.parameters(),
-                                lr=args.learning_rate,
-                                weight_decay=args.weight_decay)
     print('Here is the conditioned network:')
     print(execution_engine)
   if args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
@@ -357,37 +362,53 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     params = baseline_model.parameters()
     if args.baseline_train_only_rnn == 1:
       params = baseline_model.rnn.parameters()
-    baseline_optimizer = optim_method(params,
-                                      lr=args.learning_rate,
-                                      weight_decay=args.weight_decay)
     print('Here is the baseline model')
     print(baseline_model)
     baseline_type = args.model_type
+
+  if args.allow_resume and os.path.exists(args.checkpoint_path):
+    program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type)
+    execution_engine, _  = vr.utils.load_execution_engine(args.checkpoint_path, model_type=args.model_type)
+    program_generator.cuda()
+    execution_engine.cuda()
+    with open(args.checkpoint_path + '.json', 'r') as f:
+      checkpoint = json.load(f)
+    for key in list(stats.keys()):
+      if key in checkpoint:
+        stats[key] = checkpoint[key]
+    stats['model_epoch'] -= 1
+    best_pg_state = get_state(program_generator)
+    best_ee_state = get_state(execution_engine)
+    # no support for PG+EE her
+    best_baseline_state = None
+
+  if program_generator:
+    pg_optimizer = optim_method(program_generator.parameters(),
+                                lr=args.learning_rate,
+                                weight_decay=args.weight_decay)
+  if execution_engine:
+    ee_optimizer = optim_method(execution_engine.parameters(),
+                                lr=args.learning_rate,
+                                weight_decay=args.weight_decay)
+  if baseline_model:
+    baseline_optimizer = optim_method(params,
+                                      lr=args.learning_rate,
+                                      weight_decay=args.weight_decay)
+
   loss_fn = torch.nn.CrossEntropyLoss().cuda()
-  
+
   if args.exponential_moving_average_weight < 1. and args.model_type == 'MAC':
     EMA = vr.utils.EMA(args.exponential_moving_average_weight)
-    
+
     for name, param in program_generator.named_parameters():
       if param.requires_grad:
         EMA.register('prog', name, param.data)
-    
+
     for name, param in execution_engine.named_parameters():
       if param.requires_grad:
         EMA.register('exec', name, param.data)
 
-  stats = {
-    'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
-    'train_accs': [], 'val_accs': [], 'val_accs_ts': [],
-    'best_val_acc': -1, 'model_t': 0,
-  }
-
-  if valB_loader:
-    stats['valB_accs'] = []
-    stats['valB_accs_ts'] = []
-    stats['bestB_val_acc'] = []
-
-  t, epoch, reward_moving_average = 0, 0, 0
+  t, epoch, reward_moving_average = stats['model_t'], stats['model_epoch'], 0
 
   set_mode('train', [program_generator, execution_engine, baseline_model])
 
@@ -484,7 +505,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         if args.debug_every < float('inf'):
           check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else 'MAC')
           check_grad_num_nans(program_generator, 'FiLMGen')
-        
+
         if args.model_type == 'MAC':
           if args.train_program_generator == 1 or args.train_execution_engine == 1:
             if args.grad_clip > 0:
@@ -492,7 +513,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
               torch.nn.utils.clip_grad_norm(allMacParams, args.grad_clip)
             pg_optimizer.step()
             ee_optimizer.step()
-            
+
             if args.exponential_moving_average_weight < 1.:
               for name, param in program_generator.named_parameters():
                 if param.requires_grad:
@@ -615,10 +636,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         if val_acc > stats['best_val_acc']:
           stats['best_val_acc'] = val_acc
           if valB_loader: stats['bestB_val_acc'] = valB_acc
-          stats['model_t'] = t
           best_pg_state = get_state(program_generator)
           best_ee_state = get_state(execution_engine)
           best_baseline_state = get_state(baseline_model)
+
+        stats['model_t'] = t
+        stats['model_epoch'] = epoch
 
         checkpoint = {
           'args': args.__dict__,
@@ -813,14 +836,14 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
-                
+
                 #'module_dropout': args.module_dropout,
                 'question_embedding_dropout': args.mac_question_embedding_dropout,
                 'stem_dropout': args.mac_stem_dropout,
                 'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
-                
+
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,

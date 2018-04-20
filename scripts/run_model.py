@@ -337,18 +337,20 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
       if args.betas_from:
         programs_pred[:,:,pg.module_dim:2*pg.module_dim] = loaded_betas.expand_as(
           programs_pred[:,:,pg.module_dim:2*pg.module_dim])
-    else:
+      film_params += [programs_pred.cpu().data.numpy()]
+    elif args.model_type == 'EE':
       programs_pred = pg.reinforce_sample(
                         questions_var,
                         temperature=args.temperature,
                         argmax=(args.sample_argmax == 1))
+    else:
+      programs_pred = pg(questions_var)
 
-    film_params += [programs_pred.cpu().data.numpy()]
     scores = ee(feats_var, programs_pred, save_activations=True)
     probs = F.softmax(scores)
 
     _, preds = scores.data.cpu().max(1)
-    all_programs.append(programs_pred.data.cpu().clone())
+    # all_programs.append(programs_pred.data.cpu().clone())
     all_scores.append(scores.data.cpu().clone())
     all_probs.append(probs.data.cpu().clone())
     all_preds.append(preds.cpu().clone())
@@ -359,7 +361,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   acc = float(num_correct) / num_samples
   print('Got %d / %d = %.2f correct' % (num_correct, num_samples, 100 * acc))
   print('%.2fs to evaluate' % (start - time.time()))
-  all_programs = torch.cat(all_programs, 0)
+  # all_programs = torch.cat(all_programs, 0)
   all_scores = torch.cat(all_scores, 0)
   all_probs = torch.cat(all_probs, 0)
   all_preds = torch.cat(all_preds, 0).squeeze().numpy()
@@ -368,10 +370,10 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     with h5py.File(args.output_h5, 'w') as fout:
       fout.create_dataset('scores', data=all_scores.numpy())
       fout.create_dataset('probs', data=all_probs.numpy())
-      fout.create_dataset('predicted_programs', data=all_programs.numpy())
+      # fout.create_dataset('predicted_programs', data=all_programs.numpy())
 
   # Save FiLM params
-  np.save('film_params', np.vstack(film_params))
+  # np.save('film_params', np.vstack(film_params))
   if isinstance(questions, list):
     np.save('q_types', np.vstack(q_types))
 

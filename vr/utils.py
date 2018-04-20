@@ -10,9 +10,9 @@ import inspect
 import json
 import torch
 
-from vr.models import ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel
-from vr.models import FiLMedNet
-from vr.models import FiLMGen
+from vr.models import (
+  ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel, FiLMedNet,
+  FiLMGen, MAC)
 
 def invert_dict(d):
   return {v: k for k, v in d.items()}
@@ -45,13 +45,15 @@ def load_program_generator(path, model_type='PG+EE'):
   checkpoint = load_cpu(path)
   kwargs = checkpoint['program_generator_kwargs']
   state = checkpoint['program_generator_state']
-  if model_type == 'FiLM':
+  if model_type in ['FiLM', 'MAC']:
     print('Loading FiLMGen from ' + path)
     kwargs = get_updated_args(kwargs, FiLMGen)
     model = FiLMGen(**kwargs)
-  else:
+  elif model_type == 'EE':
     print('Loading PG from ' + path)
     model = Seq2Seq(**kwargs)
+  else:
+    raise ValueError()
   model.load_state_dict(state)
   return model, kwargs
 
@@ -65,9 +67,14 @@ def load_execution_engine(path, verbose=True, model_type='PG+EE'):
     print('Loading FiLMedNet from ' + path)
     kwargs = get_updated_args(kwargs, FiLMedNet)
     model = FiLMedNet(**kwargs)
-  else:
+  elif model_type == 'EE':
     print('Loading EE from ' + path)
     model = ModuleNet(**kwargs)
+  elif model_type == 'MAC':
+    print('Loading MAC from ' + path)
+    model = MAC(**kwargs)
+  else:
+    raise ValueError()
   cur_state = model.state_dict()
   model.load_state_dict(state)
   return model, kwargs

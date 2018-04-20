@@ -5,7 +5,7 @@ THIS_SCRIPT_DIR=`dirname $0`
 python $THIS_SCRIPT_DIR/../train_model.py \
   --model_type MAC \
   --feature_dim=3,64,64 \
-  --num_iterations 20000 \
+  --num_iterations 50000 \
   --checkpoint_every 100 \
   --record_loss_every 10 \
   --num_val_samples 1000 \
@@ -14,8 +14,8 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --batch_size 64 \
   --use_coords 1 \
   --module_stem_batchnorm 1 \
-  --module_stem_num_layers 6 \
-  --module_stem_subsample_layers 1,3 \
+  --module_stem_num_layers 4 \
+  --module_stem_subsample_layers 1 \
   --module_stem_kernel_size 3 \
   --mac_question_embedding_dropout 0. \
   --mac_stem_dropout 0. \

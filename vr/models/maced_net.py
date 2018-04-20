@@ -11,7 +11,7 @@ import torchvision.models
 import math
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
-from vr.models.layers import build_classifier
+from vr.models.layers import build_classifier, build_stem
 import vr.programs
 
 class MAC(nn.Module):
@@ -25,21 +25,18 @@ class MAC(nn.Module):
                stem_padding,
                num_modules,
                module_dim,
-               #module_dropout=0,
-               
-               question_embedding_dropout=0.08,
-               stem_dropout = 0.18,
-               memory_dropout = 0.15,
-               read_dropout = 0.15,
-               use_prior_control_in_control_unit = False,
-               
-               sharing_params_patterns=(0,1,1,1),
-               use_self_attention=0,
-               use_memory_gate=0,
-               classifier_fc_layers=(512,),
-               classifier_batchnorm=False,
-               classifier_dropout=0.15,
-               use_coords=1,
+               question_embedding_dropout,
+               stem_dropout,
+               memory_dropout,
+               read_dropout,
+               use_prior_control_in_control_unit,
+               sharing_params_patterns,
+               use_self_attention,
+               use_memory_gate,
+               classifier_fc_layers,
+               classifier_batchnorm,
+               classifier_dropout,
+               use_coords,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
                verbose=True,
@@ -54,7 +51,7 @@ class MAC(nn.Module):
     self.timing = False
 
     self.num_modules = num_modules
-    
+
     self.question_embedding_dropout = question_embedding_dropout
     self.memory_dropout = memory_dropout
     self.read_dropout = read_dropout
@@ -81,7 +78,7 @@ class MAC(nn.Module):
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(stem_feature_dim, module_dim,
-                           num_layers=stem_num_layers, dropout=stem_dropout, with_batchnorm=stem_batchnorm,
+                           num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
                            kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
                            subsample_layers=stem_subsample_layers, acceptEvenKernel=True)
 
@@ -137,15 +134,15 @@ class MAC(nn.Module):
 
     #parameters for initial memory and control vectors
     self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
-    
+
     #first transformation of question embeddings
     self.init_question_transformer = nn.Linear(self.module_dim, self.module_dim)
     self.init_question_non_linear = nn.Tanh()
 
     self.vocab = vocab
-    
+
     self.question_embedding_dropout_module = nn.Dropout(p=self.question_embedding_dropout)
-    
+
     # Initialize output classifier
     self.classifier = OutputUnit(module_dim, classifier_fc_layers, num_answers,
                                  with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
@@ -162,13 +159,13 @@ class MAC(nn.Module):
       self.cf_input = None
 
     q_context, q_rep, q_mask = ques
-    
+
     original_q_rep = q_rep
-    
+
     q_rep = self.question_embedding_dropout_module(q_rep)
-    
+
     init_control = q_rep
-    
+
     q_rep = self.init_question_non_linear(self.init_question_transformer(q_rep))
 
     stem_batch_coords = None
@@ -188,7 +185,7 @@ class MAC(nn.Module):
 
     control_storage[:,0,:] = init_control
     memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
-    
+
     if self.memory_dropout > 0. and not isTest:
       dropout_mask_memory = Variable(torch.Tensor(N, self.module_dim).fill_(
         self.memory_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
@@ -239,11 +236,11 @@ class MAC(nn.Module):
 class OutputUnit(nn.Module):
   def __init__(self, module_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
     super(OutputUnit, self).__init__()
-    
+
     self.dropout = dropout
-    
+
     self.question_transformer = nn.Linear(module_dim, module_dim)
-    
+
     input_dim = 2*module_dim
     hidden_units = [input_dim] + [h for h in hidden_units] + [num_outputs]
     self.linears = []
@@ -255,17 +252,17 @@ class OutputUnit(nn.Module):
       mod = nn.BatchNorm1d(nin) if with_batchnorm else None
       if mod is not None: self.add_module('MAC_BatchNormFC' + str(i), mod)
       self.batchnorms.append(mod)
-    
+
     self.non_linear = nn.ReLU()
     self.dropout_module = nn.Dropout(p=self.dropout)
 
     init_modules(self.modules())
 
   def forward(self, final_memory, original_q_rep, isTest=False):
-    
+
     transformed_question = self.question_transformer(original_q_rep)
     features = torch.cat([final_memory, transformed_question], 1)
-    
+
     for i, (linear, batchnorm) in enumerate(zip(self.linears, self.batchnorms)):
       if batchnorm is not None:
         features = batchnorm(features)
@@ -273,7 +270,7 @@ class OutputUnit(nn.Module):
       features = linear(features)
       if i < len(self.linears) - 1:
         features = self.non_linear(features)
-    
+
     return features
 
 class WriteUnit(nn.Module):
@@ -287,7 +284,7 @@ class WriteUnit(nn.Module):
 
     if use_self_attention:
       self.current_control_transformer = nn.Linear(common_dim, common_dim)
-      
+
       self.control_transformer = nn.Linear(common_dim, 1) #Eq (w2.1)
       self.acc_memory_transformer = nn.Linear(common_dim, common_dim, bias=False)
       self.pre_memory_transformer = nn.Linear(common_dim, common_dim) #Eq (w2.3)
@@ -351,7 +348,7 @@ class ReadUnit(nn.Module):
 
     #Eq (r3.1)
     self.read_attention_transformer = nn.Linear(common_dim, 1)
-    
+
     self.non_linear = nn.ReLU()
     self.read_dropout_module = nn.Dropout(p=self.read_dropout)
 
@@ -361,14 +358,14 @@ class ReadUnit(nn.Module):
               memory_dropout=0., dropout_mask_memory=None, isTest=False):
 
     #pre_memory(Nxd), current_control(Nxd), image(NxdxHxW)
-    
+
     image = image.transpose(1,2).transpose(2,3) #NXHxWxd
     trans_image = image
-    
+
     if not isTest and memory_dropout > 0.:
       assert dropout_mask_memory is not None
       pre_memory = (pre_memory / (1. - memory_dropout)) * dropout_mask_memory
-    
+
     pre_memory = self.read_dropout_module(pre_memory)
     trans_image = self.read_dropout_module(trans_image)
 
@@ -386,11 +383,11 @@ class ReadUnit(nn.Module):
     #Eq (r3.1)
     trans_current_control = current_control.unsqueeze(1).unsqueeze(2).expand(trans_intermediate.size()) #NxHxWxd
     intermediate_score = trans_current_control * trans_intermediate
-    
+
     intermediate_score = self.non_linear(intermediate_score)
-    
+
     intermediate_score = self.read_dropout_module(intermediate_score)
-    
+
     scores = self.read_attention_transformer(intermediate_score).squeeze(3) #NxHxWx1 -> NxHxW
 
     #Eq (r3.2): softmax
@@ -493,41 +490,3 @@ def init_modules(modules, init='uniform'):
     if isinstance(m, (nn.Conv2d, nn.Linear)):
       init_params(m.weight)
       if m.bias is not None: constant(m.bias, 0.)
-
-def build_stem(feature_dim, module_dim, num_layers=2, dropout=0., with_batchnorm=True,
-               kernel_size=[3], stride=[1], padding=None, subsample_layers=None, acceptEvenKernel=False):
-  layers = []
-  prev_dim = feature_dim
-
-  if len(kernel_size) == 1:
-    kernel_size = num_layers * kernel_size
-  if len(stride) == 1:
-    stride = num_layers * stride
-  if padding == None:
-    padding = num_layers * [None]
-  if len(padding) == 1:
-    padding = num_layers * padding
-
-  if subsample_layers is None:
-    subsample_layers = []
-
-  for i, cur_kernel_size, cur_stride, cur_padding in zip(range(num_layers), kernel_size, stride, padding):
-    if cur_padding is None:  # Calculate default padding when None provided
-      if cur_kernel_size % 2 == 0 and not acceptEvenKernel:
-        raise(NotImplementedError)
-      cur_padding = cur_kernel_size // 2
-    
-    if with_batchnorm:
-      layers.append(nn.BatchNorm2d(prev_dim))
-    
-    if dropout > 0.:
-      layers.append(nn.Dropout2d(p=dropout))
-    
-    layers.append(nn.Conv2d(prev_dim, module_dim,
-                            kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding))
-    
-    layers.append(nn.ReLU(inplace=True))
-    if i in subsample_layers:
-      layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-    prev_dim = module_dim
-  return nn.Sequential(*layers)

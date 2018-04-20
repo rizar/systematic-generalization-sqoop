@@ -4,7 +4,7 @@ THIS_SCRIPT_DIR=`dirname $0`
 
 python $THIS_SCRIPT_DIR/../train_model.py \
   --model_type FiLM \
-  --num_iterations 20000 \
+  --num_iterations 50000 \
   --feature_dim=3,64,64 \
   --checkpoint_every 100 \
   --record_loss_every 10 \

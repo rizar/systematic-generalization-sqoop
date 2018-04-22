@@ -823,9 +823,9 @@ def get_execution_engine(args):
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
-                'use_self_attention': args.mac_use_self_attention,
-                'use_memory_gate': args.mac_use_memory_gate,
-                'use_memory_lstm': args.mac_use_memory_lstm,
+                'use_self_attention': args.mac_use_self_attention == 1,
+                'use_memory_gate': args.mac_use_memory_gate == 1,
+                'use_memory_lstm': args.mac_use_memory_lstm == 1,
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,

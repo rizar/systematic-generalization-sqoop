@@ -140,14 +140,15 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
 parser.add_argument('--mac_sharing_params_patterns', default='', type=str) # List of 0/1's
-parser.add_argument('--mac_use_self_attention', default=1, type=int)
-parser.add_argument('--mac_use_memory_gate', default=1, type=int)
+parser.add_argument('--mac_use_self_attention', default=0, type=int)
+parser.add_argument('--mac_use_memory_gate', default=0, type=int)
 
 parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float)
 parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
 parser.add_argument('--mac_memory_dropout', default=0.15, type=float)
 parser.add_argument('--mac_read_dropout', default=0.15, type=float)
 parser.add_argument('--mac_use_prior_control_in_control_unit', default=0, type=int)
+parser.add_argument('--mac_use_memory_lstm', default=0, type=int)
 parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
 
 parser.add_argument('--exponential_moving_average_weight', default=1., type=float)
@@ -824,6 +825,7 @@ def get_execution_engine(args):
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
+                'use_memory_lstm': args.mac_use_memory_lstm,
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,

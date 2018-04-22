@@ -226,7 +226,7 @@ class MAC(nn.Module):
                         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory, isTest=isTest)
 
       #compute write memeory at the current step
-      memory_i = writeUnit(memory_storage, control_storage, state_memory_storage, read_i, fn_num+1)
+      memory_i, state_memory_i = writeUnit(memory_storage, control_storage, state_memory_storage, read_i, fn_num+1)
 
       if save_activations:
         self.memory_outputs.append(memory_i)
@@ -237,6 +237,11 @@ class MAC(nn.Module):
         memory_updated = memory_storage.clone()
         memory_updated[:,(fn_num+1),:] = memory_updated[:,(fn_num+1),:] + memory_i
         memory_storage = memory_updated
+        
+        if state_memory_i is not None:
+          state_memory_updated = state_memory_storage.clone()
+          state_memory_updated[:,(fn_num+1),:] = state_memory_updated[:,(fn_num+1),:] + state_memory_i
+          state_memory_storage = state_memory_updated
 
     if save_activations:
       self.cf_input = final_module_output
@@ -330,6 +335,7 @@ class WriteUnit(nn.Module):
       res_memory = _output * self.lstm_non_linear(current_state)
     else:
       #Eq (w1)
+      current_state = None
       res_memory = self.control_memory_transfomer( torch.cat([current_read, prior_memory], 1) ) #N x d
 
     if self.use_self_attention:
@@ -361,7 +367,7 @@ class WriteUnit(nn.Module):
       gated_control = self.non_linear(gated_control-1)
       res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
 
-    return res_memory
+    return res_memory, current_state
 
 
 class ReadUnit(nn.Module):

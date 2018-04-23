@@ -97,7 +97,7 @@ class TMAC(nn.Module):
       self.InputUnits = []
       for i in range(len(self.children_list)):
         mod = InputUnit(module_dim)
-        self.add_module('InputUnit' + str(i+1), mod)
+        self.add_module('InputUnit' + str(i), mod)
         self.InputUnits.append(mod)
 
     if self.sharing_params_patterns[1]:

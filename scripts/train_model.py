@@ -139,6 +139,7 @@ parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', type=s
 parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
+parser.add_argument('--mac_write_unit', default='original', type=str)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 
@@ -841,6 +842,7 @@ def get_execution_engine(args):
                 'stem_dropout': args.mac_stem_dropout,
                 'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
+                'write_unit': args.mac_write_unit,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
 
                 'use_self_attention': args.mac_use_self_attention,

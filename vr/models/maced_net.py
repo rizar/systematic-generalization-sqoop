@@ -29,18 +29,19 @@ class MAC(nn.Module):
                stem_dropout,
                memory_dropout,
                read_dropout,
+               write_unit,
                use_prior_control_in_control_unit,
                use_self_attention,
                use_memory_gate,
-               classifier_fc_layers,
                classifier_batchnorm,
+               classifier_fc_layers,
                classifier_dropout,
                use_coords,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
                verbose=True,
                ):
-    super(MAC, self).__init__()
+    super().__init__()
 
     num_answers = len(vocab['answer_idx_to_token'])
 
@@ -96,9 +97,14 @@ class MAC(nn.Module):
     self.add_module('ReadUnit', mod)
     self.readUnit = mod
 
-    mod = WriteUnit(module_dim,
-                    use_self_attention=self.use_self_attention,
-                    use_memory_gate=self.use_memory_gate)
+    if write_unit == 'original':
+      mod = WriteUnit(module_dim,
+                      use_self_attention=self.use_self_attention,
+                      use_memory_gate=self.use_memory_gate)
+    elif write_unit == 'gru':
+      mod = GRUWriteUnit(module_dim)
+    else:
+      raise ValueError(mod)
     self.add_module('WriteUnit', mod)
     self.writeUnit = mod
 
@@ -205,7 +211,7 @@ class MAC(nn.Module):
 
 class OutputUnit(nn.Module):
   def __init__(self, module_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
-    super(OutputUnit, self).__init__()
+    super().__init__()
 
     self.dropout = dropout
 
@@ -242,6 +248,16 @@ class OutputUnit(nn.Module):
         features = self.non_linear(features)
 
     return features
+
+
+class GRUWriteUnit(nn.Module):
+  def __init__(self, common_dim):
+    super().__init__()
+    self.gru = nn.GRUCell(common_dim, common_dim)
+
+  def forward(self, memories, controls, current_read, idx):
+    return self.gru.forward(current_read, memories[:, idx - 1, :])
+
 
 class WriteUnit(nn.Module):
   def __init__(self, common_dim, use_self_attention=False, use_memory_gate=False):
@@ -305,7 +321,7 @@ class WriteUnit(nn.Module):
 
 class ReadUnit(nn.Module):
   def __init__(self, common_dim, read_dropout=0.):
-    super(ReadUnit, self).__init__()
+    super().__init__()
     self.common_dim = common_dim
     self.read_dropout = read_dropout
 
@@ -375,7 +391,7 @@ class ReadUnit(nn.Module):
 
 class ControlUnit(nn.Module):
   def __init__(self, common_dim, use_prior_control_in_control_unit=False):
-    super(ControlUnit, self).__init__()
+    super().__init__()
     self.common_dim = common_dim
     self.use_prior_control_in_control_unit = use_prior_control_in_control_unit
 
@@ -410,7 +426,7 @@ class ControlUnit(nn.Module):
 
 class InputUnit(nn.Module):
   def __init__(self, common_dim):
-    super(InputUnit, self).__init__()
+    super().__init__()
     self.common_dim = common_dim
     self.question_transformer = nn.Linear(common_dim, common_dim)
 

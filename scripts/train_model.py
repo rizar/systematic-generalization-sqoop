@@ -511,7 +511,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else args.model_type)
           check_grad_num_nans(program_generator, 'FiLMGen')
 
-        if args.model_type == 'MAC':
+        if args.model_type == 'MAC' or args.model_type == 'TMAC':
           if args.train_program_generator == 1 or args.train_execution_engine == 1:
             if args.grad_clip > 0:
               allMacParams = itertools.chain(program_generator.parameters(), execution_engine.parameters())
@@ -519,7 +519,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             pg_optimizer.step()
             ee_optimizer.step()
 
-            if args.exponential_moving_average_weight < 1.:
+            if args.exponential_moving_average_weight < 1. or args.model_type == 'MAC':
               for name, param in program_generator.named_parameters():
                 if param.requires_grad:
                   param.data = EMA('prog', name, param.data)

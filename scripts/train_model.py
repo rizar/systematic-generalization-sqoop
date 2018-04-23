@@ -149,7 +149,6 @@ parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
 parser.add_argument('--mac_memory_dropout', default=0.15, type=float)
 parser.add_argument('--mac_read_dropout', default=0.15, type=float)
 parser.add_argument('--mac_use_prior_control_in_control_unit', default=0, type=int)
-parser.add_argument('--mac_use_memory_lstm', default=0, type=int)
 parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
 
 parser.add_argument('--exponential_moving_average_weight', default=1., type=float)

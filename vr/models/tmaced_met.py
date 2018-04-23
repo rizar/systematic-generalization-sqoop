@@ -27,14 +27,9 @@ class TMAC(nn.Module):
                children_list,
                module_dim,
                question_embedding_dropout,
-               #stem_dropout,
-               #memory_dropout,
                read_dropout,
                use_prior_control_in_control_unit,
                sharing_params_patterns,
-               #use_self_attention,
-               #use_memory_gate,
-               #use_memory_lstm,
                classifier_fc_layers,
                classifier_batchnorm,
                classifier_dropout,
@@ -61,9 +56,6 @@ class TMAC(nn.Module):
     self.module_dim = module_dim
 
     self.sharing_params_patterns = [True if p == 1 else False for p in sharing_params_patterns]
-    #self.use_self_attention = use_self_attention == 1
-    #self.use_memory_gate = use_memory_gate == 1
-    #self.use_memory_lstm = use_memory_lstm == 1
 
     self.use_coords_freq = use_coords
     self.debug_every = debug_every
@@ -129,26 +121,18 @@ class TMAC(nn.Module):
     if self.sharing_params_patterns[3]:
       self.WriteUnits = {}
       for num in unique_children_number:
-        mod = WriteUnit(num, module_dim) #,
-                        #use_self_attention=self.use_self_attention,
-                        #use_memory_gate=self.use_memory_gate,
-                        #use_memory_lstm=self.use_memory_lstm)
+        mod = WriteUnit(num, module_dim)
         self.add_module('WriteUnit' + str(num), mod)
         self.WriteUnits[num] = mod
     else:
       self.WriteUnits = []
       for i, children in enumerate(self.children_list):
-        mod = WriteUnit(len(children), module_dim) #,
-                        #use_self_attention=self.use_self_attention,
-                        #use_memory_gate=self.use_memory_gate,
-                        #use_memory_lstm=self.use_memory_lstm)
+        mod = WriteUnit(len(children), module_dim)
         self.add_module('WriteUnit' + str(i), mod)
         self.WriteUnits.append(mod)
 
     #parameters for initial memory and control vectors
     self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
-    #if self.use_memory_lstm:
-    #  self.init_state_memory = nn.Parameter(torch.zeros(module_dim).cuda())
 
     #first transformation of question embeddings
     self.init_question_transformer = nn.Linear(self.module_dim, self.module_dim)
@@ -200,18 +184,6 @@ class TMAC(nn.Module):
 
     control_storage[:,0,:] = init_control
     memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
-    
-    #if self.use_memory_lstm:
-    #  state_memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
-    #  state_memory_storage[:,0,:] = self.init_state_memory.expand(N, self.module_dim)
-    #else:
-    #  state_memory_storage = None
-
-    #if self.memory_dropout > 0. and not isTest:
-    #  dropout_mask_memory = Variable(torch.Tensor(N, self.module_dim).fill_(
-    #    self.memory_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
-    #else:
-    #  dropout_mask_memory = None
 
     for nidx in range(len(self.children_list)-1,-1,-1):
       children = self.children_list[nidx]
@@ -233,10 +205,6 @@ class TMAC(nn.Module):
         writeUnit = self.WriteUnits[num_children]
       else:
         writeUnit = self.WriteUnits[nidx]
-      
-      #controlUnit = self.ControlUnits[fn_num] if isinstance(self.ControlUnits, list) else self.ControlUnits
-      #readUnit = self.ReadUnits[fn_num] if isinstance(self.ReadUnits, list) else self.ReadUnits
-      #writeUnit = self.WriteUnits[fn_num] if isinstance(self.WriteUnits, list) else self.WriteUnits
 
       #compute question representation specific to this cell
       q_rep_i = inputUnit(q_rep) # N x d
@@ -262,12 +230,10 @@ class TMAC(nn.Module):
       else:
         for child in children:
           pre_memories.append(memory_storage[:,child+1,:])
-      read_i = readUnit(pre_memories, control_updated[:,(nidx+1),:], feats) #, 
-                        #memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory, isTest=isTest)
+      read_i = readUnit(pre_memories, control_updated[:,(nidx+1),:], feats)
 
       #compute write memeory at the current step
       memory_i = writeUnit(memory_storage, read_i, children)
-      #memory_i, state_memory_i = writeUnit(memory_storage, control_storage, state_memory_storage, read_i, fn_num+1)
 
       if save_activations:
         self.memory_outputs.append(memory_i)
@@ -278,11 +244,6 @@ class TMAC(nn.Module):
         memory_updated = memory_storage.clone()
         memory_updated[:,(nidx+1),:] = memory_updated[:,(nidx+1),:] + memory_i
         memory_storage = memory_updated
-        
-      #  if state_memory_i is not None:
-      #    state_memory_updated = state_memory_storage.clone()
-      #    state_memory_updated[:,(fn_num+1),:] = state_memory_updated[:,(fn_num+1),:] + state_memory_i
-      #    state_memory_storage = state_memory_updated
 
     if save_activations:
       self.cf_input = final_module_output
@@ -332,40 +293,16 @@ class OutputUnit(nn.Module):
     return features
 
 class WriteUnit(nn.Module):
-  def __init__(self, num_children, common_dim): #, use_self_attention=False, use_memory_gate=False, use_memory_lstm=False):
+  def __init__(self, num_children, common_dim):
     super(WriteUnit, self).__init__()
     self.num_children = num_children
     if num_children == 0: self.num_children += 1
     self.common_dim = common_dim
-    #self.use_self_attention = use_self_attention
-    #self.use_memory_gate = use_memory_gate
-    #self.use_memory_lstm = use_memory_lstm
-    
-    #if self.use_memory_lstm:
-    #  self.forget_transfomer = nn.Linear(2 * common_dim, common_dim)
-    #  self.input_transfomer = nn.Linear(2 * common_dim, common_dim)
-    #  self.output_transfomer = nn.Linear(2 * common_dim, common_dim)
-    #  self.state_transfomer = nn.Linear(2 * common_dim, common_dim)
-    #  self.lstm_non_linear = nn.ReLU()
-    #else:
-    #  self.control_memory_transfomer = nn.Linear(2 * common_dim, common_dim) #Eq (w1)
     
     self.control_memory_transfomer = nn.Linear((self.num_children+1) * common_dim, common_dim) #Eq (w1)
 
-    #if use_self_attention:
-    #  self.current_control_transformer = nn.Linear(common_dim, common_dim)
-
-    #  self.control_transformer = nn.Linear(common_dim, 1) #Eq (w2.1)
-    #  self.acc_memory_transformer = nn.Linear(common_dim, common_dim, bias=False)
-    #  self.pre_memory_transformer = nn.Linear(common_dim, common_dim) #Eq (w2.3)
-
-    #if use_memory_gate:
-    #  self.gated_control_transformer = nn.Linear(common_dim, 1) #Eq (w3.1)
-    #  self.non_linear = nn.Sigmoid()
-
     init_modules(self.modules())
 
-  #def forward(self, memories, controls, state_memories, current_read, idx):
   def forward(self, memories, current_read, _idx):
     #memories (N x num_cell x d), controls (N x num_cell x d), current_read (N x d), idx (int starting from 1)
     
@@ -376,53 +313,9 @@ class WriteUnit(nn.Module):
     for i in idx:
       prior_memories.append(memories[:,i+1,:])
     
-    #prior_memory = memories[:,idx-1,:]
-    #if self.use_memory_lstm:
-    #  assert state_memories is not None
-    #  _forget = self.lstm_non_linear( self.forget_transfomer( torch.cat([current_read, prior_memory], 1) ) )
-    #  _input = self.lstm_non_linear( self.input_transfomer( torch.cat([current_read, prior_memory], 1) ) )
-    #  _output = self.lstm_non_linear( self.output_transfomer( torch.cat([current_read, prior_memory], 1) ) )
-    #  _state = self.lstm_non_linear( self.state_transfomer( torch.cat([current_read, prior_memory], 1) ) )
-      
-    #  current_state = _forget * state_memories[:,idx-1,:] + _input * _state
-    #  res_memory = _output * self.lstm_non_linear(current_state)
-    #else:
-      #Eq (w1)
-    #  current_state = None
-    #  res_memory = self.control_memory_transfomer( torch.cat([current_read, prior_memory], 1) ) #N x d
-    
     res_memory = self.control_memory_transfomer( torch.cat(prior_memories + [current_read], 1) ) #N x d
 
-    #if self.use_self_attention:
-    #  current_control = controls[:,idx,:] # N x d
-    #  current_control = self.current_control_transformer(current_control) # N x d in code
-    #  if idx > 1:
-        #Eq (w2.1)
-    #    previous_controls = controls[:,1:idx,:] # N x (idx-1) x d
-    #    cscores = previous_controls * current_control.unsqueeze(1) # N x (idx-1) x d
-    #    cscores = self.control_transformer(cscores).squeeze(2) # N x (idx -1)
-    #    cscores = torch.exp(cscores - cscores.max(1, keepdim=True)[0]) # N x (idx -1)
-    #    cscores = cscores / cscores.sum(1, keepdim=True) # N x (idx -1)
-
-        #Eq (w2.2)
-    #    previous_memories = memories[:,1:idx,:] #N x (idx-1) x d
-    #    acc_memory = (previous_memories * cscores.unsqueeze(2)).sum(1) # N x d
-
-        #Eq (w2.3)
-    #    res_memory = self.acc_memory_transformer(acc_memory) + self.pre_memory_transformer(res_memory)
-    #  else:
-        #Eq (w2.3) as there is no m_i^{sa} in this case
-    #    res_memory = self.pre_memory_transformer(res_memory)
-
-    #if self.use_memory_gate:
-      #Eq (w3.1)
-    #  gated_control = self.gated_control_transformer(controls[:,idx,:]) #N x 1
-
-      #Eq (w3.2)
-    #  gated_control = self.non_linear(gated_control-1)
-    #  res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
-
-    return res_memory #, current_state
+    return res_memory
 
 
 class ReadUnit(nn.Module):
@@ -452,17 +345,12 @@ class ReadUnit(nn.Module):
 
     init_modules(self.modules())
 
-  def forward(self, pre_memories, current_control, image): #,
-              #memory_dropout=0., dropout_mask_memory=None, isTest=False):
+  def forward(self, pre_memories, current_control, image):
 
     #pre_memory(Nxd), current_control(Nxd), image(NxdxHxW)
 
     image = image.transpose(1,2).transpose(2,3) #NXHxWxd
     trans_image = image
-
-    #if not isTest and memory_dropout > 0.:
-    #  assert dropout_mask_memory is not None
-    #  pre_memory = (pre_memory / (1. - memory_dropout)) * dropout_mask_memory
     
     trans_image = self.read_dropout_module(trans_image)
     for i in range(len(pre_memories)):

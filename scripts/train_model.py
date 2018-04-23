@@ -139,7 +139,6 @@ parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', type=s
 parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
-parser.add_argument('--mac_sharing_params_patterns', default='', type=str) # List of 0/1's
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 
@@ -844,7 +843,6 @@ def get_execution_engine(args):
                 'read_dropout': args.mac_read_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
 
-                'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),

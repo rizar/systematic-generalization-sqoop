@@ -30,7 +30,6 @@ class MAC(nn.Module):
                memory_dropout,
                read_dropout,
                use_prior_control_in_control_unit,
-               sharing_params_patterns,
                use_self_attention,
                use_memory_gate,
                classifier_fc_layers,
@@ -58,7 +57,6 @@ class MAC(nn.Module):
 
     self.module_dim = module_dim
 
-    self.sharing_params_patterns = [True if p == 1 else False for p in sharing_params_patterns]
     self.use_self_attention = use_self_attention == 1
     self.use_memory_gate = use_memory_gate == 1
 
@@ -84,53 +82,25 @@ class MAC(nn.Module):
 
 
     #Define units
-    if self.sharing_params_patterns[0]:
+    self.inputUnits = []
+    for i in range(self.num_modules):
       mod = InputUnit(module_dim)
-      self.add_module('InputUnit', mod)
-      self.InputUnits = mod
-    else:
-      self.InputUnits = []
-      for i in range(self.num_modules):
-        mod = InputUnit(module_dim)
-        self.add_module('InputUnit' + str(i+1), mod)
-        self.InputUnits.append(mod)
+      self.add_module('InputUnit' + str(i+1), mod)
+      self.inputUnits.append(mod)
 
-    if self.sharing_params_patterns[1]:
-      mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
-      self.add_module('ControlUnit', mod)
-      self.ControlUnits = mod
-    else:
-      self.ControlUnits = []
-      for i in range(self.num_modules):
-        mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
-        self.add_module('ControlUnit' + str(i+1), mod)
-        self.ControlUnits.append(mod)
+    mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
+    self.add_module('ControlUnit', mod)
+    self.controlUnit = mod
 
-    if self.sharing_params_patterns[2]:
-      mod = ReadUnit(module_dim, self.read_dropout)
-      self.add_module('ReadUnit', mod)
-      self.ReadUnits = mod
-    else:
-      self.ReadUnits = []
-      for i in range(self.num_modules):
-        mod = ReadUnit(module_dim, self.read_dropout)
-        self.add_module('ReadUnit' + str(i+1), mod)
-        self.ReadUnits.append(mod)
+    mod = ReadUnit(module_dim, self.read_dropout)
+    self.add_module('ReadUnit', mod)
+    self.readUnit = mod
 
-    if self.sharing_params_patterns[3]:
-      mod = WriteUnit(module_dim,
-                      use_self_attention=self.use_self_attention,
-                      use_memory_gate=self.use_memory_gate)
-      self.add_module('WriteUnit', mod)
-      self.WriteUnits = mod
-    else:
-      self.WriteUnits = []
-      for i in range(self.num_modules):
-        mod = WriteUnit(module_dim,
-                        use_self_attention=self.use_self_attention,
-                        use_memory_gate=self.use_memory_gate)
-        self.add_module('WriteUnit' + str(i+1), mod)
-        self.WriteUnits.append(mod)
+    mod = WriteUnit(module_dim,
+                    use_self_attention=self.use_self_attention,
+                    use_memory_gate=self.use_memory_gate)
+    self.add_module('WriteUnit', mod)
+    self.writeUnit = mod
 
     #parameters for initial memory and control vectors
     self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
@@ -193,10 +163,10 @@ class MAC(nn.Module):
       dropout_mask_memory = None
 
     for fn_num in range(self.num_modules):
-      inputUnit = self.InputUnits[fn_num] if isinstance(self.InputUnits, list) else self.InputUnits
-      controlUnit = self.ControlUnits[fn_num] if isinstance(self.ControlUnits, list) else self.ControlUnits
-      readUnit = self.ReadUnits[fn_num] if isinstance(self.ReadUnits, list) else self.ReadUnits
-      writeUnit = self.WriteUnits[fn_num] if isinstance(self.WriteUnits, list) else self.WriteUnits
+      inputUnit = self.inputUnits[fn_num] if isinstance(self.inputUnits, list) else self.inputUnits
+      controlUnit = self.controlUnit[fn_num] if isinstance(self.controlUnit, list) else self.controlUnit
+      readUnit = self.readUnit[fn_num] if isinstance(self.readUnit, list) else self.readUnit
+      writeUnit = self.writeUnit[fn_num] if isinstance(self.writeUnit, list) else self.writeUnit
 
       #compute question representation specific to this cell
       q_rep_i = inputUnit(q_rep) # N x d

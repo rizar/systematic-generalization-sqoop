@@ -429,7 +429,7 @@ class ReadUnit(nn.Module):
   def __init__(self, num_children, common_dim, prefix='', read_dropout=0.):
     super(ReadUnit, self).__init__()
     self.num_children = num_children
-    if num_children == 1: self.num_children += 1
+    if num_children == 0: self.num_children += 1
     self.common_dim = common_dim
     self.read_dropout = read_dropout
 

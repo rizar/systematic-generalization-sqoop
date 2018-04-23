@@ -155,7 +155,7 @@ parser.add_argument('--exponential_moving_average_weight', default=1., type=floa
 
 #TMAC options
 parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str)
-parser.add_argument('--tmac_sharing_params_patterns', default=[0,1,1,1], type=parse_int_list)
+parser.add_argument('--tmac_sharing_params_patterns', default='0,1,1,1')
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)

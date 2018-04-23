@@ -28,6 +28,11 @@ class TreeGenerator:
       if depth == '': depth = 3
       else: depth = int(depth)
       return heapCompleteBinaryTree(depth)
+    elif tree_type.startswith('pairChainTree'):
+      depth = tree_type[len('pairChainTree'):]
+      if depth == '': depth = 7
+      else: depth = int(depth)
+      return heapPairChainTree(depth)
     else:
       raise(NotImplemented)
 
@@ -39,6 +44,14 @@ def heapCompleteBinaryTree(depth=3):
   for _ in range(num):
     childrens.append([])
   return childrens
+
+def heapPairChainTree(depth=8):
+  children = [[1,2]]
+  for i in range(3,2*depth+1):
+    children.append([i])
+  children.append([])
+  children.append([])
+  return children
 
 def completeBinaryTree(depth=3):
   arities = []

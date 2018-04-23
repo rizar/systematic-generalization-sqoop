@@ -155,6 +155,7 @@ parser.add_argument('--exponential_moving_average_weight', default=1., type=floa
 
 #TMAC options
 parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str)
+parser.add_argument('--tmac_sharing_params_patterns', default=[0,1,1,1], type=parse_int_list)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -879,7 +880,7 @@ def get_execution_engine(args):
                 'read_dropout': args.mac_read_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 
-                'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
+                'sharing_params_patterns': parse_int_list(args.tmac_sharing_params_patterns),
                 #'use_self_attention': args.mac_use_self_attention == 1,
                 #'use_memory_gate': args.mac_use_memory_gate == 1,
                 #'use_memory_lstm': args.mac_use_memory_lstm == 1,

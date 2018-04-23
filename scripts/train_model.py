@@ -38,6 +38,7 @@ from vr.models import (ModuleNet,
                        RTFiLMedNet,
                        FiLMGen,
                        MAC,
+                       TMAC,
                        HeteroModuleNet,
                        NMNFiLMedNet)
 from vr.treeGenerator import TreeGenerator
@@ -74,7 +75,7 @@ parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['NMNFilm', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC'])
+  choices=['NMNFilm', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC', 'TMAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -152,6 +153,9 @@ parser.add_argument('--mac_use_memory_lstm', default=0, type=int)
 parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
 
 parser.add_argument('--exponential_moving_average_weight', default=1., type=float)
+
+#TMAC options
+parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str)
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -338,7 +342,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
-  if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
+  if args.model_type in ['TMAC', 'NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
     program_generator, pg_kwargs = get_program_generator(args)
     pg_optimizer = optim_method(program_generator.parameters(),
                                 lr=args.learning_rate,
@@ -346,7 +350,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
+  if args.model_type in ['TMAC', 'NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     ee_optimizer = optim_method(execution_engine.parameters(),
                                 lr=args.learning_rate,
@@ -470,7 +474,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           pg_optimizer.zero_grad()
           program_generator.reinforce_backward(centered_reward.cuda())
           pg_optimizer.step()
-      elif args.model_type == 'FiLM' or args.model_type == 'MAC':
+      elif args.model_type == 'FiLM' or args.model_type == 'MAC' or args.model_type == 'TMAC':
         if args.set_execution_engine_eval == 1:
           set_mode('eval', [execution_engine])
         programs_pred = program_generator(questions_var)
@@ -483,10 +487,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           pdb.set_trace()
         loss.backward()
         if args.debug_every < float('inf'):
-          check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else 'MAC')
+          check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else args.model_type)
           check_grad_num_nans(program_generator, 'FiLMGen')
         
-        if args.model_type == 'MAC':
+        if args.model_type == 'MAC' or args.model_type == 'TMAC':
           if args.train_program_generator == 1 or args.train_execution_engine == 1:
             if args.grad_clip > 0:
               allMacParams = itertools.chain(program_generator.parameters(), execution_engine.parameters())
@@ -494,7 +498,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             pg_optimizer.step()
             ee_optimizer.step()
             
-            if args.exponential_moving_average_weight < 1.:
+            if args.exponential_moving_average_weight < 1. and args.model_type == 'MAC':
               for name, param in program_generator.named_parameters():
                 if param.requires_grad:
                   param.data = EMA('prog', name, param.data)
@@ -681,7 +685,7 @@ def get_program_generator(args):
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
     }
-    if args.model_type in ['NMNFilm', 'FiLM', 'Tfilm', 'RTfilm', 'MAC']:
+    if args.model_type in ['NMNFilm', 'FiLM', 'Tfilm', 'RTfilm', 'MAC', 'TMAC']:
       kwargs['parameter_efficient'] = args.program_generator_parameter_efficient == 1
       kwargs['output_batchnorm'] = args.rnn_output_batchnorm == 1
       kwargs['bidirectional'] = args.bidirectional == 1
@@ -698,7 +702,7 @@ def get_program_generator(args):
         kwargs['num_modules'] = len(treeArities)
       elif args.model_type == 'NMNFilm':
         kwargs['num_modules'] = len(vocab['program_token_to_idx'])
-      if args.model_type == 'MAC':
+      if args.model_type == 'MAC' or args.model_type == 'TMAC':
         kwargs['taking_context'] = True
         kwargs['variational_embedding_dropout'] = args.variational_embedding_dropout
       kwargs['module_num_layers'] = args.module_num_layers
@@ -834,6 +838,38 @@ def get_execution_engine(args):
                 'print_verbose_every': args.print_verbose_every,
                 }
       ee = MAC(**kwargs)
+    elif args.model_type == 'TMAC':
+      kwargs = {
+                'vocab': vocab,
+                'feature_dim': parse_int_list(args.feature_dim),
+                'stem_num_layers': args.module_stem_num_layers,
+                'stem_batchnorm': args.module_stem_batchnorm == 1,
+                'stem_kernel_size': args.module_stem_kernel_size,
+                'stem_subsample_layers': args.module_stem_subsample_layers,
+                'stem_stride': args.module_stem_stride,
+                'stem_padding': args.module_stem_padding,
+                'children_list': TreeGenerator().genHeap(args.tree_type_for_TMAC),
+                'module_dim': args.module_dim,
+                
+                #'module_dropout': args.module_dropout,
+                'question_embedding_dropout': args.mac_question_embedding_dropout,
+                #'stem_dropout': args.mac_stem_dropout,
+                #'memory_dropout': args.mac_memory_dropout,
+                'read_dropout': args.mac_read_dropout,
+                'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
+                
+                'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
+                #'use_self_attention': args.mac_use_self_attention == 1,
+                #'use_memory_gate': args.mac_use_memory_gate == 1,
+                #'use_memory_lstm': args.mac_use_memory_lstm == 1,
+                'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
+                'classifier_batchnorm': args.classifier_batchnorm == 1,
+                'classifier_dropout': args.classifier_dropout,
+                'use_coords': args.use_coords,
+                'debug_every': args.debug_every,
+                'print_verbose_every': args.print_verbose_every,
+                }
+      ee = TMAC(**kwargs)
     elif args.model_type == 'Hetero':
       kwargs = {
         'vocab': vocab,
@@ -982,6 +1018,9 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type == 'MAC':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred, isTest=True)
+    elif args.model_type == 'TMAC':
+      programs_pred = program_generator(questions_var)
+      scores = execution_engine(feats_var, programs_pred)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
 

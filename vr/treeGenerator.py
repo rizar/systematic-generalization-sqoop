@@ -22,6 +22,24 @@ class TreeGenerator:
     else:
       raise(NotImplemented)
 
+def genHeap(self, tree_type='complete_binary'):
+  if tree_type.startswith('complete_binary'):
+    depth = tree_type[len('complete_binary'):]
+    if depth == '': depth = 3
+    else: depth = int(depth)
+    return heapCompleteBinaryTree(depth)
+  else:
+    raise(NotImplemented)
+
+def heapCompleteBinaryTree(depth=3):
+  childrens = []
+  num = 2 ** depth
+  for i in range(num-1):
+    childrens.append([i*2+1,i*2+2])
+  for _ in range(num):
+    childrens.append([])
+  return childrens
+
 def completeBinaryTree(depth=3):
   arities = []
   def gen(idepth=0):

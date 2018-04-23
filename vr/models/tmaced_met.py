@@ -95,7 +95,7 @@ class TMAC(nn.Module):
       self.InputUnits = mod
     else:
       self.InputUnits = []
-      for i in range(self.num_modules):
+      for i in range(len(self.children_list)):
         mod = InputUnit(module_dim)
         self.add_module('InputUnit' + str(i+1), mod)
         self.InputUnits.append(mod)

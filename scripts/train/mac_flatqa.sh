@@ -24,8 +24,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --mac_use_prior_control_in_control_unit 0 \
   --variational_embedding_dropout 0. \
   --module_dim 256 \
-  --num_modules 4 \
-  --mac_sharing_params_patterns 0,1,1,1 \
+  --num_modules 12 \
   --mac_use_self_attention 0 \
   --mac_use_memory_gate 0 \
   --bidirectional 1 \

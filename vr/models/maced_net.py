@@ -29,20 +29,19 @@ class MAC(nn.Module):
                stem_dropout,
                memory_dropout,
                read_dropout,
+               write_unit,
                use_prior_control_in_control_unit,
-               sharing_params_patterns,
                use_self_attention,
                use_memory_gate,
-               use_memory_lstm,
-               classifier_fc_layers,
                classifier_batchnorm,
+               classifier_fc_layers,
                classifier_dropout,
                use_coords,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
                verbose=True,
                ):
-    super(MAC, self).__init__()
+    super().__init__()
 
     num_answers = len(vocab['answer_idx_to_token'])
 
@@ -59,7 +58,6 @@ class MAC(nn.Module):
 
     self.module_dim = module_dim
 
-    self.sharing_params_patterns = [True if p == 1 else False for p in sharing_params_patterns]
     self.use_self_attention = use_self_attention == 1
     self.use_memory_gate = use_memory_gate == 1
     self.use_memory_lstm = use_memory_lstm == 1
@@ -86,55 +84,30 @@ class MAC(nn.Module):
 
 
     #Define units
-    if self.sharing_params_patterns[0]:
+    self.inputUnits = []
+    for i in range(self.num_modules):
       mod = InputUnit(module_dim)
-      self.add_module('InputUnit', mod)
-      self.InputUnits = mod
-    else:
-      self.InputUnits = []
-      for i in range(self.num_modules):
-        mod = InputUnit(module_dim)
-        self.add_module('InputUnit' + str(i+1), mod)
-        self.InputUnits.append(mod)
+      self.add_module('InputUnit' + str(i+1), mod)
+      self.inputUnits.append(mod)
 
-    if self.sharing_params_patterns[1]:
-      mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
-      self.add_module('ControlUnit', mod)
-      self.ControlUnits = mod
-    else:
-      self.ControlUnits = []
-      for i in range(self.num_modules):
-        mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
-        self.add_module('ControlUnit' + str(i+1), mod)
-        self.ControlUnits.append(mod)
+    mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
+    self.add_module('ControlUnit', mod)
+    self.controlUnit = mod
 
-    if self.sharing_params_patterns[2]:
-      mod = ReadUnit(module_dim, self.read_dropout)
-      self.add_module('ReadUnit', mod)
-      self.ReadUnits = mod
-    else:
-      self.ReadUnits = []
-      for i in range(self.num_modules):
-        mod = ReadUnit(module_dim, self.read_dropout)
-        self.add_module('ReadUnit' + str(i+1), mod)
-        self.ReadUnits.append(mod)
+    mod = ReadUnit(module_dim, self.read_dropout)
+    self.add_module('ReadUnit', mod)
+    self.readUnit = mod
 
-    if self.sharing_params_patterns[3]:
+    if write_unit == 'original':
       mod = WriteUnit(module_dim,
                       use_self_attention=self.use_self_attention,
-                      use_memory_gate=self.use_memory_gate,
-                      use_memory_lstm=self.use_memory_lstm)
-      self.add_module('WriteUnit', mod)
-      self.WriteUnits = mod
+                      use_memory_gate=self.use_memory_gate)
+    elif write_unit == 'gru':
+      mod = GRUWriteUnit(module_dim)
     else:
-      self.WriteUnits = []
-      for i in range(self.num_modules):
-        mod = WriteUnit(module_dim,
-                        use_self_attention=self.use_self_attention,
-                        use_memory_gate=self.use_memory_gate,
-                        use_memory_lstm=self.use_memory_lstm)
-        self.add_module('WriteUnit' + str(i+1), mod)
-        self.WriteUnits.append(mod)
+      raise ValueError(mod)
+    self.add_module('WriteUnit', mod)
+    self.writeUnit = mod
 
     #parameters for initial memory and control vectors
     self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
@@ -205,10 +178,10 @@ class MAC(nn.Module):
       dropout_mask_memory = None
 
     for fn_num in range(self.num_modules):
-      inputUnit = self.InputUnits[fn_num] if isinstance(self.InputUnits, list) else self.InputUnits
-      controlUnit = self.ControlUnits[fn_num] if isinstance(self.ControlUnits, list) else self.ControlUnits
-      readUnit = self.ReadUnits[fn_num] if isinstance(self.ReadUnits, list) else self.ReadUnits
-      writeUnit = self.WriteUnits[fn_num] if isinstance(self.WriteUnits, list) else self.WriteUnits
+      inputUnit = self.inputUnits[fn_num] if isinstance(self.inputUnits, list) else self.inputUnits
+      controlUnit = self.controlUnit[fn_num] if isinstance(self.controlUnit, list) else self.controlUnit
+      readUnit = self.readUnit[fn_num] if isinstance(self.readUnit, list) else self.readUnit
+      writeUnit = self.writeUnit[fn_num] if isinstance(self.writeUnit, list) else self.writeUnit
 
       #compute question representation specific to this cell
       q_rep_i = inputUnit(q_rep) # N x d
@@ -252,7 +225,7 @@ class MAC(nn.Module):
 
 class OutputUnit(nn.Module):
   def __init__(self, module_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
-    super(OutputUnit, self).__init__()
+    super().__init__()
 
     self.dropout = dropout
 
@@ -289,6 +262,16 @@ class OutputUnit(nn.Module):
         features = self.non_linear(features)
 
     return features
+
+
+class GRUWriteUnit(nn.Module):
+  def __init__(self, common_dim):
+    super().__init__()
+    self.gru = nn.GRUCell(common_dim, common_dim)
+
+  def forward(self, memories, controls, current_read, idx):
+    return self.gru.forward(current_read, memories[:, idx - 1, :])
+
 
 class WriteUnit(nn.Module):
   def __init__(self, common_dim, use_self_attention=False, use_memory_gate=False, use_memory_lstm=False):
@@ -372,7 +355,7 @@ class WriteUnit(nn.Module):
 
 class ReadUnit(nn.Module):
   def __init__(self, common_dim, read_dropout=0.):
-    super(ReadUnit, self).__init__()
+    super().__init__()
     self.common_dim = common_dim
     self.read_dropout = read_dropout
 
@@ -442,7 +425,7 @@ class ReadUnit(nn.Module):
 
 class ControlUnit(nn.Module):
   def __init__(self, common_dim, use_prior_control_in_control_unit=False):
-    super(ControlUnit, self).__init__()
+    super().__init__()
     self.common_dim = common_dim
     self.use_prior_control_in_control_unit = use_prior_control_in_control_unit
 
@@ -477,7 +460,7 @@ class ControlUnit(nn.Module):
 
 class InputUnit(nn.Module):
   def __init__(self, common_dim):
-    super(InputUnit, self).__init__()
+    super().__init__()
     self.common_dim = common_dim
     self.question_transformer = nn.Linear(common_dim, common_dim)
 

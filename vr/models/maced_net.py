@@ -245,7 +245,7 @@ class MAC(nn.Module):
         transformed_parts = [part_transform(part)
                              for part_transform, part in zip(self.part_transforms, parts)]
         read_input = transformed_parts[0] + transformed_parts[1]
-      elif self.read_connect == 'memory':
+      elif self.read_connect == 'last':
         read_input = memory_storage[:,fn_num,:]
       else:
         raise ValueError(self.read_connect)

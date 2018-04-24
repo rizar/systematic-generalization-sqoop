@@ -73,6 +73,8 @@ parser.add_argument('--num_train_samples', default=None, type=int)
 parser.add_argument('--num_val_samples', default=None, type=int)
 parser.add_argument('--shuffle_train_data', default=1, type=int)
 
+parser.add_argument('--percent_of_data_for_training', default=1., type=float)
+
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
   choices=['NMNFilm', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC', 'TMAC'])
@@ -293,6 +295,7 @@ def main(args):
     'question_families': question_families,
     'max_samples': args.num_train_samples,
     'num_workers': args.loader_num_workers,
+    'percent_of_data': args.percent_of_data_for_training,
   }
   val_loader_kwargs = {
     'question_h5': args.val_question_h5,

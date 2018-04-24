@@ -13,7 +13,7 @@ import io
 import torch
 from torch.utils.data import Dataset, DataLoader
 from torch.utils.data.dataloader import default_collate
-
+import random, math
 import vr.programs
 from vr.programs import ProgramConverter
 
@@ -25,11 +25,17 @@ def _dataset_to_tensor(dset, mask=None):
   tensor = torch.LongTensor(arr)
   return tensor
 
+def _gen_subsample_mask(num, percent=1.0):
+  chosen_num = math.floor(num * percent)
+  mask = np.full((num,), False)
+  selected_ids = np.asarray(random.sample(range(num), chosen_num), dtype='int32')
+  mask[selected_ids] = True
+  return mask
 
 class ClevrDataset(Dataset):
   def __init__(self, question_h5, feature_h5_path, vocab, mode='prefix',
                image_h5=None, max_samples=None, question_families=None,
-               image_idx_start_from=None):
+               image_idx_start_from=None, percent_of_data=1.0):
     mode_choices = ['prefix', 'postfix']
     if mode not in mode_choices:
       raise ValueError('Invalid mode "%s"' % mode)
@@ -52,6 +58,10 @@ class ClevrDataset(Dataset):
     if image_idx_start_from is not None:
       all_image_idxs = np.asarray(question_h5['image_idxs'])
       mask = all_image_idxs >= image_idx_start_from
+    
+    if percent_of_data < 1.0:
+      num_example = np.asarray(question_h5['image_idxs']).shape[0]
+      mask = _gen_subsample_mask(num_example, percent_of_data)
 
     # Data from the question file is small, so read it all into memory
     print('Reading question data into memory')
@@ -140,6 +150,8 @@ class ClevrDataLoader(DataLoader):
 
     vocab = kwargs.pop('vocab')
     mode = kwargs.pop('mode', 'prefix')
+    
+    percent_of_data = kwargs.pop('percent_of_data', 1.)
 
     question_families = kwargs.pop('question_families', None)
     max_samples = kwargs.pop('max_samples', None)
@@ -151,7 +163,8 @@ class ClevrDataLoader(DataLoader):
                                   image_h5=self.image_h5,
                                   max_samples=max_samples,
                                   question_families=question_families,
-                                  image_idx_start_from=image_idx_start_from)
+                                  image_idx_start_from=image_idx_start_from,
+                                  percent_of_data=percent_of_data)
     kwargs['collate_fn'] = clevr_collate
     super(ClevrDataLoader, self).__init__(self.dataset, **kwargs)
 

@@ -38,6 +38,7 @@ class MAC(nn.Module):
                use_coords,
                write_unit,
                read_connect,
+               noisy_controls,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
                verbose=True,
@@ -146,6 +147,11 @@ class MAC(nn.Module):
         self.part_transforms.append(mod)
         self.add_module("part_transform_" + str(i), mod)
 
+    self.noisy_controls = noisy_controls
+    if noisy_controls:
+      self.compute_mu = nn.Linear(self.module_dim, self.module_dim)
+      self.compute_logvar = nn.Linear(self.module_dim, self.module_dim)
+
     init_modules(self.modules())
 
   def forward(self, x, ques, isTest=False, save_activations=False):
@@ -212,6 +218,17 @@ class MAC(nn.Module):
       connect = connect - 1000 * connect_mask.unsqueeze(0)
       connect = torch.nn.Softmax(dim=2)(connect)
       connections.append(connect)
+
+    if self.noisy_controls:
+      mu = self.compute_mu(controls)
+      logvar = self.compute_logvar(controls)
+      std = (0.5 * logvar).exp()
+      noise = Variable(torch.randn(*std.size())).cuda()
+      noisy_controls = mu + std * noise
+      # max returns a tuple of (max, argmax)
+      self.vib_costs = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp())).sum(2).max(1)[0]
+    else:
+      noisy_controls = controls
 
     for fn_num in range(self.num_modules):
       inputUnit = self.inputUnits[fn_num]

@@ -144,6 +144,7 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
 parser.add_argument('--mac_read_connect', default='last', type=str)
+parser.add_argument('--mac_vib_coof', default=0., type=float)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 
@@ -505,6 +506,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         programs_pred = program_generator(questions_var)
         scores = execution_engine(feats_var, programs_pred)
         loss = loss_fn(scores, answers_var)
+        if args.mac_vib_coof:
+          loss += args.mac_vib_coof * execution_engine.vib_costs.sum()
+
 
         pg_optimizer.zero_grad()
         ee_optimizer.zero_grad()
@@ -853,6 +857,7 @@ def get_execution_engine(args):
                 'read_dropout': args.mac_read_dropout,
                 'write_unit': args.mac_write_unit,
                 'read_connect': args.mac_read_connect,
+                'noisy_controls': bool(args.mac_vib_coof),
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,

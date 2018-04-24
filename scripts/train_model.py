@@ -522,7 +522,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             pg_optimizer.step()
             ee_optimizer.step()
 
-            if args.exponential_moving_average_weight < 1. or args.model_type == 'MAC':
+            if args.exponential_moving_average_weight < 1. and args.model_type == 'MAC':
               for name, param in program_generator.named_parameters():
                 if param.requires_grad:
                   param.data = EMA('prog', name, param.data)

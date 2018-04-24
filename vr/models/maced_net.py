@@ -180,10 +180,7 @@ class MAC(nn.Module):
       self.feats = feats
     N, _, H, W = feats.size()
 
-    control_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
     memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
-
-    control_storage[:,0,:] = init_control
     memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
 
     if self.memory_dropout > 0. and not isTest:

@@ -252,12 +252,12 @@ class MAC(nn.Module):
 
       #compute read at the current step
       read_i = self.readUnit(
-        read_input, controls[:,(fn_num+1),:], feats,
+        read_input, noisy_controls[:,(fn_num+1),:], feats,
         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory,
         isTest=isTest)
 
       #compute write memeory at the current step
-      memory_i = self.writeUnit(memory_storage, controls, read_i, fn_num+1)
+      memory_i = self.writeUnit(memory_storage, noisy_controls, read_i, fn_num+1)
 
       if fn_num == (self.num_modules - 1):
         final_module_output = memory_i

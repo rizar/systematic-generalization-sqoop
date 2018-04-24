@@ -187,7 +187,9 @@ class MAC(nn.Module):
         controls[fn_num], q_rep_i, q_context, q_mask)
       controls.append(control_i)
       control_scores.append(control_scores_i)
-    control_storage = torch.cat([c.unsqueeze(1) for c in controls], 1)
+    controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x T x D
+
+
 
     for fn_num in range(self.num_modules):
       inputUnit = self.inputUnits[fn_num]
@@ -197,12 +199,12 @@ class MAC(nn.Module):
 
       #compute read at the current step
       read_i = self.readUnit(
-        memory_storage[:,fn_num,:], control_storage[:,(fn_num+1),:], feats,
+        memory_storage[:,fn_num,:], controls[:,(fn_num+1),:], feats,
         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory,
         isTest=isTest)
 
       #compute write memeory at the current step
-      memory_i = self.writeUnit(memory_storage, control_storage, read_i, fn_num+1)
+      memory_i = self.writeUnit(memory_storage, controls, read_i, fn_num+1)
 
       if fn_num == (self.num_modules - 1):
         final_module_output = memory_i
@@ -212,8 +214,8 @@ class MAC(nn.Module):
         memory_storage = memory_updated
 
       if save_activations:
-        self.control_outputs.append(control_i)
-        self.control_scores.append(control_scores_i)
+        self.control_outputs.append(controls[fn_num + 1])
+        self.control_scores.append(control_scores[fn_num + 1])
         self.memory_outputs.append(memory_i)
 
     if save_activations:

@@ -141,6 +141,7 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
+parser.add_argument('--mac_read_connect', default='memory', type=str)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 
@@ -847,6 +848,7 @@ def get_execution_engine(args):
                 'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
                 'write_unit': args.mac_write_unit,
+                'read_connect': args.mac_read_connect,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,

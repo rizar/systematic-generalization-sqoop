@@ -133,7 +133,7 @@ class MAC(nn.Module):
 
     self.pre_connects = []
     self.part_transforms = []
-    num_pre_connect = {'memory': 0, 'one': 1, 'two': 2}
+    num_pre_connect = {'last': 0, 'one': 1, 'two': 2}
     for i in range(num_pre_connect[read_connect]):
       mod = nn.Linear(self.module_dim, self.module_dim)
       self.pre_connects.append(mod)

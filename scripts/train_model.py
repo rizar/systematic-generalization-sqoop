@@ -518,7 +518,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             pg_optimizer.step()
             ee_optimizer.step()
 
-            if args.exponential_moving_average_weight < 1. or args.model_type == 'MAC':
+            if args.exponential_moving_average_weight < 1. and args.model_type == 'MAC':
               for name, param in program_generator.named_parameters():
                 if param.requires_grad:
                   param.data = EMA('prog', name, param.data)
@@ -850,7 +850,7 @@ def get_execution_engine(args):
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
-                
+
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,
@@ -871,14 +871,14 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'children_list': TreeGenerator().genHeap(args.tree_type_for_TMAC),
                 'module_dim': args.module_dim,
-                
+
                 #'module_dropout': args.module_dropout,
                 'question_embedding_dropout': args.mac_question_embedding_dropout,
                 #'stem_dropout': args.mac_stem_dropout,
                 #'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
-                
+
                 'sharing_params_patterns': parse_int_list(args.mac_sharing_params_patterns),
                 #'use_self_attention': args.mac_use_self_attention == 1,
                 #'use_memory_gate': args.mac_use_memory_gate == 1,

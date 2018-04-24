@@ -29,7 +29,6 @@ class MAC(nn.Module):
                stem_dropout,
                memory_dropout,
                read_dropout,
-               write_unit,
                use_prior_control_in_control_unit,
                use_self_attention,
                use_memory_gate,
@@ -37,6 +36,7 @@ class MAC(nn.Module):
                classifier_fc_layers,
                classifier_dropout,
                use_coords,
+               write_unit,
                debug_every=float('inf'),
                print_verbose_every=float('inf'),
                verbose=True,
@@ -103,6 +103,10 @@ class MAC(nn.Module):
                       use_memory_gate=self.use_memory_gate)
     elif write_unit == 'gru':
       mod = GRUWriteUnit(module_dim)
+    elif write_unit == 'lastread':
+      mod = LastReadWriteUnit()
+    elif write_unit == 'noop':
+      mod = NoOpWriteUnit()
     else:
       raise ValueError(mod)
     self.add_module('WriteUnit', mod)
@@ -131,6 +135,7 @@ class MAC(nn.Module):
     if save_activations:
       self.feats = None
       self.control_outputs = []
+      self.control_scores = []
       self.memory_outputs = []
       self.cf_input = None
 
@@ -169,31 +174,24 @@ class MAC(nn.Module):
       dropout_mask_memory = None
 
     for fn_num in range(self.num_modules):
-      inputUnit = self.inputUnits[fn_num] if isinstance(self.inputUnits, list) else self.inputUnits
-      controlUnit = self.controlUnit[fn_num] if isinstance(self.controlUnit, list) else self.controlUnit
-      readUnit = self.readUnit[fn_num] if isinstance(self.readUnit, list) else self.readUnit
-      writeUnit = self.writeUnit[fn_num] if isinstance(self.writeUnit, list) else self.writeUnit
+      inputUnit = self.inputUnits[fn_num]
 
       #compute question representation specific to this cell
       q_rep_i = inputUnit(q_rep) # N x d
 
       #compute control at the current step
-      control_i = controlUnit(control_storage[:,fn_num,:], q_rep_i, q_context, q_mask)
-      if save_activations:
-        self.control_outputs.append(control_i)
+      control_i, control_scores_i = self.controlUnit(
+        control_storage[:,fn_num,:], q_rep_i, q_context, q_mask)
       control_updated = control_storage.clone()
       control_updated[:,(fn_num+1),:] = control_updated[:,(fn_num+1),:] + control_i
       control_storage = control_updated
 
       #compute read at the current step
-      read_i = readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats,
+      read_i = self.readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats,
                         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory, isTest=isTest)
 
       #compute write memeory at the current step
-      memory_i = writeUnit(memory_storage, control_storage, read_i, fn_num+1)
-
-      if save_activations:
-        self.memory_outputs.append(memory_i)
+      memory_i = self.writeUnit(memory_storage, control_storage, read_i, fn_num+1)
 
       if fn_num == (self.num_modules - 1):
         final_module_output = memory_i
@@ -201,6 +199,11 @@ class MAC(nn.Module):
         memory_updated = memory_storage.clone()
         memory_updated[:,(fn_num+1),:] = memory_updated[:,(fn_num+1),:] + memory_i
         memory_storage = memory_updated
+
+      if save_activations:
+        self.control_outputs.append(control_i)
+        self.control_scores.append(control_scores_i)
+        self.memory_outputs.append(memory_i)
 
     if save_activations:
       self.cf_input = final_module_output
@@ -250,6 +253,18 @@ class OutputUnit(nn.Module):
     return features
 
 
+class NoOpWriteUnit(nn.Module):
+
+  def forward(self, memories, controls, current_read, idx):
+    return torch.zeros_like(current_read)
+
+
+class LastReadWriteUnit(nn.Module):
+
+  def forward(self, memories, controls, current_read, idx):
+    return current_read
+
+
 class GRUWriteUnit(nn.Module):
   def __init__(self, common_dim):
     super().__init__()
@@ -265,7 +280,7 @@ class WriteUnit(nn.Module):
     self.common_dim = common_dim
     self.use_self_attention = use_self_attention
     self.use_memory_gate = use_memory_gate
-    
+
     self.control_memory_transfomer = nn.Linear(2 * common_dim, common_dim) #Eq (w1)
 
     if use_self_attention:
@@ -283,7 +298,7 @@ class WriteUnit(nn.Module):
 
   def forward(self, memories, controls, current_read, idx):
     #memories (N x num_cell x d), controls (N x num_cell x d), current_read (N x d), idx (int starting from 1)
-    
+
     prior_memory = memories[:,idx-1,:]
     #Eq (w1)
     res_memory = self.control_memory_transfomer( torch.cat([current_read, prior_memory], 1) ) #N x d
@@ -423,7 +438,7 @@ class ControlUnit(nn.Module):
     #Eq (c2.3)
     control = (context * scores.unsqueeze(2)).sum(1) #Nxd
 
-    return control
+    return control, scores
 
 class InputUnit(nn.Module):
   def __init__(self, common_dim):

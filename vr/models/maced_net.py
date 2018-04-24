@@ -173,6 +173,9 @@ class MAC(nn.Module):
     else:
       dropout_mask_memory = None
 
+    # compute controls
+    controls = [init_control]
+    control_scores = [torch.zeros_like(q_context[:, :, 0])]
     for fn_num in range(self.num_modules):
       inputUnit = self.inputUnits[fn_num]
 
@@ -181,14 +184,22 @@ class MAC(nn.Module):
 
       #compute control at the current step
       control_i, control_scores_i = self.controlUnit(
-        control_storage[:,fn_num,:], q_rep_i, q_context, q_mask)
-      control_updated = control_storage.clone()
-      control_updated[:,(fn_num+1),:] = control_updated[:,(fn_num+1),:] + control_i
-      control_storage = control_updated
+        controls[fn_num], q_rep_i, q_context, q_mask)
+      controls.append(control_i)
+      control_scores.append(control_scores_i)
+    control_storage = torch.cat([c.unsqueeze(1) for c in controls], 1)
+
+    for fn_num in range(self.num_modules):
+      inputUnit = self.inputUnits[fn_num]
+
+      #compute question representation specific to this cell
+      q_rep_i = inputUnit(q_rep) # N x d
 
       #compute read at the current step
-      read_i = self.readUnit(memory_storage[:,fn_num,:], control_updated[:,(fn_num+1),:], feats,
-                        memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory, isTest=isTest)
+      read_i = self.readUnit(
+        memory_storage[:,fn_num,:], control_storage[:,(fn_num+1),:], feats,
+        memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory,
+        isTest=isTest)
 
       #compute write memeory at the current step
       memory_i = self.writeUnit(memory_storage, control_storage, read_i, fn_num+1)

@@ -143,6 +143,7 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
+parser.add_argument('--mac_read_connect', default='memory', type=str)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 
@@ -851,10 +852,11 @@ def get_execution_engine(args):
                 'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
                 'write_unit': args.mac_write_unit,
+                'read_connect': args.mac_read_connect,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
-                
+
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,
@@ -875,14 +877,13 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'children_list': TreeGenerator().genHeap(args.tree_type_for_TMAC),
                 'module_dim': args.module_dim,
-                
+
                 #'module_dropout': args.module_dropout,
                 'question_embedding_dropout': args.mac_question_embedding_dropout,
                 #'stem_dropout': args.mac_stem_dropout,
                 #'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
-                
                 'sharing_params_patterns': parse_int_list(args.tmac_sharing_params_patterns),
                 #'use_self_attention': args.mac_use_self_attention == 1,
                 #'use_memory_gate': args.mac_use_memory_gate == 1,

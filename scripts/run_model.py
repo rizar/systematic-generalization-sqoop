@@ -282,6 +282,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   all_scores, all_programs, all_correct = [], [], []
   all_probs = []
   all_preds = []
+  all_control_scores = []
   num_correct, num_samples = 0, 0
 
   loaded_gammas = None
@@ -355,6 +356,9 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     all_probs.append(probs.data.cpu().clone())
     all_preds.append(preds.cpu().clone())
     all_correct.append(preds == answers)
+    if args.model_type == 'MAC':
+      all_control_scores.append(
+        torch.cat([cs.unsqueeze(1) for cs in ee.control_scores], 1))
     if answers[0] is not None:
       num_correct += (preds == answers).sum()
     num_samples += preds.size(0)
@@ -367,18 +371,26 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   all_probs = torch.cat(all_probs, 0)
   all_preds = torch.cat(all_preds, 0).squeeze().numpy()
   all_correct = torch.cat(all_correct, 0)
+  # zero pad control scores
+  max_len = max(cs.size(2) for cs in all_control_scores)
+  for i in range(len(all_control_scores)):
+    all_control_scores[i] = torch.zeros(
+      (all_control_scores[i].size(0), all_control_scores[i].size(1), max_len))
+    all_control_scores[i][:, :, :all_control_scores[i].size(2)] = all_control_scores[i]
+  all_control_scores = torch.cat(all_control_scores, 0)
   if args.output_h5 is not None:
     print('Writing output to "%s"' % args.output_h5)
     with h5py.File(args.output_h5, 'w') as fout:
       fout.create_dataset('scores', data=all_scores.numpy())
       fout.create_dataset('probs', data=all_probs.numpy())
       fout.create_dataset('correct', data=all_correct.numpy())
+      fout.create_dataset('control_scores', data=all_control_scores.numpy())
       # fout.create_dataset('predicted_programs', data=all_programs.numpy())
 
   # Save FiLM params
   # np.save('film_params', np.vstack(film_params))
-  if isinstance(questions, list):
-    np.save('q_types', np.vstack(q_types))
+  # if isinstance(questions, list):
+  #   np.save('q_types', np.vstack(q_types))
 
   # Save FiLM param stats
   if args.output_program_stats_dir:

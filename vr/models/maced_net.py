@@ -129,8 +129,22 @@ class MAC(nn.Module):
     self.classifier = OutputUnit(module_dim, classifier_fc_layers, num_answers,
                                  with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
 
-    if read_connect == 'one':
-      self.pre_connect = nn.Linear(self.module_dim, self.module_dim)
+
+    self.pre_connects = []
+    self.part_transforms = []
+    num_pre_connect = {'memory': 0, 'one': 1, 'two': 2}
+    for i in range(num_pre_connect[read_connect]):
+      mod = nn.Linear(self.module_dim, self.module_dim)
+      self.pre_connects.append(mod)
+      self.add_module("pre_connect_" + str(i), mod)
+    if read_connect == 'two':
+      # if we connect a module to two modules, we should transform their contributions
+      # differently to preserve the information about
+      # what comes from the left and what comes from the right
+      for i in range(2):
+        mod = nn.Linear(self.module_dim, self.module_dim)
+        self.part_transforms.append(mod)
+        self.add_module("part_transform_" + str(i), mod)
 
     init_modules(self.modules())
 
@@ -194,10 +208,13 @@ class MAC(nn.Module):
       control_scores.append(control_scores_i)
     controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x T x D
 
-    connect = torch.bmm(controls, self.pre_connect(controls).permute(0, 2, 1)) # N x T x T
-    mask = Variable(torch.tril(torch.ones(connect.size(1), connect.size(2)))).cuda()
-    connect = connect - 1000 * mask.unsqueeze(0)
-    connect = torch.nn.Softmax(dim=2)(connect)
+    connect_mask = Variable(torch.tril(torch.ones(controls.size(1), controls.size(1)))).cuda()
+    connections = []
+    for pre_connect in self.pre_connects:
+      connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x T x T
+      connect = connect - 1000 * connect_mask.unsqueeze(0)
+      connect = torch.nn.Softmax(dim=2)(connect)
+      connections.append(connect)
 
     for fn_num in range(self.num_modules):
       inputUnit = self.inputUnits[fn_num]
@@ -205,16 +222,21 @@ class MAC(nn.Module):
       #compute question representation specific to this cell
       q_rep_i = inputUnit(q_rep) # N x d
 
-      #compute read at the current step
+      # compute the visual input to thread unit
+      parts = [torch.bmm(connect[:, [fn_num + 1], :], memory_storage).squeeze(1)
+               for connect in connections]  # (N x 1 x T) and (N x T x D)
       if self.read_connect == 'one':
-        read_input = torch.bmm(connect[:, [fn_num + 1], :], memory_storage).squeeze(1)
-        # (N x 1 x T) and (N x T x D)
+        read_input = parts[0]
       elif self.read_connect == 'two':
-        raise NotImplementedError()
+        transformed_parts = [part_transform(part)
+                             for part_transform, part in zip(self.part_transforms, parts)]
+        read_input = transformed_parts[0] + transformed_parts[1]
       elif self.read_connect == 'memory':
         read_input = memory_storage[:,fn_num,:]
       else:
         raise ValueError(self.read_connect)
+
+      #compute read at the current step
       read_i = self.readUnit(
         read_input, controls[:,(fn_num+1),:], feats,
         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory,

@@ -141,7 +141,7 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
-parser.add_argument('--mac_read_connect', default='memory', type=str)
+parser.add_argument('--mac_read_connect', default='last', type=str)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 

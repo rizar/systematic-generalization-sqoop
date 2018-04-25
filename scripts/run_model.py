@@ -283,6 +283,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   all_probs = []
   all_preds = []
   all_control_scores = []
+  all_connections = []
   num_correct, num_samples = 0, 0
 
   loaded_gammas = None
@@ -357,8 +358,8 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     all_preds.append(preds.cpu().clone())
     all_correct.append(preds == answers)
     if args.model_type == 'MAC':
-      all_control_scores.append(
-        torch.cat([cs.unsqueeze(1) for cs in ee.control_scores], 1))
+      all_control_scores.append(ee.control_scores.data.cpu().clone())
+      all_connections.append(torch.cat([conn.unsqueeze(1) for conn in ee.connections], 1).data.cpu().clone())
     if answers[0] is not None:
       num_correct += (preds == answers).sum()
     num_samples += preds.size(0)
@@ -371,6 +372,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   all_probs = torch.cat(all_probs, 0)
   all_preds = torch.cat(all_preds, 0).squeeze().numpy()
   all_correct = torch.cat(all_correct, 0)
+  all_connections = torch.cat(all_connections, 0)
   # zero pad control scores
   max_len = max(cs.size(2) for cs in all_control_scores)
   for i in range(len(all_control_scores)):
@@ -385,6 +387,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
       fout.create_dataset('probs', data=all_probs.numpy())
       fout.create_dataset('correct', data=all_correct.numpy())
       fout.create_dataset('control_scores', data=all_control_scores.numpy())
+      fout.create_dataset('connections', data=all_connections.numpy())
       # fout.create_dataset('predicted_programs', data=all_programs.numpy())
 
   # Save FiLM params

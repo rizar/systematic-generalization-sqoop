@@ -158,10 +158,6 @@ class MAC(nn.Module):
     # Initialize forward pass and externally viewable activations
     self.fwd_count += 1
     if save_activations:
-      self.feats = None
-      self.control_outputs = []
-      self.control_scores = []
-      self.memory_outputs = []
       self.cf_input = None
 
     q_context, q_rep, q_mask = ques
@@ -209,13 +205,14 @@ class MAC(nn.Module):
         controls[fn_num], q_rep_i, q_context, q_mask)
       controls.append(control_i)
       control_scores.append(control_scores_i)
-    controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x T x D
+    controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x M x D
+    control_scores = torch.cat([c.unsqueeze(1) for c in controls], 1).permute(1, 0, 2) # N x M x T
 
-    connect_mask = Variable(torch.tril(torch.ones(controls.size(1), controls.size(1)))).cuda()
+    disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).cuda()
     connections = []
     for pre_connect in self.pre_connects:
-      connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x T x T
-      connect = connect - 1000 * connect_mask.unsqueeze(0)
+      connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x M x M
+      connect = connect - 1000 * disconnect_mask.unsqueeze(0)
       connect = torch.nn.Softmax(dim=2)(connect)
       connections.append(connect)
 
@@ -238,7 +235,7 @@ class MAC(nn.Module):
 
       # compute the visual input to thread unit
       parts = [torch.bmm(connect[:, [fn_num + 1], :], memory_storage).squeeze(1)
-               for connect in connections]  # (N x 1 x T) and (N x T x D)
+               for connect in connections]  # (N x 1 x M) and (N x M x D)
       if self.read_connect == 'one':
         read_input = parts[0]
       elif self.read_connect == 'two':
@@ -266,13 +263,12 @@ class MAC(nn.Module):
         memory_updated[:,(fn_num+1),:] = memory_updated[:,(fn_num+1),:] + memory_i
         memory_storage = memory_updated
 
-      if save_activations:
-        self.control_outputs.append(controls[fn_num + 1])
-        self.control_scores.append(control_scores[fn_num + 1])
-        self.memory_outputs.append(memory_i)
-
     if save_activations:
       self.cf_input = final_module_output
+      self.controls = controls
+      self.control_scores = control_scores
+      self.memory_storage = memory_storage
+      self.connections = connections
 
     out = self.classifier(final_module_output, original_q_rep, isTest=isTest)
 

@@ -506,15 +506,17 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         programs_pred = program_generator(questions_var)
         scores = execution_engine(feats_var, programs_pred)
         loss = loss_fn(scores, answers_var)
+        full_loss = loss
         if args.mac_vib_coof:
-          loss += args.mac_vib_coof * execution_engine.vib_costs.sum()
+          print(execution_engine.vib_costs.mean())
+          full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()
 
 
         pg_optimizer.zero_grad()
         ee_optimizer.zero_grad()
         if args.debug_every <= -2:
           pdb.set_trace()
-        loss.backward()
+        full_loss.backward()
         if args.debug_every < float('inf'):
           check_grad_num_nans(execution_engine, 'FiLMedNet' if args.model_type == 'FiLM' else args.model_type)
           check_grad_num_nans(program_generator, 'FiLMGen')

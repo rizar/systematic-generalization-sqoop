@@ -411,6 +411,7 @@ class ReadUnit(nn.Module):
 
     #Eq (r2)
     self.intermediate_transformer = nn.Linear(2 * common_dim, common_dim)
+    self.intermediate_transformer_2 = nn.Linear(common_dim, common_dim)
 
     #Eq (r3.1)
     self.read_attention_transformer = nn.Linear(common_dim, 1)
@@ -445,6 +446,7 @@ class ReadUnit(nn.Module):
     #trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, image], 3)) #NxHxWxd
     trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, trans_image], 3)) #NxHxWxd
     trans_intermediate = self.non_linear(trans_intermediate)
+    trans_intermediate = self.intermediate_transformer_2(trans_intermediate)
 
     #Eq (r3.1)
     trans_current_control = current_control.unsqueeze(1).unsqueeze(2).expand(trans_intermediate.size()) #NxHxWxd

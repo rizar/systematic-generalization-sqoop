@@ -72,9 +72,10 @@ def load_execution_engine(path, verbose=True, model_type='PG+EE'):
     model = ModuleNet(**kwargs)
   elif model_type == 'MAC':
     print('Loading MAC from ' + path)
-    if not 'write_unit' in kwargs:
-      kwargs['write_unit'] = 'original'
-      del kwargs['sharing_params_patterns']
+    kwargs.setdefault('write_unit', 'original')
+    kwargs.setdefault('read_connect', 'last')
+    kwargs.setdefault('noisy_controls', False)
+    kwargs.pop('sharing_params_patterns', None)
     model = MAC(**kwargs)
   else:
     raise ValueError()

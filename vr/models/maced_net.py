@@ -161,13 +161,9 @@ class MAC(nn.Module):
       self.cf_input = None
 
     q_context, q_rep, q_mask = ques
-
     original_q_rep = q_rep
-
     q_rep = self.question_embedding_dropout_module(q_rep)
-
     init_control = q_rep
-
     q_rep = self.init_question_non_linear(self.init_question_transformer(q_rep))
 
     stem_batch_coords = None
@@ -180,6 +176,7 @@ class MAC(nn.Module):
     feats = self.stem(x)
     if save_activations:
       self.feats = feats
+      self.read_scores = []
     N, _, H, W = feats.size()
 
     memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
@@ -206,7 +203,7 @@ class MAC(nn.Module):
       controls.append(control_i)
       control_scores.append(control_scores_i)
     controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x M x D
-    control_scores = torch.cat([c.unsqueeze(1) for c in controls], 1).permute(1, 0, 2) # N x M x T
+    control_scores = torch.cat([c.unsqueeze(1) for c in control_scores], 1) # N x M x T
 
     disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).cuda()
     connections = []
@@ -218,12 +215,13 @@ class MAC(nn.Module):
 
     if self.noisy_controls:
       mu = self.compute_mu(controls)
-      logvar = self.compute_logvar(controls)
+      logvar = -5 + self.compute_logvar(controls)
       std = (0.5 * logvar).exp()
       noise = Variable(torch.randn(*std.size())).cuda()
+      kls = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp()))
+      vib_costs_each_step = kls.sum(2)
+      self.vib_costs = vib_costs_each_step.max(1)[0]
       noisy_controls = mu + std * noise
-      # max returns a tuple of (max, argmax)
-      self.vib_costs = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp())).sum(2).max(1)[0]
     else:
       noisy_controls = controls
 
@@ -248,7 +246,7 @@ class MAC(nn.Module):
         raise ValueError(self.read_connect)
 
       #compute read at the current step
-      read_i = self.readUnit(
+      read_i, read_scores_i = self.readUnit(
         read_input, noisy_controls[:,(fn_num+1),:], feats,
         memory_dropout=self.memory_dropout, dropout_mask_memory=dropout_mask_memory,
         isTest=isTest)
@@ -263,12 +261,16 @@ class MAC(nn.Module):
         memory_updated[:,(fn_num+1),:] = memory_updated[:,(fn_num+1),:] + memory_i
         memory_storage = memory_updated
 
+      if save_activations:
+        self.read_scores.append(read_scores_i)
+
     if save_activations:
       self.cf_input = final_module_output
       self.controls = controls
       self.control_scores = control_scores
       self.memory_storage = memory_storage
       self.connections = connections
+      self.read_scores = torch.cat([rs.unsqueeze(1) for rs in self.read_scores], 1)
 
     out = self.classifier(final_module_output, original_q_rep, isTest=isTest)
 
@@ -409,6 +411,7 @@ class ReadUnit(nn.Module):
 
     #Eq (r2)
     self.intermediate_transformer = nn.Linear(2 * common_dim, common_dim)
+    self.intermediate_transformer_2 = nn.Linear(common_dim, common_dim)
 
     #Eq (r3.1)
     self.read_attention_transformer = nn.Linear(common_dim, 1)
@@ -443,6 +446,7 @@ class ReadUnit(nn.Module):
     #trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, image], 3)) #NxHxWxd
     trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, trans_image], 3)) #NxHxWxd
     trans_intermediate = self.non_linear(trans_intermediate)
+    trans_intermediate = self.intermediate_transformer_2(trans_intermediate)
 
     #Eq (r3.1)
     trans_current_control = current_control.unsqueeze(1).unsqueeze(2).expand(trans_intermediate.size()) #NxHxWxd
@@ -465,7 +469,7 @@ class ReadUnit(nn.Module):
     readrep = readrep.view(readrep.shape[0], -1, readrep.shape[-1]) #N x (H*W) x d
     readrep = readrep.sum(1) #N x d
 
-    return readrep
+    return readrep, scores
 
 class ControlUnit(nn.Module):
   def __init__(self, common_dim, use_prior_control_in_control_unit=False):

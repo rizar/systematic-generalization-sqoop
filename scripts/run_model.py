@@ -30,8 +30,8 @@ from vr.preprocess import tokenize, encode
 
 
 parser = argparse.ArgumentParser()
-parser.add_argument('--program_generator', default='models/best.pt')
-parser.add_argument('--execution_engine', default='models/best.pt')
+parser.add_argument('--program_generator', default=None)
+parser.add_argument('--execution_engine', default=None)
 parser.add_argument('--baseline_model', default=None)
 parser.add_argument('--model_type', default='FiLM')
 parser.add_argument('--debug_every', default=float('inf'), type=float)
@@ -86,6 +86,9 @@ programs = {}  # NOTE: Useful for zero-shot program manipulation when in debug m
 def main(args):
   if args.debug_every <= 1:
     pdb.set_trace()
+  if not args.program_generator:
+    args.program_generator = args.execution_engine
+
   model = None
   if args.baseline_model is not None:
     print('Loading baseline model from ', args.baseline_model)
@@ -279,11 +282,15 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   ee.type(dtype)
   ee.eval()
 
-  all_scores, all_programs, all_correct = [], [], []
+  all_scores = []
+  all_programs = []
+  all_correct = []
   all_probs = []
   all_preds = []
+  all_read_scores = []
   all_control_scores = []
   all_connections = []
+  all_vib_costs = []
   num_correct, num_samples = 0, 0
 
   loaded_gammas = None
@@ -359,6 +366,10 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     all_correct.append(preds == answers)
     if args.model_type == 'MAC':
       all_control_scores.append(ee.control_scores.data.cpu().clone())
+      all_read_scores.append(ee.read_scores.data.cpu().clone())
+    if hasattr(ee, 'vib_costs'):
+      all_vib_costs.append(ee.vib_costs.data.cpu().clone())
+    if ee.connections:
       all_connections.append(torch.cat([conn.unsqueeze(1) for conn in ee.connections], 1).data.cpu().clone())
     if answers[0] is not None:
       num_correct += (preds == answers).sum()
@@ -367,33 +378,27 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   acc = float(num_correct) / num_samples
   print('Got %d / %d = %.2f correct' % (num_correct, num_samples, 100 * acc))
   print('%.2fs to evaluate' % (start - time.time()))
-  # all_programs = torch.cat(all_programs, 0)
-  all_scores = torch.cat(all_scores, 0)
-  all_probs = torch.cat(all_probs, 0)
-  all_preds = torch.cat(all_preds, 0).squeeze().numpy()
-  all_correct = torch.cat(all_correct, 0)
-  all_connections = torch.cat(all_connections, 0)
-  # zero pad control scores
-  max_len = max(cs.size(2) for cs in all_control_scores)
-  for i in range(len(all_control_scores)):
-    all_control_scores[i] = torch.zeros(
-      (all_control_scores[i].size(0), all_control_scores[i].size(1), max_len))
-    all_control_scores[i][:, :, :all_control_scores[i].size(2)] = all_control_scores[i]
-  all_control_scores = torch.cat(all_control_scores, 0)
+  if all_control_scores:
+    max_len = max(cs.size(2) for cs in all_control_scores)
+    for i in range(len(all_control_scores)):
+      tmp = torch.zeros(
+        (all_control_scores[i].size(0), all_control_scores[i].size(1), max_len))
+      tmp[:, :, :all_control_scores[i].size(2)] = all_control_scores[i]
+      all_control_scores[i] = tmp
   if args.output_h5 is not None:
     print('Writing output to "%s"' % args.output_h5)
     with h5py.File(args.output_h5, 'w') as fout:
-      fout.create_dataset('scores', data=all_scores.numpy())
-      fout.create_dataset('probs', data=all_probs.numpy())
-      fout.create_dataset('correct', data=all_correct.numpy())
-      fout.create_dataset('control_scores', data=all_control_scores.numpy())
-      fout.create_dataset('connections', data=all_connections.numpy())
-      # fout.create_dataset('predicted_programs', data=all_programs.numpy())
-
-  # Save FiLM params
-  # np.save('film_params', np.vstack(film_params))
-  # if isinstance(questions, list):
-  #   np.save('q_types', np.vstack(q_types))
+      fout.create_dataset('scores', data=torch.cat(all_scores, 0).numpy())
+      fout.create_dataset('probs', data=torch.cat(all_probs, 0).numpy())
+      fout.create_dataset('correct', data=torch.cat(all_correct, 0).numpy())
+      if all_vib_costs:
+        fout.create_dataset('vib_costs', data=torch.cat(all_vib_costs, 0).numpy())
+      if all_read_scores:
+        fout.create_dataset('read_scores', data=torch.cat(all_read_scores, 0).numpy())
+      if all_control_scores:
+        fout.create_dataset('control_scores', data=torch.cat(all_control_scores, 0).numpy())
+      if all_connections:
+        fout.create_dataset('connections', data=torch.cat(all_connections, 0).numpy())
 
   # Save FiLM param stats
   if args.output_program_stats_dir:

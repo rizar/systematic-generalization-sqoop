@@ -506,7 +506,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         programs_pred = program_generator(questions_var)
         scores = execution_engine(feats_var, programs_pred)
         loss = loss_fn(scores, answers_var)
-        full_loss = loss
+        full_loss = loss.clone()
         if args.mac_vib_coof:
           print(execution_engine.vib_costs.mean())
           full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()

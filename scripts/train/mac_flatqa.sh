@@ -23,7 +23,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --mac_read_dropout 0. \
   --mac_use_prior_control_in_control_unit 0 \
   --variational_embedding_dropout 0. \
-  --module_dim 256 \
+  --module_dim 128 \
   --num_modules 12 \
   --mac_use_self_attention 0 \
   --mac_use_memory_gate 0 \
@@ -32,7 +32,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --weight_decay 1e-5 \
   --rnn_num_layers 1 \
   --rnn_wordvec_dim 300 \
-  --rnn_hidden_dim 256 \
+  --rnn_hidden_dim 128 \
   --rnn_dropout 0 \
   --rnn_output_batchnorm 0 \
   --classifier_fc_dims 1024 \

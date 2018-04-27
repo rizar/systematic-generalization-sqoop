@@ -218,7 +218,9 @@ class MAC(nn.Module):
       logvar = -5 + self.compute_logvar(controls)
       std = (0.5 * logvar).exp()
       noise = Variable(torch.randn(*std.size())).cuda()
-      self.vib_costs = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp())).sum(2).max(1)[0]
+      kls = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp()))
+      vib_costs_each_step = kls.sum(2)
+      self.vib_costs = vib_costs_each_step.max(1)[0]
       noisy_controls = mu + std * noise
     else:
       noisy_controls = controls

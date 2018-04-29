@@ -144,6 +144,7 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
 parser.add_argument('--mac_read_connect', default='last', type=str)
+parser.add_argument('--mac_vib_start', default=0, type=float)
 parser.add_argument('--mac_vib_coof', default=0., type=float)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
@@ -508,8 +509,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         full_loss = loss.clone()
         if args.mac_vib_coof:
-          print(execution_engine.vib_costs.mean())
-          full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()
+          if t > args.mac_vib_start:
+            print(execution_engine.vib_costs.mean())
+            full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()
 
 
         pg_optimizer.zero_grad()

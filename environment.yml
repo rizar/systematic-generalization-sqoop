@@ -5,6 +5,7 @@ channels:
 dependencies:
 - python
 - pytorch=0.3
+- cuda90
 - torchvision
 - h5py
 - numpy

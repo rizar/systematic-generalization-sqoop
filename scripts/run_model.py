@@ -38,6 +38,7 @@ parser.add_argument('--debug_every', default=float('inf'), type=float)
 parser.add_argument('--use_gpu', default=1, type=int)
 
 # For running on a preprocessed dataset
+parser.add_argument('--data_dir', default=None, type=str)
 parser.add_argument('--input_question_h5', default=None)
 parser.add_argument('--input_features_h5', default=None)
 
@@ -88,6 +89,10 @@ def main(args):
     pdb.set_trace()
   if not args.program_generator:
     args.program_generator = args.execution_engine
+  if args.data_dir and not args.input_question_h5:
+    args.input_question_h5 = os.path.join(args.data_dir, 'val_questions.h5')
+  if args.data_dir and not args.input_features_h5:
+    args.input_features_h5 = os.path.join(args.data_dir, 'val_features.h5')
 
   model = None
   if args.baseline_model is not None:
@@ -385,20 +390,24 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         (all_control_scores[i].size(0), all_control_scores[i].size(1), max_len))
       tmp[:, :, :all_control_scores[i].size(2)] = all_control_scores[i]
       all_control_scores[i] = tmp
-  if args.output_h5 is not None:
-    print('Writing output to "%s"' % args.output_h5)
-    with h5py.File(args.output_h5, 'w') as fout:
-      fout.create_dataset('scores', data=torch.cat(all_scores, 0).numpy())
-      fout.create_dataset('probs', data=torch.cat(all_probs, 0).numpy())
-      fout.create_dataset('correct', data=torch.cat(all_correct, 0).numpy())
-      if all_vib_costs:
-        fout.create_dataset('vib_costs', data=torch.cat(all_vib_costs, 0).numpy())
-      if all_read_scores:
-        fout.create_dataset('read_scores', data=torch.cat(all_read_scores, 0).numpy())
-      if all_control_scores:
-        fout.create_dataset('control_scores', data=torch.cat(all_control_scores, 0).numpy())
-      if all_connections:
-        fout.create_dataset('connections', data=torch.cat(all_connections, 0).numpy())
+
+  output_path = ('output_' + args.execution_engine[:-3] + ".h5"
+                 if not args.output_h5
+                 else args.output_h5)
+
+  print('Writing output to "%s"' % output_path)
+  with h5py.File(output_path, 'w') as fout:
+    fout.create_dataset('scores', data=torch.cat(all_scores, 0).numpy())
+    fout.create_dataset('probs', data=torch.cat(all_probs, 0).numpy())
+    fout.create_dataset('correct', data=torch.cat(all_correct, 0).numpy())
+    if all_vib_costs:
+      fout.create_dataset('vib_costs', data=torch.cat(all_vib_costs, 0).numpy())
+    if all_read_scores:
+      fout.create_dataset('read_scores', data=torch.cat(all_read_scores, 0).numpy())
+    if all_control_scores:
+      fout.create_dataset('control_scores', data=torch.cat(all_control_scores, 0).numpy())
+    if all_connections:
+      fout.create_dataset('connections', data=torch.cat(all_connections, 0).numpy())
 
   # Save FiLM param stats
   if args.output_program_stats_dir:

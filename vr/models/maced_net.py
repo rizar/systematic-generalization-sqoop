@@ -296,7 +296,7 @@ class OutputUnit(nn.Module):
       if mod is not None: self.add_module('MAC_BatchNormFC' + str(i), mod)
       self.batchnorms.append(mod)
 
-    self.non_linear = nn.ReLU()
+    self.non_linear = nn.ELU()
     self.dropout_module = nn.Dropout(p=self.dropout)
 
     init_modules(self.modules())
@@ -393,7 +393,7 @@ class WriteUnit(nn.Module):
       gated_control = self.gated_control_transformer(controls[:,idx,:]) #N x 1
 
       #Eq (w3.2)
-      gated_control = self.non_linear(gated_control-1)
+      gated_control = self.non_linear(gated_control) #-1)
       res_memory = memories[:,idx-1,:] * gated_control + res_memory * (1. - gated_control)
 
     return res_memory
@@ -411,12 +411,12 @@ class ReadUnit(nn.Module):
 
     #Eq (r2)
     self.intermediate_transformer = nn.Linear(2 * common_dim, common_dim)
-    self.intermediate_transformer_2 = nn.Linear(common_dim, common_dim)
+    #self.intermediate_transformer_2 = nn.Linear(common_dim, common_dim)
 
     #Eq (r3.1)
     self.read_attention_transformer = nn.Linear(common_dim, 1)
 
-    self.non_linear = nn.ReLU()
+    self.non_linear = nn.ELU()
     self.read_dropout_module = nn.Dropout(p=self.read_dropout)
 
     init_modules(self.modules())
@@ -446,7 +446,7 @@ class ReadUnit(nn.Module):
     #trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, image], 3)) #NxHxWxd
     trans_intermediate = self.intermediate_transformer(torch.cat([intermediate, trans_image], 3)) #NxHxWxd
     trans_intermediate = self.non_linear(trans_intermediate)
-    trans_intermediate = self.intermediate_transformer_2(trans_intermediate)
+    #trans_intermediate = self.intermediate_transformer_2(trans_intermediate)
 
     #Eq (r3.1)
     trans_current_control = current_control.unsqueeze(1).unsqueeze(2).expand(trans_intermediate.size()) #NxHxWxd

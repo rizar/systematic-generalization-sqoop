@@ -22,6 +22,8 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --mac_memory_dropout 0. \
   --mac_read_dropout 0. \
   --mac_use_prior_control_in_control_unit 0 \
+  --mac_embedding_uniform_boundary 1.0 \
+  --mac_nonlinearity ReLU \
   --variational_embedding_dropout 0. \
   --module_dim 128 \
   --num_modules 12 \

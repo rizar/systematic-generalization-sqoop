@@ -90,11 +90,16 @@ class TFiLMedNet(nn.Module):
     self.num_extra_channels = 2 if self.use_coords_freq > 0 else 0
     if self.debug_every <= -1:
       self.print_verbose_every = 1
-    module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    for _ in stem_subsample_layers:
-      module_H //= 2
-      module_W //= 2
+    
+    stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
+    self.stem = build_stem(
+      stem_feature_dim, module_dim,
+      num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
+      kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+      subsample_layers=stem_subsample_layers)
+    tmp = self.stem(Variable(torch.zeros([1, feature_dim[0], feature_dim[1], feature_dim[2]])))
+    module_H = tmp.size(2)
+    module_W = tmp.size(3)
     
     self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = coord_map((module_H, module_W))
@@ -102,11 +107,11 @@ class TFiLMedNet(nn.Module):
     self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
 
     # Initialize stem
-    stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
-    self.stem = build_stem(stem_feature_dim, module_dim,
-                           num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
-                           subsample_layers=stem_subsample_layers)
+   # stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
+    #self.stem = build_stem(stem_feature_dim, module_dim,
+    #                       num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
+    #                       kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+    #                       subsample_layers=stem_subsample_layers)
 
     # Initialize Tfilmed network body
     self.function_modules = {}

@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
-
+from torch.nn.init import uniform, xavier_uniform, constant
 
 class FiLMGen(nn.Module):
   def __init__(self,
@@ -37,6 +37,7 @@ class FiLMGen(nn.Module):
     
     taking_context = False,
     variational_embedding_dropout = 0.,
+    embedding_uniform_boundary = 0.,
   ):
     super(FiLMGen, self).__init__()
     self.encoder_type = encoder_type
@@ -81,13 +82,20 @@ class FiLMGen(nn.Module):
     self.decoder_rnn = init_rnn(self.decoder_type, hidden_dim, hidden_dim, rnn_num_layers,
                                 dropout=rnn_dropout, bidirectional=self.bidirectional)
     
-    if self.taking_context: self.decoder_linear = None #nn.Linear(2 * hidden_dim, hidden_dim) 
-    else: self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
+    if self.taking_context:
+      self.decoder_linear = None #nn.Linear(2 * hidden_dim, hidden_dim)
+      for n, p in self.encoder_rnn.named_parameters():
+        if n.startswith('weight'): xavier_uniform(p)
+        elif n.startswith('bias'): constant(p, 0.)
+    else:
+      self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
     
     if self.output_batchnorm:
       self.output_bn = nn.BatchNorm1d(self.cond_feat_size, affine=True)
 
     init_modules(self.modules())
+    if embedding_uniform_boundary > 0.:
+      uniform(self.encoder_embed.weight, -1.*embedding_uniform_boundary, embedding_uniform_boundary)
 
   def expand_encoder_vocab(self, token_to_idx, word2vec=None, std=0.01):
     expand_embedding_vocab(self.encoder_embed, token_to_idx,

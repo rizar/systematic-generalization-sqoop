@@ -148,6 +148,7 @@ parser.add_argument('--mac_vib_start', default=0, type=float)
 parser.add_argument('--mac_vib_coof', default=0., type=float)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
+parser.add_argument('--mac_nonlinearity', default='ELU', type=str)
 
 parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float)
 parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
@@ -155,6 +156,7 @@ parser.add_argument('--mac_memory_dropout', default=0.15, type=float)
 parser.add_argument('--mac_read_dropout', default=0.15, type=float)
 parser.add_argument('--mac_use_prior_control_in_control_unit', default=0, type=int)
 parser.add_argument('--variational_embedding_dropout', default=0.15, type=float)
+parser.add_argument('--mac_embedding_uniform_boundary', default=1., type=float)
 
 parser.add_argument('--exponential_moving_average_weight', default=1., type=float)
 
@@ -740,6 +742,7 @@ def get_program_generator(args):
       if args.model_type == 'MAC' or args.model_type == 'TMAC':
         kwargs['taking_context'] = True
         kwargs['variational_embedding_dropout'] = args.variational_embedding_dropout
+        kwargs['embedding_uniform_boundary'] = args.mac_embedding_uniform_boundary
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
@@ -865,6 +868,7 @@ def get_execution_engine(args):
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
+                'nonlinearity': args.mac_nonlinearity,
 
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,

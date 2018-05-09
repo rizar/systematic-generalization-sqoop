@@ -156,8 +156,16 @@ def shape_module(shape):
   return "Shape[{}]".format(shape)
 
 
+def binary_shape_module(shape):
+  return "Shape2[{}]".format(shape)
+
+
 def color_module(color):
   return "Color[{}]".format(color)
+
+
+def binary_color_module(color):
+  return "Color2[{}]".format(color)
 
 
 def relation_module(relation):
@@ -205,6 +213,8 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
       max_program_len = 8
     elif args.program == 'chain':
       max_program_len = 7
+    elif args.program == 'chain_shortcut':
+      max_program_len = 11
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
                     + sampler.colors + sampler.shapes + RELATIONS)
@@ -213,6 +223,8 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
   program_words = (['<NULL>', '<START>', '<END>', 'scene', 'And']
                    + [color_module(color) for color in sampler.colors]
                    + [shape_module(shape) for shape in sampler.shapes]
+                   + [binary_color_module(color) for color in sampler.colors]
+                   + [binary_shape_module(shape) for shape in sampler.shapes]
                    + [relation_module(rel) for rel in RELATIONS]
                    + [unary_relation_module(rel) for rel in RELATIONS])
   program_vocab = {word: i for i, word in enumerate(program_words)}
@@ -238,7 +250,8 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
     text_token_to_idx[word] = idx
 
   def arity(token):
-    if token == 'And' or token.startswith('Relate['):
+    if (token == 'And' or token.startswith('Relate[') 
+        or token.startswith('Color2[') or token.startswith('Shape2[')):
       return 2
     elif token == 'scene':
       return 0
@@ -363,7 +376,11 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
                      unary_relation_module(rel),
                      shape_module(shape2), color_module(color2), 
                      "scene"]
-          
+        elif args.program == 'chain_shortcut':
+          program = ["<START>", 
+                     binary_shape_module(shape1), 'scene', binary_color_module(color1), 'scene', 
+                     unary_relation_module(rel),
+                     binary_shape_module(shape2), 'scene', binary_color_module(color2), 'scene', 'scene']
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
@@ -571,7 +588,7 @@ if __name__ == '__main__':
   parser.add_argument('--test', type=int, default=1000,
                       help="Size of the test set")
   parser.add_argument('--level', type=str, choices=('shapecolor', 'relations'), default='shapecolor')
-  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain'))
+  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'))
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--num-objects', type=int, default=5)

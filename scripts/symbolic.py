@@ -126,12 +126,13 @@ class WeakCheater(nn.Module):
         self.act = nn.ReLU()
 
     def __call__(self, h):
-        x1_x2_y1_part = torch.cat([h[:, :2 * args.max_value],
-                                    h[:, 2 * args.max_value:3 * args.max_value]], 1)
-        x1_x2_y2_part = torch.cat([h[:, :2 * args.max_value],
-                                    h[:, 3 * args.max_value:]], 1)
-        h1 = self.act(self.linear1(x1_x2_y1_part))
-        h2 = self.act(self.linear2(x1_x2_y2_part))
+        x1_x2_y1, x1_x2_y2 = h
+        # x1_x2_y1_part = torch.cat([h[:, :2 * args.max_value],
+                                    # h[:, 2 * args.max_value:3 * args.max_value]], 1)
+        # x1_x2_y2_part = torch.cat([h[:, :2 * args.max_value],
+                                    # h[:, 3 * args.max_value:]], 1)
+        h1 = self.act(self.linear1(x1_x2_y1))
+        h2 = self.act(self.linear2(x1_x2_y2))
         h = self.act(self.linear3(torch.cat([h1, h2], 1)))
         return self.output(h)
 
@@ -167,7 +168,7 @@ class Dataset:
             self.positive_indices[1] = positive_indices[0]
             self.negative_indices[1] = negative_indices[0]
 
-    def get_batch(self, part, weakcheater=False):
+    def get_batch(self, part, model=None):
         indices = numpy.concatenate([self.rng.choice(self.positive_indices[part], self.batch_size // 2),
                                     self.rng.choice(self.negative_indices[part], self.batch_size // 2)])
         x1, x2, y1, y2 = [torch.LongTensor(self.inputs[indices, j][:, None]) for j in range(4)]
@@ -179,8 +180,14 @@ class Dataset:
             return o
         ox1, ox2, oy1, oy2 = [onehot(v) for v in [x1, x2, y1, y2]]
 
-        h = Variable(torch.cat([ox1, ox2, oy1, oy2], 1)).float()
         targets = 2 * Variable((x1 == y1) & (x2 == y2)).float() - 1
+
+        if model == "WeakCheater":
+            h = (Variable(torch.cat([ox1, ox2, oy1], 1)).float(),
+                 Variable(torch.cat([ox1, ox2, oy2], 1)).float())
+        else:
+            h = Variable(torch.cat([ox1, ox2, oy1, oy2], 1)).float()
+
         return h, targets
 
 
@@ -195,7 +202,7 @@ if __name__ == '__main__':
 
         for i in range(args.nsteps):
             # train
-            h, targets = data.get_batch(0)
+            h, targets = data.get_batch(0, args.model)
             net.zero_grad()
             s = net(h)
             train_cost = torch.nn.Softplus()(s * -targets).mean()
@@ -205,7 +212,7 @@ if __name__ == '__main__':
                 p.data -= args.lr * p.grad.data
 
             # test
-            h, targets = data.get_batch(1)
+            h, targets = data.get_batch(1, args.model)
             s = net(h)
             test_cost = torch.nn.Softplus()(s * -targets).mean()
             test_acc = (targets * s > 0).float().mean()

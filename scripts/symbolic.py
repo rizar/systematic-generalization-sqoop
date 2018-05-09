@@ -117,7 +117,6 @@ class Cheater(nn.Module):
 
 class WeakCheater(nn.Module):
 
-
     def __init__(self):
         super().__init__()
         self.linear1 = nn.Linear(3 * args.max_value, args.dim // 2)
@@ -137,90 +136,99 @@ class WeakCheater(nn.Module):
         return self.output(h)
 
 
-stats = collections.defaultdict(list)
-for seed in range(args.nseeds):
-    torch.manual_seed(seed)
-    rng = numpy.random.RandomState(seed)
+class Dataset:
+    def __init__(self, rng, batch_size, split, max_value):
+        self.rng = rng
+        self.batch_size = batch_size
+        self.max_value = max_value
 
-    net = eval(args.model)()
+        inputs = []
+        # first train, then test
+        positive_indices = [[], []]
+        negative_indices = [[], []]
+        r = range(max_value)
+        for x1 in r:
+            for x2 in r:
+                for y1 in r:
+                    for y2 in r:
+                        if split == 'none':
+                            part = 0
+                        elif split == 'random':
+                            part = self.rng.randint(2)
+                        if x1 == y1 and x2 == y2:
+                            positive_indices[part].append(len(inputs))
+                        else:
+                            negative_indices[part].append(len(inputs))
+                        inputs.append([x1, x2, y1, y2])
+        self.inputs = numpy.array(inputs)
+        self.positive_indices = list(map(numpy.array, positive_indices))
+        self.negative_indices = list(map(numpy.array, negative_indices))
+        if split == 'none':
+            self.positive_indices[1] = positive_indices[0]
+            self.negative_indices[1] = negative_indices[0]
 
-    inputs = []
-    # first train, then test
-    positive_indices = [[], []]
-    negative_indices = [[], []]
-    r = range(args.max_value)
-    for x1 in r:
-        for x2 in r:
-            for y1 in r:
-                for y2 in r:
-                    if args.split == 'none':
-                        part = 0
-                    elif args.split == 'random':
-                        part = rng.randint(2)
-                    if x1 == y1 and x2 == y2:
-                        positive_indices[part].append(len(inputs))
-                    else:
-                        negative_indices[part].append(len(inputs))
-                    inputs.append([x1, x2, y1, y2])
-    inputs = numpy.array(inputs)
-    positive_indices = list(map(numpy.array, positive_indices))
-    negative_indices = list(map(numpy.array, negative_indices))
-    if args.split == 'none':
-        positive_indices[1] = positive_indices[0]
-        negative_indices[1] = negative_indices[0]
+    def get_batch(self, part, weakcheater=False):
+        indices = numpy.concatenate([self.rng.choice(self.positive_indices[part], self.batch_size // 2),
+                                    self.rng.choice(self.negative_indices[part], self.batch_size // 2)])
+        x1, x2, y1, y2 = [torch.LongTensor(self.inputs[indices, j][:, None]) for j in range(4)]
 
-    for i in range(args.nsteps):
-        def get_batch(part):
-            indices = numpy.concatenate([rng.choice(positive_indices[part], args.batch_size // 2),
-                                        rng.choice(negative_indices[part], args.batch_size // 2)])
-            x1, x2, y1, y2 = [torch.LongTensor(inputs[indices, j][:, None]) for j in range(4)]
+        def onehot(x):
+            o = torch.LongTensor(self.batch_size, self.max_value)
+            o.zero_()
+            o.scatter_(1, x, 1)
+            return o
+        ox1, ox2, oy1, oy2 = [onehot(v) for v in [x1, x2, y1, y2]]
 
-            def onehot(x):
-                o = torch.LongTensor(args.batch_size, args.max_value)
-                o.zero_()
-                o.scatter_(1, x, 1)
-                return o
-            ox1, ox2, oy1, oy2 = [onehot(v) for v in [x1, x2, y1, y2]]
+        h = Variable(torch.cat([ox1, ox2, oy1, oy2], 1)).float()
+        targets = 2 * Variable((x1 == y1) & (x2 == y2)).float() - 1
+        return h, targets
 
-            h = Variable(torch.cat([ox1, ox2, oy1, oy2], 1)).float()
-            targets = 2 * Variable((x1 == y1) & (x2 == y2)).float() - 1
-            return h, targets
 
-        # train
-        h, targets = get_batch(0)
-        net.zero_grad()
-        s = net(h)
-        train_cost = torch.nn.Softplus()(s * -targets).mean()
-        train_acc = (targets * s > 0).float().mean()
-        train_cost.backward()
-        for p in net.parameters():
-            p.data -= args.lr * p.grad.data
+if __name__ == '__main__':
+    stats = collections.defaultdict(list)
+    for seed in range(args.nseeds):
+        torch.manual_seed(seed)
+        rng = numpy.random.RandomState(seed)
 
-        # test
-        h, targets = get_batch(1)
-        s = net(h)
-        test_cost = torch.nn.Softplus()(s * -targets).mean()
-        test_acc = (targets * s > 0).float().mean()
+        net = eval(args.model)()
+        data = Dataset(rng, args.batch_size, args.split, args.max_value)
 
-        print("train cost: {}, test cost: {}, train acc: {}, test acc: {}".format(
-            train_cost.data[0], test_cost.data[0], train_acc.data[0], test_acc.data[0]))
-        stats['step'].append(i)
-        stats['seed'].append(seed)
-        stats['train_cost'].append(train_cost.data[0])
-        stats['train_acc'].append(train_acc.data[0])
-        stats['test_cost'].append(test_cost.data[0])
-        stats['test_acc'].append(test_acc.data[0])
+        for i in range(args.nsteps):
+            # train
+            h, targets = data.get_batch(0)
+            net.zero_grad()
+            s = net(h)
+            train_cost = torch.nn.Softplus()(s * -targets).mean()
+            train_acc = (targets * s > 0).float().mean()
+            train_cost.backward()
+            for p in net.parameters():
+                p.data -= args.lr * p.grad.data
 
-df = pandas.DataFrame.from_dict(stats)
-if args.save_path:
-    df.to_csv(args.save_path)
-df_agg = df.groupby('step').agg('mean')
+            # test
+            h, targets = data.get_batch(1)
+            s = net(h)
+            test_cost = torch.nn.Softplus()(s * -targets).mean()
+            test_acc = (targets * s > 0).float().mean()
 
-f, axis = pyplot.subplots(1, 2)
-axis[0].plot(df_agg.index, df_agg['train_cost'])
-axis[0].plot(df_agg.index, df_agg['test_cost'])
-axis[1].plot(df_agg.index, df_agg['train_acc'])
-axis[1].plot(df_agg.index, df_agg['test_acc'])
-pyplot.show()
-if args.ipython:
-    import IPython; IPython.embed()
+            print("train cost: {}, test cost: {}, train acc: {}, test acc: {}".format(
+                train_cost.data[0], test_cost.data[0], train_acc.data[0], test_acc.data[0]))
+            stats['step'].append(i)
+            stats['seed'].append(seed)
+            stats['train_cost'].append(train_cost.data[0])
+            stats['train_acc'].append(train_acc.data[0])
+            stats['test_cost'].append(test_cost.data[0])
+            stats['test_acc'].append(test_acc.data[0])
+
+    df = pandas.DataFrame.from_dict(stats)
+    if args.save_path:
+        df.to_csv(args.save_path)
+    df_agg = df.groupby('step').agg('mean')
+
+    f, axis = pyplot.subplots(1, 2)
+    axis[0].plot(df_agg.index, df_agg['train_cost'])
+    axis[0].plot(df_agg.index, df_agg['test_cost'])
+    axis[1].plot(df_agg.index, df_agg['train_acc'])
+    axis[1].plot(df_agg.index, df_agg['test_acc'])
+    pyplot.show()
+    if args.ipython:
+        import IPython; IPython.embed()

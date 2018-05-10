@@ -164,6 +164,10 @@ def relation_module(relation):
   return "Relate[{}]".format(relation)
 
 
+def unary_relation_module(relation):
+  return "Relate1[{}]".format(relation)
+
+
 def generate_scene(rng, sampler, objects=[], **kwargs):
   orig_objects = objects
 
@@ -195,7 +199,12 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
     max_program_len = 7
   elif args.level == 'relations':
     max_question_len = 8
-    max_program_len = 12
+    if args.program == 'best':
+      max_program_len = 12
+    elif args.program == 'noand':
+      max_program_len = 8
+    elif args.program == 'chain':
+      max_program_len = 7
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
                     + sampler.colors + sampler.shapes + RELATIONS)
@@ -204,7 +213,8 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
   program_words = (['<NULL>', '<START>', '<END>', 'scene', 'And']
                    + [color_module(color) for color in sampler.colors]
                    + [shape_module(shape) for shape in sampler.shapes]
-                   + [relation_module(rel) for rel in RELATIONS])
+                   + [relation_module(rel) for rel in RELATIONS]
+                   + [unary_relation_module(rel) for rel in RELATIONS])
   program_vocab = {word: i for i, word in enumerate(program_words)}
 
   answer_token_to_idx = {word: idx for idx, word in
@@ -228,7 +238,7 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
     text_token_to_idx[word] = idx
 
   def arity(token):
-    if token == 'And' or token.startswith('Relate'):
+    if token == 'And' or token.startswith('Relate['):
       return 2
     elif token == 'scene':
       return 0
@@ -339,9 +349,21 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
             continue
         question = ["is", "there", "a",
                     color1, shape1, rel, color2, shape2]
-        program = ["<START>", relation_module(rel),
-                    "And", shape_module(shape1), "scene", color_module(color1), "scene",
-                    "And", shape_module(shape2), "scene", color_module(color2), "scene"]
+        if args.program == 'best':
+          program = ["<START>", relation_module(rel),
+                      "And", shape_module(shape1), "scene", color_module(color1), "scene",
+                      "And", shape_module(shape2), "scene", color_module(color2), "scene"]
+        elif args.program == 'noand':
+          program = ["<START>", relation_module(rel),
+                     shape_module(shape1), color_module(color1), "scene",
+                     shape_module(shape2), color_module(color2), "scene"]
+        elif args.program == 'chain':
+          program = ["<START>", 
+                     shape_module(shape1), color_module(color1), 
+                     unary_relation_module(rel),
+                     shape_module(shape2), color_module(color2), 
+                     "scene"]
+          
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
@@ -549,6 +571,7 @@ if __name__ == '__main__':
   parser.add_argument('--test', type=int, default=1000,
                       help="Size of the test set")
   parser.add_argument('--level', type=str, choices=('shapecolor', 'relations'), default='shapecolor')
+  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain'))
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--num-objects', type=int, default=5)

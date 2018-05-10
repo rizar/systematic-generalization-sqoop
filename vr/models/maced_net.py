@@ -29,6 +29,7 @@ class MAC(nn.Module):
                stem_dropout,
                memory_dropout,
                read_dropout,
+               nonlinearity,
                use_prior_control_in_control_unit,
                use_self_attention,
                use_memory_gate,
@@ -92,13 +93,8 @@ class MAC(nn.Module):
       self.add_module('InputUnit' + str(i+1), mod)
       self.inputUnits.append(mod)
 
-    mod = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
-    self.add_module('ControlUnit', mod)
-    self.controlUnit = mod
-
-    mod = ReadUnit(module_dim, self.read_dropout)
-    self.add_module('ReadUnit', mod)
-    self.readUnit = mod
+    self.controlUnit = ControlUnit(module_dim, use_prior_control_in_control_unit=use_prior_control_in_control_unit)
+    self.readUnit = ReadUnit(module_dim, nonlinearity, self.read_dropout)
 
     if write_unit == 'original':
       mod = WriteUnit(module_dim,
@@ -127,8 +123,10 @@ class MAC(nn.Module):
     self.question_embedding_dropout_module = nn.Dropout(p=self.question_embedding_dropout)
 
     # Initialize output classifier
-    self.classifier = OutputUnit(module_dim, classifier_fc_layers, num_answers,
-                                 with_batchnorm=classifier_batchnorm, dropout=classifier_dropout)
+    self.classifier = OutputUnit(
+      module_dim, classifier_fc_layers, num_answers,
+      with_batchnorm=classifier_batchnorm, dropout=classifier_dropout,
+      nonlinearity=nonlinearity)
 
 
     self.pre_connects = []
@@ -277,7 +275,8 @@ class MAC(nn.Module):
     return out
 
 class OutputUnit(nn.Module):
-  def __init__(self, module_dim, hidden_units, num_outputs, with_batchnorm=False, dropout=0.0):
+  def __init__(self, module_dim, hidden_units, num_outputs, 
+               nonlinearity, with_batchnorm, dropout):
     super().__init__()
 
     self.dropout = dropout
@@ -296,7 +295,7 @@ class OutputUnit(nn.Module):
       if mod is not None: self.add_module('MAC_BatchNormFC' + str(i), mod)
       self.batchnorms.append(mod)
 
-    self.non_linear = nn.ELU()
+    self.non_linear = nn.ReLU()
     self.dropout_module = nn.Dropout(p=self.dropout)
 
     init_modules(self.modules())
@@ -400,7 +399,7 @@ class WriteUnit(nn.Module):
 
 
 class ReadUnit(nn.Module):
-  def __init__(self, common_dim, read_dropout=0.):
+  def __init__(self, common_dim, nonlinearity, read_dropout=0.):
     super().__init__()
     self.common_dim = common_dim
     self.read_dropout = read_dropout
@@ -416,7 +415,7 @@ class ReadUnit(nn.Module):
     #Eq (r3.1)
     self.read_attention_transformer = nn.Linear(common_dim, 1)
 
-    self.non_linear = nn.ELU()
+    self.non_linear = getattr(nn, nonlinearity)()
     self.read_dropout_module = nn.Dropout(p=self.read_dropout)
 
     init_modules(self.modules())

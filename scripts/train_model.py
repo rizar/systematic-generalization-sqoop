@@ -144,9 +144,11 @@ parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
 parser.add_argument('--mac_read_connect', default='last', type=str)
+parser.add_argument('--mac_vib_start', default=0, type=float)
 parser.add_argument('--mac_vib_coof', default=0., type=float)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
+parser.add_argument('--mac_nonlinearity', default='ELU', type=str)
 
 parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float)
 parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
@@ -509,8 +511,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         full_loss = loss.clone()
         if args.mac_vib_coof:
-          print(execution_engine.vib_costs.mean())
-          full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()
+          if t > args.mac_vib_start:
+            print(execution_engine.vib_costs.mean())
+            full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()
 
 
         pg_optimizer.zero_grad()
@@ -767,6 +770,7 @@ def get_execution_engine(args):
       'stem_stride': args.module_stem_stride,
       'stem_padding': args.module_stem_padding,
       'module_dim': args.module_dim,
+      'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
@@ -865,6 +869,7 @@ def get_execution_engine(args):
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,
                 'use_memory_gate': args.mac_use_memory_gate,
+                'nonlinearity': args.mac_nonlinearity,
 
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,

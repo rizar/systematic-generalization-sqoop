@@ -770,6 +770,7 @@ def get_execution_engine(args):
       'stem_stride': args.module_stem_stride,
       'stem_padding': args.module_stem_padding,
       'module_dim': args.module_dim,
+      'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,

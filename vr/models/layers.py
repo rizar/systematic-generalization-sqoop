@@ -14,12 +14,14 @@ from torch.nn.init import kaiming_normal, kaiming_uniform
 
 
 class ResidualBlock(nn.Module):
-  def __init__(self, in_dim, out_dim=None, with_residual=True, with_batchnorm=True):
+  def __init__(self, in_dim, out_dim=None, kernel_size=3, with_residual=True, with_batchnorm=True):
     if out_dim is None:
       out_dim = in_dim
     super(ResidualBlock, self).__init__()
-    self.conv1 = nn.Conv2d(in_dim, out_dim, kernel_size=3, padding=1)
-    self.conv2 = nn.Conv2d(out_dim, out_dim, kernel_size=3, padding=1)
+    if kernel_size % 2 == 0:
+      raise NotImplementedError()
+    self.conv1 = nn.Conv2d(in_dim, out_dim, kernel_size=kernel_size, padding=kernel_size // 2)
+    self.conv2 = nn.Conv2d(out_dim, out_dim, kernel_size=kernel_size, padding=kernel_size // 2)
     self.with_batchnorm = with_batchnorm
     if with_batchnorm:
       self.bn1 = nn.BatchNorm2d(out_dim)
@@ -45,11 +47,12 @@ class ResidualBlock(nn.Module):
 
 
 class ConcatBlock(nn.Module):
-  def __init__(self, dim, with_residual=True, with_batchnorm=True):
+  def __init__(self, dim, kernel_size, with_residual=True, with_batchnorm=True):
     super(ConcatBlock, self).__init__()
     self.proj = nn.Conv2d(2 * dim, dim, kernel_size=1, padding=0)
-    self.res_block = ResidualBlock(dim, with_residual=with_residual,
-                        with_batchnorm=with_batchnorm)
+    self.res_block = ResidualBlock(
+      dim, kernel_size=kernel_size, with_residual=with_residual,
+      with_batchnorm=with_batchnorm)
 
   def forward(self, x, y):
     out = torch.cat([x, y], 1) # Concatentate along depth

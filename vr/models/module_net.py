@@ -26,7 +26,8 @@ class ModuleNet(nn.Module):
                stem_kernel_size,
                stem_stride,
                stem_padding,
-               module_dim=128,
+               module_dim,
+               module_kernel_size,
                module_residual=True,
                module_batchnorm=False,
                classifier_proj_dim=512,
@@ -74,11 +75,15 @@ class ModuleNet(nn.Module):
       num_inputs = vocab['program_token_arity'][fn_str]
       self.function_modules_num_inputs[fn_str] = num_inputs
       if fn_str == 'scene' or num_inputs == 1:
-        mod = ResidualBlock(module_dim,
+        mod = ResidualBlock(
+                module_dim,
+                kernel_size=module_kernel_size,
                 with_residual=module_residual,
                 with_batchnorm=module_batchnorm)
       elif num_inputs == 2:
-        mod = ConcatBlock(module_dim,
+        mod = ConcatBlock(
+                module_dim,
+                kernel_size=module_kernel_size,
                 with_residual=module_residual,
                 with_batchnorm=module_batchnorm)
       self.add_module(fn_str, mod)

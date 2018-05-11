@@ -38,22 +38,25 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
     pyplot.figure(figsize=(15, 5))
     df_mean = df.groupby(['root', 'step']).agg(['mean', 'std'])
     for root, df_root in df_mean.groupby('root'):
-        values = df_root[train_quantity]['mean']
+      train_values = df_root[train_quantity]['mean']
+      if window:
+        train_values = train_values.rolling(window).mean()
+      train_lines = pyplot.plot(df_root.index.get_level_values(1),
+                                train_values,
+                                label=root + ' train',
+                                linestyle='dotted')
+      if val_quantity:
+        val_values = df_root[val_quantity]['mean']
         if window:
-            values = pandas.rolling_mean(values, window)
-        train_lines = pyplot.plot(df_root.index.get_level_values(1),
-                                  values,
-                                  label=root + ' train',
-                                  linestyle='dotted')
-        if val_quantity:
-            pyplot.plot(df_root.index.get_level_values(1),
-                        df_root[val_quantity]['mean'],
-                        label=root + " val",
-                        color=train_lines[0].get_color())
-        to_print = [root, values.iloc[-1]]
-        if val_quantity:
-          to_print.append(df_root[val_quantity]['mean'].iloc[-1])
-        print(*to_print)
+          val_values = val_values.rolling(window).mean()
+        pyplot.plot(df_root.index.get_level_values(1),
+                    val_values,
+                    label=root + " val",
+                    color=train_lines[0].get_color())
+      to_print = [root, train_values.iloc[-1]]
+      if val_quantity:
+        to_print.append(val_values.iloc[-1])
+      print(*to_print)
     pyplot.legend()
 
 

@@ -127,7 +127,7 @@ class NMNFiLMedNet2(nn.Module):
         self.fn_str_2_filmId[fn_str] = len(self.fn_str_2_filmId)
       
       if num_inputs == 1:
-        if self.sharing_patterns[0] == 1 and 1 in self.function_modules:
+        if self.sharing_patterns[0] == 1 and '1' in self.function_modules:
           mod = self.function_modules['1']
           stored_name = '1'
           newModule = False
@@ -148,7 +148,7 @@ class NMNFiLMedNet2(nn.Module):
           stored_name = '1' if self.sharing_patterns[0] == 1 else fn_str
           newModule = True
       elif num_inputs == 2:
-        if self.sharing_patterns[0] == 1 and 2 in self.function_modules:
+        if self.sharing_patterns[0] == 1 and '2' in self.function_modules:
           mod = self.function_modules['2']
           stored_name = '2'
           newModule = False
@@ -224,7 +224,7 @@ class NMNFiLMedNet2(nn.Module):
     j += 1
     
     num_inputs = self.function_modules_num_inputs[fn_str]
-    if fn_str == 'scence': num_inputs = 1
+    if fn_str == 'scene': num_inputs = 1
     
     if self.sharing_patterns[1] == 1:
       query_id = str(num_inputs)

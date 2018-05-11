@@ -17,9 +17,14 @@ from vr.models.layers import init_modules, ResidualBlock, GlobalAveragePool, Fla
 from vr.models.layers import build_classifier, build_stem, ConcatBlock
 import vr.programs
 
+from vr.models.tfilmed_net import ConcatFiLMedResBlock
+
+from vr.models.filmed_net import FiLM, FiLMedResBlock #, coord_map
 
 class ModuleNet(nn.Module):
   def __init__(self, vocab, feature_dim,
+               use_film,
+               sharing_patterns,
                stem_num_layers,
                stem_batchnorm,
                stem_subsample_layers,
@@ -38,6 +43,8 @@ class ModuleNet(nn.Module):
                verbose=True):
     super(ModuleNet, self).__init__()
 
+    self.use_film = use_film
+    self.sharing_patterns = sharing_patterns
 
     self.stem = build_stem(feature_dim[0], module_dim,
                            num_layers=stem_num_layers,
@@ -48,6 +55,12 @@ class ModuleNet(nn.Module):
     tmp = self.stem(Variable(torch.zeros([1, feature_dim[0], feature_dim[1], feature_dim[2]])))
     module_H = tmp.size(2)
     module_W = tmp.size(3)
+    
+    #self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
+    #self.coords = coord_map((module_H, module_W))
+    #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
+    #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
+    self.declare_film_coefficients()
 
     if verbose:
       print('Here is my stem:')
@@ -70,26 +83,96 @@ class ModuleNet(nn.Module):
 
     self.function_modules = {}
     self.function_modules_num_inputs = {}
+    self.fn_str_2_filmId = {}
     self.vocab = vocab
     for fn_str in vocab['program_token_to_idx']:
       num_inputs = vocab['program_token_arity'][fn_str]
       self.function_modules_num_inputs[fn_str] = num_inputs
+      
+      if self.use_film:
+          if self.sharing_patterns[1] == 1:
+            numId = 1 if fn_str == 'scence' else num_inputs
+            self.fn_str_2_filmId[str(numId)] = numId-1
+          else:
+            self.fn_str_2_filmId[fn_str] = len(self.fn_str_2_filmId)
+      
       if fn_str == 'scene' or num_inputs == 1:
-        mod = ResidualBlock(
-                module_dim,
-                kernel_size=module_kernel_size,
-                with_residual=module_residual,
-                with_batchnorm=module_batchnorm)
+        if self.use_film:
+          if self.sharing_patterns[0] == 1 and '1' in self.function_modules:
+              mod = self.function_modules['1']
+              stored_name = '1'
+              newModule = False
+          else:
+              mod = FiLMedResBlock(module_dim, with_residual=module_residual,
+                                   with_intermediate_batchnorm=False, with_batchnorm=False,
+                                   with_cond=[True, True],
+                                   dropout=5e-2,
+                                   num_extra_channels=0, # was 2 for original film,
+                                   extra_channel_freq=1,
+                                   with_input_proj=True,
+                                   num_cond_maps=0,
+                                   kernel_size=module_kernel_size,
+                                   batchnorm_affine=False,
+                                    num_layers=1,
+                                    condition_method='bn-film',
+                                    debug_every=float('inf'))
+              stored_name = '1' if self.sharing_patterns[0] == 1 else fn_str
+              newModule = True
+        else:
+          mod = ResidualBlock(
+                  module_dim,
+                  kernel_size=module_kernel_size,
+                  with_residual=module_residual,
+                  with_batchnorm=module_batchnorm)
       elif num_inputs == 2:
-        mod = ConcatBlock(
-                module_dim,
-                kernel_size=module_kernel_size,
-                with_residual=module_residual,
-                with_batchnorm=module_batchnorm)
-      self.add_module(fn_str, mod)
-      self.function_modules[fn_str] = mod
+        if self.use_film: 
+          if self.sharing_patterns[0] == 1 and '2' in self.function_modules:
+            mod = self.function_modules['2']
+            stored_name = '2'
+            newModule = False
+          else:
+            mod = ConcatFiLMedResBlock(2, module_dim, with_residual=module_residual,
+                          with_intermediate_batchnorm=False, with_batchnorm=False,
+                          with_cond=[True, True],
+                          dropout=5e-2,
+                          num_extra_channels=0, #was 2 for original film,
+                          extra_channel_freq=1,
+                          with_input_proj=True,
+                          num_cond_maps=0,
+                          kernel_size=module_kernel_size,
+                          batchnorm_affine=False,
+                          num_layers=1,
+                          condition_method='bn-film',
+                          debug_every=float('inf'))
+            stored_name = '2' if self.sharing_patterns[0] == 1 else fn_str
+            newModule = True
+        else:
+          mod = ConcatBlock(
+                    module_dim,
+                    kernel_size=module_kernel_size,
+                    with_residual=module_residual,
+                    with_batchnorm=module_batchnorm)
+      
+      if self.use_film:
+        if newModule:
+          self.add_module(stored_name, mod)
+          self.function_modules[stored_name] = mod
+      else: 
+        self.add_module(fn_str, mod)
+        self.function_modules[fn_str] = mod
 
     self.save_module_outputs = False
+
+  def declare_film_coefficients(self):
+    if self.use_film:
+      self.gammas = nn.Parameter(torch.Tensor(1, len(self.fn_str_2_filmId), self.module_dim))
+      xavier_uniform(self.gammas)
+      self.betas = nn.Parameter(torch.Tensor(1, len(self.fn_str_2_filmId), self.module_dim))
+      xavier_uniform(self.betas)
+      
+    else:
+      self.gammas = None
+      self.betas = None
 
   def expand_answer_vocab(self, answer_to_idx, std=0.01, init_b=-50):
     # TODO: This is really gross, dipping into private internals of Sequential
@@ -156,16 +239,43 @@ class ModuleNet(nn.Module):
     if used_fn_j:
       self.used_fns[i, j] = 1
     j += 1
-    module = self.function_modules[fn_str]
+    
+    num_inputs = self.function_modules_num_inputs[fn_str]
+    if fn_str == 'scene': num_inputs = 1
+    
+    if self.use_film:
+      if self.sharing_patterns[1] == 1:
+        query_id = str(num_inputs)
+      else:
+        query_id = fn_str
+      assert query_id in self.fn_str_2_filmId
+      midx = self.fn_str_2_filmId[query_id]
+    
+      if self.sharing_patterns[0] == 1:
+        query_id = str(num_inputs)
+      else:
+        query_id = fn_str
+      assert query_id in self.function_modules
+      module = self.function_modules[query_id]
+    else:
+      midx = -1
+      module = self.function_modules[fn_str]
+
     if fn_str == 'scene':
       module_inputs = [feats[i:i+1]]
     else:
-      num_inputs = self.function_modules_num_inputs[fn_str]
+      #num_inputs = self.function_modules_num_inputs[fn_str]
       module_inputs = []
       while len(module_inputs) < num_inputs:
         cur_input, j = self._forward_modules_ints_helper(feats, program, i, j)
         module_inputs.append(cur_input)
-    module_output = module(*module_inputs)
+    
+    if self.use_film:
+      igammas = gammas[:,midx,:]
+      ibetas =  betas[:,midx,:]
+      module_output = module(module_inputs, igammas, ibetas)
+    else:
+      module_output = module(*module_inputs)
     return module_output, j
 
   def _forward_modules_ints(self, feats, program):

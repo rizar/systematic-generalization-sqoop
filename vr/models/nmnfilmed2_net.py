@@ -185,12 +185,12 @@ class NMNFiLMedNet2(nn.Module):
     init_modules(self.modules())
   
   def declare_film_coefficients(self):
-    if self.condition_method == 'concat' or self.use_gamma:
+    if self.use_gamma:
       self.gammas = nn.Parameter(torch.Tensor(len(self.fn_str_2_filmId), self.module_dim))
       xavier_uniform(self.gammas)
     else:
       self.gammas = None
-    if self.condition_method == 'concat' or self.use_beta:
+    if self.use_beta:
       self.betas = nn.Parameter(torch.Tensor(len(self.fn_str_2_filmId), self.module_dim))
       xavier_uniform(self.betas)
     else:
@@ -231,7 +231,7 @@ class NMNFiLMedNet2(nn.Module):
     else:
       query_id = fn_str
     assert query_id in self.fn_str_2_filmId
-    filmId = self.fn_str_2_filmId[query_id]
+    midx = self.fn_str_2_filmId[query_id]
     
     if self.sharing_patterns[0] == 1:
       query_id = str(num_inputs)
@@ -249,14 +249,26 @@ class NMNFiLMedNet2(nn.Module):
         module_inputs.append(cur_input)
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
     
-    midx = filmId
     bcoords = batch_coords[i:i+1] if batch_coords is not None else None
     if self.condition_method == 'concat':
-      icond_maps = cond_maps[:,midx,:,:,:]
+      if not self.use_gamma and not self.use_beta:
+        nmidx = 0
+      else:
+        nmidx = midx
+      icond_maps = cond_maps[:,nmidx,:,:,:]
       module_output = module(module_inputs, extra_channels=bcoords, cond_maps=icond_maps)
     else:
-      igammas = gammas[:,midx,:]
-      ibetas =  betas[:,midx,:]
+      if not self.use_gamma:
+        nmidx = 0
+      else:
+        nmidx = midx
+      igammas = gammas[:,nmidx,:]
+      
+      if not self.use_beta:
+        nmidx = 0
+      else:
+        nmidx = midx
+      ibetas =  betas[:,nmidx,:]
       module_output = module(module_inputs, igammas, ibetas, bcoords)
     if save_activations:
       self.module_outputs.append(module_output)
@@ -274,23 +286,20 @@ class NMNFiLMedNet2(nn.Module):
       pdb.set_trace()
 
     # Prepare Tfilm layers
-    cond_maps = None
-    gammas = None
-    betas = None
+    cond_maps = None    
+    if not self.use_gamma:
+      gammas = self.default_weight #.expand_as(gammas)
+    else:
+      gammas = self.gammas.unsqueeze(0)
+    if not self.use_beta:
+      betas = self.default_bias #.expand_as(betas)
+    else:
+      betas = self.betas.unsqueeze(0)
+    
     if self.condition_method == 'concat':
       # Use parameters usually used to condition via FiLM instead to condition via concatenation
-      cond_params = torch.cat([self.gammas, self.betas], 1).unsqueeze(0)
+      cond_params = torch.cat([gammas, betas], 2) #.unsqueeze(0)
       cond_maps = cond_params.unsqueeze(3).unsqueeze(4).expand(cond_params.size() + x.size()[-2:])
-    else:
-      #gammas, betas = torch.split(film[:,:,:2*self.module_dim], self.module_dim, dim=-1)
-      if not self.use_gamma:
-        gammas = self.default_weight #.expand_as(gammas)
-      else:
-        gammas = self.gammas.unsqueeze(0)
-      if not self.use_beta:
-        betas = self.default_bias #.expand_as(betas)
-      else:
-        betas = self.betas.unsqueeze(0)
 
     # Propagate up image features CNN
     stem_batch_coords = None

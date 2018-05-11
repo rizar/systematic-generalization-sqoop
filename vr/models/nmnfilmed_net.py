@@ -14,7 +14,9 @@ from vr.models.layers import init_modules, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
 import vr.programs
 
-from vr.models.tfilmed_net import TfilmedResBlock, ConCatTfilmBlock, coord_map
+from vr.models.tfilmed_net import ConcatFiLMedResBlock
+
+from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 
 class NMNFiLMedNet(nn.Module):
   def __init__(self, vocab, feature_dim=(1024, 14, 14),
@@ -24,7 +26,6 @@ class NMNFiLMedNet(nn.Module):
                stem_subsample_layers=None,
                stem_stride=1,
                stem_padding=None,
-               num_modules=4,
 
                module_num_layers=1,
                module_dim=128,
@@ -57,8 +58,6 @@ class NMNFiLMedNet(nn.Module):
     self.module_times = []
     self.classifier_times = []
     self.timing = False
-
-    self.num_modules = num_modules
 
     self.module_num_layers = module_num_layers
     self.module_batchnorm = module_batchnorm
@@ -118,7 +117,7 @@ class NMNFiLMedNet(nn.Module):
       self.fn_str_2_filmId[fn_str] = len(self.fn_str_2_filmId)
       
       if fn_str == 'scene' or num_inputs == 1:
-        mod = TfilmedResBlock(module_dim, with_residual=module_residual,
+        mod = FiLMedResBlock(module_dim, with_residual=module_residual,
                        with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=self.condition_pattern,
                        dropout=module_dropout,
@@ -132,7 +131,7 @@ class NMNFiLMedNet(nn.Module):
                        condition_method=condition_method,
                        debug_every=self.debug_every)
       elif num_inputs == 2:
-        mod = ConCatTfilmBlock(2, module_dim, with_residual=module_residual,
+        mod = ConcatFiLMedResBlock(2, module_dim, with_residual=module_residual,
                        with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                        with_cond=self.condition_pattern,
                        dropout=module_dropout,

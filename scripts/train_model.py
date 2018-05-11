@@ -77,7 +77,7 @@ parser.add_argument('--percent_of_data_for_training', default=1., type=float)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['NMNFilm', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC', 'TMAC'])
+  choices=['NMNFilm2', 'NMNFilm', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC', 'TMAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -163,6 +163,9 @@ parser.add_argument('--exponential_moving_average_weight', default=1., type=floa
 #TMAC options
 parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str)
 parser.add_argument('--tmac_sharing_params_patterns', default='0,1,1,1')
+
+#NMNFilm2 options
+parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,1')
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -366,7 +369,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
+  if args.model_type in ['NMNFilm2', 'TMAC', 'NMNFilm', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -469,7 +472,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = program_generator(questions_var, programs_var)
         loss.backward()
         pg_optimizer.step()
-      elif args.model_type in ['EE', 'Hetero']:
+      elif args.model_type in ['NMNFilm2', 'EE', 'Hetero']:
         # Train execution engine with ground-truth programs
         ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, programs_var)
@@ -924,8 +927,6 @@ def get_execution_engine(args):
       }
       ee = HeteroModuleNet(**kwargs)
     elif args.model_type == 'NMNFilm':
-      kwargs['num_modules'] = len(vocab['program_token_to_idx'])
-
       kwargs['stem_kernel_size'] = args.module_stem_kernel_size
       kwargs['stem_stride'] = args.module_stem_stride
       kwargs['stem_padding'] = args.module_stem_padding
@@ -943,6 +944,26 @@ def get_execution_engine(args):
       kwargs['condition_method'] = args.condition_method
       kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
       ee = NMNFiLMedNet(**kwargs)
+    elif args.model_type == 'NMNFilm2':
+      kwargs['sharing_patterns'] = parse_int_list(args.nmnfilm2_sharing_params_patterns)
+
+      kwargs['stem_kernel_size'] = args.module_stem_kernel_size
+      kwargs['stem_stride'] = args.module_stem_stride
+      kwargs['stem_padding'] = args.module_stem_padding
+      kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['module_intermediate_batchnorm'] = args.module_intermediate_batchnorm == 1
+      kwargs['module_batchnorm_affine'] = args.module_batchnorm_affine == 1
+      kwargs['module_dropout'] = args.module_dropout
+      kwargs['module_input_proj'] = args.module_input_proj
+      kwargs['module_kernel_size'] = args.module_kernel_size
+      kwargs['use_gamma'] = args.use_gamma == 1
+      kwargs['use_beta'] = args.use_beta == 1
+      kwargs['use_coords'] = args.use_coords
+      kwargs['debug_every'] = args.debug_every
+      kwargs['print_verbose_every'] = args.print_verbose_every
+      kwargs['condition_method'] = args.condition_method
+      kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
+      ee = NMNFiLMedNet2(**kwargs)
     else:
       ee = ModuleNet(**kwargs)
   ee.cuda()
@@ -1043,7 +1064,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
         if program_pred_str == program_str:
           num_correct += 1
         num_samples += 1
-    elif args.model_type in ['EE', 'Hetero']:
+    elif args.model_type in ['NMNFilm2', 'EE', 'Hetero']:
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
       programs_pred = program_generator.reinforce_sample(

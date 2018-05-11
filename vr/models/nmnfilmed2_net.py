@@ -231,9 +231,14 @@ class NMNFiLMedNet2(nn.Module):
       query_id = str(num_inputs)
     else:
       query_id = fn_str
-    
     assert query_id in self.fn_str_2_filmId
     filmId = self.fn_str_2_filmId[query_id]
+    
+    if self.sharing_patterns[0] == 1:
+      query_id = str(num_inputs)
+    else:
+      query_id = fn_str
+    assert query_id in self.function_modules
     module = self.function_modules[query_id]
     if fn_str == 'scene':
       module_inputs = feats[i:i+1]

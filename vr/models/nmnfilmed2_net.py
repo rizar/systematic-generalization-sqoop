@@ -284,11 +284,11 @@ class NMNFiLMedNet2(nn.Module):
     else:
       #gammas, betas = torch.split(film[:,:,:2*self.module_dim], self.module_dim, dim=-1)
       if not self.use_gamma:
-        gammas = self.default_weight.expand_as(gammas)
+        gammas = self.default_weight #.expand_as(gammas)
       else:
         gammas = self.gammas.unsqueeze(0)
       if not self.use_beta:
-        betas = self.default_bias.expand_as(betas)
+        betas = self.default_bias #.expand_as(betas)
       else:
         betas = self.betas.unsqueeze(0)
 

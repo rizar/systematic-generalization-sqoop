@@ -42,7 +42,8 @@ class ModuleNet(nn.Module):
                classifier_dropout=0,
                verbose=True):
     super(ModuleNet, self).__init__()
-
+    
+    self.module_dim = module_dim
     self.use_film = use_film
     self.sharing_patterns = sharing_patterns
 

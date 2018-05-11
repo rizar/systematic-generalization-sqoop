@@ -166,7 +166,7 @@ parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str
 parser.add_argument('--tmac_sharing_params_patterns', default='0,1,1,1')
 
 #NMNFilm2 options
-parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,1')
+parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,0')
 parser.add_argument('--nmn_use_film', default=0, type=int)
 
 # CNN options (for baselines)

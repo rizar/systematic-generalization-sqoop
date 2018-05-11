@@ -60,7 +60,6 @@ class ModuleNet(nn.Module):
     #self.coords = coord_map((module_H, module_W))
     #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
     #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
-    self.declare_film_coefficients()
 
     if verbose:
       print('Here is my stem:')
@@ -160,6 +159,8 @@ class ModuleNet(nn.Module):
       else: 
         self.add_module(fn_str, mod)
         self.function_modules[fn_str] = mod
+    
+    self.declare_film_coefficients()
 
     self.save_module_outputs = False
 

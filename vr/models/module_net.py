@@ -108,13 +108,13 @@ class ModuleNet(nn.Module):
                                    dropout=5e-2,
                                    num_extra_channels=0, # was 2 for original film,
                                    extra_channel_freq=1,
-                                   with_input_proj=True,
+                                   with_input_proj=1,
                                    num_cond_maps=0,
                                    kernel_size=module_kernel_size,
                                    batchnorm_affine=False,
-                                    num_layers=1,
-                                    condition_method='bn-film',
-                                    debug_every=float('inf'))
+                                   num_layers=1,
+                                   condition_method='bn-film',
+                                   debug_every=float('inf'))
               stored_name = '1' if self.sharing_patterns[0] == 1 else fn_str
               newModule = True
         else:
@@ -136,7 +136,7 @@ class ModuleNet(nn.Module):
                           dropout=5e-2,
                           num_extra_channels=0, #was 2 for original film,
                           extra_channel_freq=1,
-                          with_input_proj=True,
+                          with_input_proj=1,
                           num_cond_maps=0,
                           kernel_size=module_kernel_size,
                           batchnorm_affine=False,

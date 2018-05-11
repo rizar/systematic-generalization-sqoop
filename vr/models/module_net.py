@@ -275,8 +275,8 @@ class ModuleNet(nn.Module):
         module_inputs.append(cur_input)
     
     if self.use_film:
-      igammas = gammas[:,midx,:]
-      ibetas =  betas[:,midx,:]
+      igammas = self.gammas[:,midx,:]
+      ibetas =  self.betas[:,midx,:]
       module_output = module(module_inputs, igammas, ibetas)
     else:
       module_output = module(*module_inputs)

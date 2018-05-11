@@ -118,9 +118,8 @@ class NMNFiLMedNet2(nn.Module):
     self.fn_str_2_filmId = {}
     for fn_str in vocab['program_token_to_idx']:
       num_inputs = vocab['program_token_arity'][fn_str]
-      self.function_modules_num_inputs[fn_str] = num_inputs
-      
       if fn_str == 'scene': num_inputs = 1
+      self.function_modules_num_inputs[fn_str] = num_inputs
       
       if self.sharing_patterns[1] == 1:
         self.fn_str_2_filmId[str(num_inputs)] = num_inputs-1

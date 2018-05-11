@@ -40,7 +40,8 @@ from vr.models import (ModuleNet,
                        MAC,
                        TMAC,
                        HeteroModuleNet,
-                       NMNFiLMedNet)
+                       NMNFiLMedNet,
+                       NMNFiLMedNet2)
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()

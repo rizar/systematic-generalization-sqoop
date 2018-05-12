@@ -99,45 +99,36 @@ class Split(nn.Module):
 
 class Cheater(nn.Module):
 
-    def __init__(self):
+    def __init__(self, k):
         super().__init__()
-        self.linear1 = nn.Linear(2 * args.max_value, args.dim // 2)
-        self.linear2 = nn.Linear(2 * args.max_value, args.dim // 2)
-        self.linear3 = nn.Linear(args.dim, args.dim)
+        self.k = k
+        self.linear1 = [nn.Linear(2 * args.max_value, args.dim // k)
+                        for i in range(k)]
+        self.linear2 = nn.Linear((args.dim // k) * k, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
 
     def __call__(self, h):
-        x1_and_y1_part = torch.cat([h[:, :1 * args.max_value],
-                                    h[:, 2 * args.max_value:3 * args.max_value]], 1)
-        x2_and_y2_part = torch.cat([h[:, 1 * args.max_value:2 * args.max_value],
-                                    h[:, 3 * args.max_value:]], 1)
-        h1 = self.act(self.linear1(x1_and_y1_part))
-        h2 = self.act(self.linear2(x2_and_y2_part))
-        h = self.act(self.linear3(torch.cat([h1, h2], 1)))
-        return self.output(h)
+        h1 = [self.act(self.linear1[i](h[i])) for i in range(self.k)]
+        h2 = self.act(self.linear2(torch.cat(h1, 1)))
+        return self.output(h2)
 
 
 class WeakCheater(nn.Module):
 
-    def __init__(self):
+    def __init__(self, k):
         super().__init__()
-        self.linear1 = nn.Linear(3 * args.max_value, args.dim // 2)
-        self.linear2 = nn.Linear(3 * args.max_value, args.dim // 2)
-        self.linear3 = nn.Linear(args.dim, args.dim)
+        self.k = k
+        self.linear1 = [nn.Linear((k+1) * args.max_value, args.dim // k)
+                        for i in range(k)]
+        self.linear2 = nn.Linear((args.dim // k) * k, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
 
     def __call__(self, h):
-        x1_x2_y1, x1_x2_y2 = h
-        # x1_x2_y1_part = torch.cat([h[:, :2 * args.max_value],
-                                    # h[:, 2 * args.max_value:3 * args.max_value]], 1)
-        # x1_x2_y2_part = torch.cat([h[:, :2 * args.max_value],
-                                    # h[:, 3 * args.max_value:]], 1)
-        h1 = self.act(self.linear1(x1_x2_y1))
-        h2 = self.act(self.linear2(x1_x2_y2))
-        h = self.act(self.linear3(torch.cat([h1, h2], 1)))
-        return self.output(h)
+        h1 = [self.act(self.linear1[i](h[i])) for i in range(self.k)]
+        h2 = self.act(self.linear2(torch.cat(h1, 1)))
+        return self.output(h2)
 
 
 class Dataset:
@@ -205,8 +196,6 @@ class Dataset:
             self.positive_indices[1] = positive_indices[0]
             self.negative_indices[1] = negative_indices[0]
 
-
-
     def _onehot(self, tensor):
         tensor.unsqueeze_(-1)
         one_hot = torch.LongTensor(self.batch_size, self.max_value).zero_()
@@ -217,36 +206,37 @@ class Dataset:
         indices = np.concatenate([self.rng.choice(self.positive_indices[part], self.batch_size // 2),
                                   self.rng.choice(self.negative_indices[part], self.batch_size // 2)])
         targets = Variable(torch.FloatTensor(self.targets[indices]))
-        x1, x2, y1, y2 = [torch.LongTensor(self.inputs[indices, j]) for j in range(4)]
-        ox1, ox2, oy1, oy2 = [self._onehot(v) for v in [x1, x2, y1, y2]]
+        xy = [torch.LongTensor(self.inputs[indices, j]) for j in range(2*self.k)]
+        x = [self._onehot(v) for v in xy[:self.k]]
+        y = [self._onehot(v) for v in xy[self.k:]]
 
         if model == "WeakCheater":
-            if randomize == 'random':
-                r = torch.LongTensor(self.rng.randint(self.max_value, size=(self.batch_size, 2)))
-                r1 = self._onehot(r[:,0])
-                r2 = self._onehot(r[:,1])
-                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     Variable(torch.cat([r1, ox2, oy2], 1)))
-            elif randomize == 'consistent':
-                r = torch.LongTensor(self.random_inputs[indices])
-                r1 = self._onehot(r[:,0])
-                r2 = self._onehot(r[:,1])
-                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     Variable(torch.cat([r1, ox2, oy2], 1)))
-            elif randomize == 'half':
-                r = torch.LongTensor(0.9*self.random_inputs[indices] +
-                                     0.1*self.rng.randint(self.max_value, size=(self.batch_size, 2)))
-                r1 = self._onehot(r[:,0])
-                r2 = self._onehot(r[:,1])
-                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     Variable(torch.cat([r1, ox2, oy2], 1)))
-            else:
-                h = (Variable(torch.cat([ox1, ox2, oy1], 1)),
-                     Variable(torch.cat([ox1, ox2, oy2], 1)))
+            # if randomize == 'random':
+                # r = torch.LongTensor(self.rng.randint(self.max_value, size=(self.batch_size, 2)))
+                # r1 = self._onehot(r[:,0])
+                # r2 = self._onehot(r[:,1])
+                # h = (Variable(torch.cat([ox1, r2, oy1], 1)),
+                     # Variable(torch.cat([r1, ox2, oy2], 1)))
+            # elif randomize == 'consistent':
+                # r = torch.LongTensor(self.random_inputs[indices])
+                # r1 = self._onehot(r[:,0])
+                # r2 = self._onehot(r[:,1])
+                # h = (Variable(torch.cat([ox1, r2, oy1], 1)),
+                     # Variable(torch.cat([r1, ox2, oy2], 1)))
+            # elif randomize == 'half':
+                # r = torch.LongTensor(0.9*self.random_inputs[indices] +
+                                     # 0.1*self.rng.randint(self.max_value, size=(self.batch_size, 2)))
+                # r1 = self._onehot(r[:,0])
+                # r2 = self._onehot(r[:,1])
+                # h = (Variable(torch.cat([ox1, r2, oy1], 1)),
+                     # Variable(torch.cat([r1, ox2, oy2], 1)))
+            # else:
+            h = [Variable(torch.cat(x + [y[i]], 1)) for i in range(self.k)]
+        elif model == 'Cheater':
+            h = [Variable(torch.cat([x[i]] + [y[i]], 1)) for i in range(self.k)]
         else:
-            h = Variable(torch.cat([ox1, ox2, oy1, oy2], 1)).float()
+            h = Variable(torch.cat(x + y, 1))
 
-        t2 = 2 * Variable((x1 == y1) & (x2 == y2)).float() - 1
         return h, targets.unsqueeze(-1)
 
 
@@ -256,7 +246,12 @@ if __name__ == '__main__':
         torch.manual_seed(seed)
         rng = np.random.RandomState(seed)
 
-        net = eval(args.model)()
+        if (args.model == 'WeakCheater' or
+            args.model == 'Cheater'):
+            net = eval(args.model)(args.k)
+        else:
+            net = eval(args.model)()
+
         data = Dataset(rng, args.batch_size, args.k, args.split, args.max_value)
 
         for i in range(args.nsteps):

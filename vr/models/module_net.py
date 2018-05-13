@@ -21,7 +21,7 @@ from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavie
 
 from vr.models.tfilmed_net import ConcatFiLMedResBlock
 
-from vr.models.filmed_net import FiLM, FiLMedResBlock #, coord_map
+from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 
 class ModuleNet(nn.Module):
   def __init__(self, vocab, feature_dim,
@@ -60,7 +60,7 @@ class ModuleNet(nn.Module):
     module_W = tmp.size(3)
     
     #self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
-    #self.coords = coord_map((module_H, module_W))
+    self.coords = coord_map((module_H, module_W))
     #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
     #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
 
@@ -93,7 +93,7 @@ class ModuleNet(nn.Module):
       
       if self.use_film:
           if self.sharing_patterns[1] == 1:
-            numId = 1 if fn_str == 'scence' else num_inputs
+            numId = 1 if fn_str == 'scene' else num_inputs
             self.fn_str_2_filmId[str(numId)] = numId-1
           else:
             self.fn_str_2_filmId[fn_str] = len(self.fn_str_2_filmId)
@@ -108,8 +108,8 @@ class ModuleNet(nn.Module):
               mod = FiLMedResBlock(module_dim, with_residual=module_residual,
                                    with_intermediate_batchnorm=False, with_batchnorm=False,
                                    with_cond=[True, True],
-                                   dropout=5e-2,
-                                   num_extra_channels=0, # was 2 for original film,
+                                   dropout=0.,
+                                   num_extra_channels=2, # was 2 for original film,
                                    extra_channel_freq=1,
                                    with_input_proj=1,
                                    num_cond_maps=0,
@@ -136,8 +136,8 @@ class ModuleNet(nn.Module):
             mod = ConcatFiLMedResBlock(2, module_dim, with_residual=module_residual,
                           with_intermediate_batchnorm=False, with_batchnorm=False,
                           with_cond=[True, True],
-                          dropout=5e-2,
-                          num_extra_channels=0, #was 2 for original film,
+                          dropout=0.,
+                          num_extra_channels=2, #was 2 for original film,
                           extra_channel_freq=1,
                           with_input_proj=1,
                           num_cond_maps=0,
@@ -277,8 +277,9 @@ class ModuleNet(nn.Module):
     if self.use_film:
       igammas = self.gammas[:,midx,:]
       ibetas =  self.betas[:,midx,:]
+      bcoords = self.coords.unsqueeze(0)
       if len(module_inputs) == 1: module_inputs = module_inputs[0]
-      module_output = module(module_inputs, igammas, ibetas)
+      module_output = module(module_inputs, igammas, ibetas, bcoords)
     else:
       module_output = module(*module_inputs)
     return module_output, j

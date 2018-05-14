@@ -51,9 +51,10 @@ class Vanilla1(nn.Module):
 
 class Vanilla2(nn.Module):
 
-    def __init__(self):
+    def __init__(self, k):
         super().__init__()
-        self.linear1 = nn.Linear(4 * args.max_value, args.dim)
+        self.k = k
+        self.linear1 = nn.Linear(2 * k * args.max_value, args.dim)
         self.linear2 = nn.Linear(args.dim, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
@@ -246,12 +247,7 @@ if __name__ == '__main__':
         torch.manual_seed(seed)
         rng = np.random.RandomState(seed)
 
-        if (args.model == 'WeakCheater' or
-            args.model == 'Cheater'):
-            net = eval(args.model)(args.k)
-        else:
-            net = eval(args.model)()
-
+        net = eval(args.model)(args.k)
         data = Dataset(rng, args.batch_size, args.k, args.split, args.max_value)
 
         for i in range(args.nsteps):

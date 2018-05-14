@@ -17,7 +17,7 @@ parser.add_argument('--model', type=str, default='Vanilla2')
 parser.add_argument('--nsteps', type=int, default=5000)
 parser.add_argument('--dim', type=int, default=128)
 parser.add_argument('--batch-size', type=int, default=64)
-parser.add_argument('--k', type=int, default=2, help='number of features')
+parser.add_argument('--num-feats', type=int, default=2, help='number of features')
 parser.add_argument('--lr', type=float, default=0.1)
 parser.add_argument('--nseeds', type=int, default=1)
 parser.add_argument('--ipython', action='store_true')
@@ -51,10 +51,9 @@ class Vanilla1(nn.Module):
 
 class Vanilla2(nn.Module):
 
-    def __init__(self, k):
+    def __init__(self):
         super().__init__()
-        self.k = k
-        self.linear1 = nn.Linear(2 * k * args.max_value, args.dim)
+        self.linear1 = nn.Linear(2 * args.num_feats * args.max_value, args.dim)
         self.linear2 = nn.Linear(args.dim, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
@@ -100,54 +99,48 @@ class Split(nn.Module):
 
 class Cheater(nn.Module):
 
-    def __init__(self, k):
+    def __init__(self):
         super().__init__()
-        self.k = k
-        self.linear1 = [nn.Linear(2 * args.max_value, args.dim // k)
-                        for i in range(k)]
+        self.linear1 = [nn.Linear(2 * args.max_value, args.dim // args.num_feats)
+                        for i in range(args.num_feats)]
         self.linear2 = nn.Linear((args.dim // k) * k, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
 
     def __call__(self, h):
-        h1 = [self.act(self.linear1[i](h[i])) for i in range(self.k)]
+        h1 = [self.act(self.linear1[i](h[i])) for i in range(args.num_feats)]
         h2 = self.act(self.linear2(torch.cat(h1, 1)))
         return self.output(h2)
 
 
 class WeakCheater(nn.Module):
 
-    def __init__(self, k):
+    def __init__(self):
         super().__init__()
-        self.k = k
-        self.linear1 = [nn.Linear((k+1) * args.max_value, args.dim // k)
-                        for i in range(k)]
-        self.linear2 = nn.Linear((args.dim // k) * k, args.dim)
+        self.linear1 = [nn.Linear((args.num_feats + 1) * args.max_value, args.dim // args.num_feats)
+                        for i in range(args.num_feats)]
+        self.linear2 = nn.Linear((args.dim // args.num_feats) * args.num_feats, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
 
     def __call__(self, h):
-        h1 = [self.act(self.linear1[i](h[i])) for i in range(self.k)]
+        h1 = [self.act(self.linear1[i](h[i])) for i in range(args.num_feats)]
         h2 = self.act(self.linear2(torch.cat(h1, 1)))
         return self.output(h2)
 
 
 class Dataset:
-    def __init__(self, rng, batch_size, k, split, max_value):
+    def __init__(self, rng):
         self.rng = rng
-        self.batch_size = batch_size
-        self.max_value = max_value
-        self.k = k
+        self._generate_data()
 
-        self._generate_data(k, max_value, split)
-        self.random_inputs = np.random.randint(self.max_value, size=(self.max_value**k, k))
-
-    def _generate_data(self, k, max_value, split):
-        self.num_examples = max_value**(k*2)
+    def _generate_data(self):
+        k = args.num_feats
+        self.num_examples = args.max_value**(k*2)
         # inputs = x_1...x_k, y_1...y_k
-        inputs_iter = itertools.product(range(max_value), repeat=k*2)
+        inputs_iter = itertools.product(range(args.max_value), repeat=k*2)
         inputs_np = np.fromiter(itertools.chain.from_iterable(inputs_iter), np.int)
-        self.inputs = np.reshape(inputs_np, (max_value**(k*2), k*2))
+        self.inputs = np.reshape(inputs_np, (args.max_value**(k*2), k*2))
         # targets = 1 if x_i = y_i, else -1
         xy_equal = []
         for i in range(k):
@@ -155,18 +148,21 @@ class Dataset:
         self.targets = 2 * np.all(np.stack(xy_equal, axis=1), axis=1) - 1
 
         is_train = self.rng.binomial(1, 0.5, self.num_examples)
-        if split == 'random':
+        if args.split == 'random':
             positive_train = np.where((self.targets == 1) & is_train)[0]
             positive_test = np.where((self.targets == 1) & (~is_train))[0]
             negative_train = np.where((self.targets == -1) & is_train)[0]
             negative_test = np.where((self.targets == -1) & (~is_train))[0]
             self.positive_indices = (positive_train, positive_test)
             self.negative_indices = (negative_train, negative_test)
-        elif split == 'none':
+        elif args.split == 'none':
             positives = np.where(self.targets == 1)[0]
             negatives = np.where(self.targets == -1)[0]
             self.positive_indices = (positives, positives)
             self.negative_indices = (negatives, negatives)
+
+        if args.randomize is not None:
+            self.random_inputs = np.random.randint(args.max_value, size=(max_value**k, k))
 
     def _continue_data(max_value):
         inputs = []
@@ -199,42 +195,44 @@ class Dataset:
 
     def _onehot(self, tensor):
         tensor.unsqueeze_(-1)
-        one_hot = torch.LongTensor(self.batch_size, self.max_value).zero_()
+        one_hot = torch.LongTensor(args.batch_size, args.max_value).zero_()
         one_hot.scatter_(1, tensor, 1)
         return one_hot.float()
 
-    def get_batch(self, part, model=None, randomize=None):
-        indices = np.concatenate([self.rng.choice(self.positive_indices[part], self.batch_size // 2),
-                                  self.rng.choice(self.negative_indices[part], self.batch_size // 2)])
+    def get_batch(self, part):
+        indices = np.concatenate([self.rng.choice(self.positive_indices[part], args.batch_size // 2),
+                                  self.rng.choice(self.negative_indices[part], args.batch_size // 2)])
         targets = Variable(torch.FloatTensor(self.targets[indices]))
-        xy = [torch.LongTensor(self.inputs[indices, j]) for j in range(2*self.k)]
-        x = [self._onehot(v) for v in xy[:self.k]]
-        y = [self._onehot(v) for v in xy[self.k:]]
+        xy = [torch.LongTensor(self.inputs[indices, j]) for j in range(2*args.num_feats)]
+        x = [self._onehot(v) for v in xy[:args.num_feats]]
+        y = [self._onehot(v) for v in xy[args.num_feats:]]
 
-        if model == "WeakCheater":
-            # if randomize == 'random':
-                # r = torch.LongTensor(self.rng.randint(self.max_value, size=(self.batch_size, 2)))
-                # r1 = self._onehot(r[:,0])
-                # r2 = self._onehot(r[:,1])
-                # h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     # Variable(torch.cat([r1, ox2, oy2], 1)))
-            # elif randomize == 'consistent':
-                # r = torch.LongTensor(self.random_inputs[indices])
-                # r1 = self._onehot(r[:,0])
-                # r2 = self._onehot(r[:,1])
-                # h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     # Variable(torch.cat([r1, ox2, oy2], 1)))
-            # elif randomize == 'half':
-                # r = torch.LongTensor(0.9*self.random_inputs[indices] +
-                                     # 0.1*self.rng.randint(self.max_value, size=(self.batch_size, 2)))
-                # r1 = self._onehot(r[:,0])
-                # r2 = self._onehot(r[:,1])
-                # h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     # Variable(torch.cat([r1, ox2, oy2], 1)))
-            # else:
-            h = [Variable(torch.cat(x + [y[i]], 1)) for i in range(self.k)]
-        elif model == 'Cheater':
-            h = [Variable(torch.cat([x[i]] + [y[i]], 1)) for i in range(self.k)]
+        if args.model == "WeakCheater":
+            if args.randomize is None:
+                h = [Variable(torch.cat(x + [y[i]], 1)) for i in range(args.num_feats)]
+            if args.randomize == 'random':
+                r = torch.LongTensor(self.rng.randint(args.max_value, size=(args.batch_size, args.num_feats)))
+                r1 = self._onehot(r[:,0])
+                r2 = self._onehot(r[:,1])
+                h = [Variable(torch.cat([ox1, r2, oy1], 1))
+                     for i in range(num_feats)]
+                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
+                     Variable(torch.cat([r1, ox2, oy2], 1)))
+            elif args.randomize == 'consistent':
+                r = torch.LongTensor(self.random_inputs[indices])
+                r1 = self._onehot(r[:,0])
+                r2 = self._onehot(r[:,1])
+                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
+                     Variable(torch.cat([r1, ox2, oy2], 1)))
+            elif args.randomize == 'half':
+                r = torch.LongTensor(0.9*self.random_inputs[indices] +
+                                     0.1*self.rng.randint(args.max_value, size=(args.batch_size, 2)))
+                r1 = self._onehot(r[:,0])
+                r2 = self._onehot(r[:,1])
+                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
+                     Variable(torch.cat([r1, ox2, oy2], 1)))
+        elif args.model == 'Cheater':
+            h = [Variable(torch.cat([x[i]] + [y[i]], 1)) for i in range(args.num_feats)]
         else:
             h = Variable(torch.cat(x + y, 1))
 
@@ -246,13 +244,12 @@ if __name__ == '__main__':
     for seed in range(args.nseeds):
         torch.manual_seed(seed)
         rng = np.random.RandomState(seed)
-
-        net = eval(args.model)(args.k)
-        data = Dataset(rng, args.batch_size, args.k, args.split, args.max_value)
+        net = eval(args.model)()
+        data = Dataset(rng)
 
         for i in range(args.nsteps):
             # train
-            h, targets = data.get_batch(0, args.model, randomize=args.randomize)
+            h, targets = data.get_batch(0)
             net.zero_grad()
             s = net(h)
             train_cost = torch.nn.Softplus()(s * -targets).mean()
@@ -262,7 +259,7 @@ if __name__ == '__main__':
                 p.data -= args.lr * p.grad.data
 
             # test
-            h, targets = data.get_batch(1, args.model, randomize=args.randomize)
+            h, targets = data.get_batch(1)
             s = net(h)
             test_cost = torch.nn.Softplus()(s * -targets).mean()
             test_acc = (targets * s > 0).float().mean()

@@ -4,6 +4,7 @@ data
 # Experiment files
 exp
 scripts/dev
+notebooks/
 
 # Image files
 img/cst

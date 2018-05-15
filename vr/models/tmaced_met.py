@@ -15,6 +15,9 @@ from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavie
 from vr.models.layers import build_classifier, build_stem
 import vr.programs
 
+from vr.models.filmed_net import coord_map
+from vr.models.maced_net import sincos_coord_map
+
 class TMAC(nn.Module):
   """Implementation of the Compositional Attention Networks from: https://openreview.net/pdf?id=S1Euwz-Rb"""
   def __init__(self, vocab, feature_dim,
@@ -442,36 +445,6 @@ class InputUnit(nn.Module):
 
   def forward(self, question):
     return self.question_transformer(question) #Section 2.1
-
-def coord_map(shape, start=-1, end=1):
-  """
-  Gives, a 2d shape tuple, returns two mxn coordinate maps,
-  Ranging min-max in the x and y directions, respectively.
-  """
-  m, n = shape
-  x_coord_row = torch.linspace(start, end, steps=n).type(torch.cuda.FloatTensor)
-  y_coord_row = torch.linspace(start, end, steps=m).type(torch.cuda.FloatTensor)
-  x_coords = x_coord_row.unsqueeze(0).expand(torch.Size((m, n))).unsqueeze(0)
-  y_coords = y_coord_row.unsqueeze(1).expand(torch.Size((m, n))).unsqueeze(0)
-  return Variable(torch.cat([x_coords, y_coords], 0))
-
-def sincos_coord_map(shape, p_h=64., p_w=64.):
-  m, n = shape
-  x_coords = torch.zeros(m,n)
-  y_coords = torch.zeros(m,n)
-
-  for i in range(m):
-    for j in range(n):
-      icoord = i if i % 2 == 0 else i-1
-      jcoord = j if j % 2 == 0 else j-1
-      x_coords[i, j] = math.sin(1.0 * i / (10000. ** (1.0 * jcoord / p_h)))
-      y_coords[i, j] = math.cos(1.0 * j / (10000. ** (1.0 * icoord / p_w)))
-
-  x_coords = x_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
-  y_coords = y_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
-
-  return Variable(torch.cat([x_coords, y_coords], 0))
-
 
 def init_modules(modules, init='uniform'):
   if init.lower() == 'normal':

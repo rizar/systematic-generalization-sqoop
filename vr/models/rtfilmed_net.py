@@ -13,9 +13,9 @@ import torchvision.models
 from vr.models.layers import init_modules, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
 import vr.programs
-from vr.models.tfilmed_net import TfilmedResBlock, ConCatTfilmBlock
+from vr.models.tfilmed_net import ConcatFiLMedResBlock
 
-from vr.models.filmed_net import FiLM
+from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 
 class RTFiLMedNet(nn.Module):
   def __init__(self, vocab, feature_dim=(1024, 14, 14),
@@ -90,11 +90,16 @@ class RTFiLMedNet(nn.Module):
     self.num_extra_channels = 2 if self.use_coords_freq > 0 else 0
     if self.debug_every <= -1:
       self.print_verbose_every = 1
-    module_H = feature_dim[1] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    module_W = feature_dim[2] // (stem_stride ** stem_num_layers)  # Rough calc: work for main cases
-    for _ in stem_subsample_layers:
-      module_H //= 2
-      module_W //= 2
+      
+    stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
+    self.stem = build_stem(
+      stem_feature_dim, module_dim,
+      num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
+      kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+      subsample_layers=stem_subsample_layers)
+    tmp = self.stem(Variable(torch.zeros([1, feature_dim[0], feature_dim[1], feature_dim[2]])))
+    module_H = tmp.size(2)
+    module_W = tmp.size(3)
     
     self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = coord_map((module_H, module_W))
@@ -102,11 +107,11 @@ class RTFiLMedNet(nn.Module):
     self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
 
     # Initialize stem
-    stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
-    self.stem = build_stem(stem_feature_dim, module_dim,
-                           num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
-                           kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
-                           subsample_layers=stem_subsample_layers)
+    #stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
+    #self.stem = build_stem(stem_feature_dim, module_dim,
+    #                       num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
+    #                       kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
+    #                       subsample_layers=stem_subsample_layers)
 
     # Initialize Tfilmed network body
     self.function_modules = {}
@@ -129,7 +134,7 @@ class RTFiLMedNet(nn.Module):
 
       if not self.share_module_weight_at_depth or j not in self.depth_to_arity:
         if art == 1 or art == 0:
-          mod = TfilmedResBlock(module_dim, with_residual=module_residual,
+          mod = FiLMedResBlock(module_dim, with_residual=module_residual,
                          with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                          with_cond=with_cond,
                          dropout=module_dropout,
@@ -143,7 +148,7 @@ class RTFiLMedNet(nn.Module):
                          condition_method=condition_method,
                          debug_every=self.debug_every)
         else:
-          mod = ConCatTfilmBlock(art, module_dim, with_residual=module_residual,
+          mod = ConcatFiLMedResBlock(art, module_dim, with_residual=module_residual,
                          with_intermediate_batchnorm=module_intermediate_batchnorm, with_batchnorm=module_batchnorm,
                          with_cond=with_cond,
                          dropout=module_dropout,
@@ -331,16 +336,3 @@ class ConcatBlock(nn.Module):
     out = F.relu(self.proj(out))
     out = self.res_block(out)
     return out
-
-
-def coord_map(shape, start=-1, end=1):
-  """
-  Gives, a 2d shape tuple, returns two mxn coordinate maps,
-  Ranging min-max in the x and y directions, respectively.
-  """
-  m, n = shape
-  x_coord_row = torch.linspace(start, end, steps=n).type(torch.cuda.FloatTensor)
-  y_coord_row = torch.linspace(start, end, steps=m).type(torch.cuda.FloatTensor)
-  x_coords = x_coord_row.unsqueeze(0).expand(torch.Size((m, n))).unsqueeze(0)
-  y_coords = y_coord_row.unsqueeze(1).expand(torch.Size((m, n))).unsqueeze(0)
-  return Variable(torch.cat([x_coords, y_coords], 0))

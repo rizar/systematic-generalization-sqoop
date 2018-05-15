@@ -103,9 +103,12 @@ class Cheater(nn.Module):
         super().__init__()
         self.linear1 = [nn.Linear(2 * args.max_value, args.dim // args.num_feats)
                         for i in range(args.num_feats)]
-        self.linear2 = nn.Linear((args.dim // k) * k, args.dim)
+        self.linear2 = nn.Linear((args.dim // args.num_feats) * args.num_feats, args.dim)
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
+
+        for i, linear in enumerate(self.linear1):
+            self.add_module('linear1-{}'.format(i), linear)
 
     def __call__(self, h):
         h1 = [self.act(self.linear1[i](h[i])) for i in range(args.num_feats)]
@@ -123,6 +126,9 @@ class WeakCheater(nn.Module):
         self.output = nn.Linear(args.dim, 1)
         self.act = nn.ReLU()
 
+        for i, linear in enumerate(self.linear1):
+            self.add_module('linear1-{}'.format(i), linear)
+
     def __call__(self, h):
         h1 = [self.act(self.linear1[i](h[i])) for i in range(args.num_feats)]
         h2 = self.act(self.linear2(torch.cat(h1, 1)))
@@ -135,16 +141,15 @@ class Dataset:
         self._generate_data()
 
     def _generate_data(self):
-        k = args.num_feats
-        self.num_examples = args.max_value**(k*2)
+        self.num_examples = args.max_value**(args.num_feats*2)
         # inputs = x_1...x_k, y_1...y_k
-        inputs_iter = itertools.product(range(args.max_value), repeat=k*2)
+        inputs_iter = itertools.product(range(args.max_value), repeat=args.num_feats*2)
         inputs_np = np.fromiter(itertools.chain.from_iterable(inputs_iter), np.int)
-        self.inputs = np.reshape(inputs_np, (args.max_value**(k*2), k*2))
+        self.inputs = np.reshape(inputs_np, (args.max_value**(args.num_feats*2), args.num_feats*2))
         # targets = 1 if x_i = y_i, else -1
         xy_equal = []
-        for i in range(k):
-            xy_equal.append(self.inputs[:, i] == self.inputs[:,i+k])
+        for i in range(args.num_feats):
+            xy_equal.append(self.inputs[:, i] == self.inputs[:,i+args.num_feats])
         self.targets = 2 * np.all(np.stack(xy_equal, axis=1), axis=1) - 1
 
         is_train = self.rng.binomial(1, 0.5, self.num_examples)
@@ -162,77 +167,38 @@ class Dataset:
             self.negative_indices = (negatives, negatives)
 
         if args.randomize is not None:
-            self.random_inputs = np.random.randint(args.max_value, size=(max_value**k, k))
+            self.random_inputs = np.random.randint(
+                args.max_value, size=(args.max_value**args.num_feats, args.num_feats))
 
-    def _continue_data(max_value):
-        inputs = []
-        targets = []
-        positive_indices = [[], []]
-        negative_indices = [[], []]
-        r = range(max_value)
-        for x1 in r:
-            for x2 in r:
-                for y1 in r:
-                    for y2 in r:
-                        if split == 'none':
-                            part = 0
-                        elif split == 'random':
-                            part = self.rng.randint(2)
-                        if x1 == y1 and x2 == y2:
-                            positive_indices[part].append(len(inputs))
-                            targets.append(1)
-                        else:
-                            negative_indices[part].append(len(inputs))
-                            targets.append(-1)
-                        inputs.append([x1, x2, y1, y2])
-        self.inputs = np.array(inputs)
-        self.targets = np.array(targets)
-        self.positive_indices = list(map(np.array, positive_indices))
-        self.negative_indices = list(map(np.array, negative_indices))
-        if split == 'none':
-            self.positive_indices[1] = positive_indices[0]
-            self.negative_indices[1] = negative_indices[0]
-
-    def _onehot(self, tensor):
-        tensor.unsqueeze_(-1)
-        one_hot = torch.LongTensor(args.batch_size, args.max_value).zero_()
-        one_hot.scatter_(1, tensor, 1)
-        return one_hot.float()
+    def _onehot(self, array):
+        one_hot = np.zeros((args.batch_size, args.max_value))
+        one_hot[np.arange(args.batch_size), array] = 1
+        return one_hot
 
     def get_batch(self, part):
         indices = np.concatenate([self.rng.choice(self.positive_indices[part], args.batch_size // 2),
                                   self.rng.choice(self.negative_indices[part], args.batch_size // 2)])
         targets = Variable(torch.FloatTensor(self.targets[indices]))
-        xy = [torch.LongTensor(self.inputs[indices, j]) for j in range(2*args.num_feats)]
-        x = [self._onehot(v) for v in xy[:args.num_feats]]
-        y = [self._onehot(v) for v in xy[args.num_feats:]]
+        xs = self.inputs[indices, :args.num_feats]
+        ys = self.inputs[indices, args.num_feats:]
+        x = [torch.FloatTensor(self._onehot(xs[:,i])) for i in range(args.num_feats)]
+        y = [torch.FloatTensor(self._onehot(ys[:,i])) for i in range(args.num_feats)]
 
         if args.model == "WeakCheater":
             if args.randomize is None:
                 h = [Variable(torch.cat(x + [y[i]], 1)) for i in range(args.num_feats)]
-            if args.randomize == 'random':
-                r = torch.LongTensor(self.rng.randint(args.max_value, size=(args.batch_size, args.num_feats)))
-                r1 = self._onehot(r[:,0])
-                r2 = self._onehot(r[:,1])
-                h = [Variable(torch.cat([ox1, r2, oy1], 1))
+            elif args.randomize == 'random':
+                rs = self.rng.randint(args.max_value, size=(args.batch_size, args.num_feats))
+                r = [torch.FloatTensor(self._onehot(rs[:,i])) for i in range(args.num_feats)]
+                h = [Variable(torch.cat(r[:i] + [x[i]] + r[i+1:] + [y[i]], 1))
                      for i in range(num_feats)]
-                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     Variable(torch.cat([r1, ox2, oy2], 1)))
             elif args.randomize == 'consistent':
-                r = torch.LongTensor(self.random_inputs[indices])
-                r1 = self._onehot(r[:,0])
-                r2 = self._onehot(r[:,1])
-                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     Variable(torch.cat([r1, ox2, oy2], 1)))
-            elif args.randomize == 'half':
-                r = torch.LongTensor(0.9*self.random_inputs[indices] +
-                                     0.1*self.rng.randint(args.max_value, size=(args.batch_size, 2)))
-                r1 = self._onehot(r[:,0])
-                r2 = self._onehot(r[:,1])
-                h = (Variable(torch.cat([ox1, r2, oy1], 1)),
-                     Variable(torch.cat([r1, ox2, oy2], 1)))
+                r = [torch.FloatTensor(self._onehot(self.random_inputs[indices][:,i]))
+                     for i in range(args.num_feats)]
+                h = [Variable(torch.cat(r[:i] + [x[i]] + r[i+1:] + [y[i]], 1))
+                     for i in range(num_feats)]
         elif args.model == 'Cheater':
-            h = [Variable(torch.cat([x[i]] + [y[i]], 1)) for i in range(args.num_feats)]
+            h = [Variable(torch.cat([x[i], y[i]], 1)) for i in range(args.num_feats)]
         else:
             h = Variable(torch.cat(x + y, 1))
 

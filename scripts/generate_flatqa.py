@@ -208,13 +208,13 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
   elif args.level == 'relations':
     max_question_len = 8
     if args.program == 'best':
-      max_program_len = 12
+      max_program_len = 13
     elif args.program == 'noand':
-      max_program_len = 8
+      max_program_len = 9
     elif args.program == 'chain':
-      max_program_len = 7
+      max_program_len = 8
     elif args.program == 'chain_shortcut':
-      max_program_len = 11
+      max_program_len = 12
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
                     + sampler.colors + sampler.shapes + RELATIONS)
@@ -364,23 +364,29 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
                     color1, shape1, rel, color2, shape2]
         if args.program == 'best':
           program = ["<START>", relation_module(rel),
-                      "And", shape_module(shape1), "scene", color_module(color1), "scene",
-                      "And", shape_module(shape2), "scene", color_module(color2), "scene"]
+                     "And", shape_module(shape1), "scene", color_module(color1), "scene",
+                     "And", shape_module(shape2), "scene", color_module(color2), "scene",
+                     "<END>"]
         elif args.program == 'noand':
           program = ["<START>", relation_module(rel),
                      shape_module(shape1), color_module(color1), "scene",
-                     shape_module(shape2), color_module(color2), "scene"]
+                     shape_module(shape2), color_module(color2), "scene",
+                     "<END>"]
         elif args.program == 'chain':
           program = ["<START>", 
                      shape_module(shape1), color_module(color1), 
                      unary_relation_module(rel),
                      shape_module(shape2), color_module(color2), 
-                     "scene"]
+                     "scene",
+                     "<END>"]
         elif args.program == 'chain_shortcut':
           program = ["<START>", 
-                     binary_shape_module(shape1), 'scene', binary_color_module(color1), 'scene', 
+                     binary_shape_module(shape1), 'scene', 
+                     binary_color_module(color1), 'scene', 
                      unary_relation_module(rel),
-                     binary_shape_module(shape2), 'scene', binary_color_module(color2), 'scene', 'scene']
+                     binary_shape_module(shape2), 'scene', 
+                     binary_color_module(color2), 'scene',
+                     'scene', "<END>"]
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
@@ -588,7 +594,7 @@ if __name__ == '__main__':
   parser.add_argument('--test', type=int, default=1000,
                       help="Size of the test set")
   parser.add_argument('--level', type=str, choices=('shapecolor', 'relations'), default='shapecolor')
-  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'))
+  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'), default='best')
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--num-objects', type=int, default=5)

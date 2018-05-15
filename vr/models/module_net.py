@@ -282,7 +282,7 @@ class ModuleNet(nn.Module):
       bcoords = self.coords.unsqueeze(0)
       if len(module_inputs) == 1:
         if self.sharing_patterns[0] == 1:
-          module_inputs = [module_inputs[0], module_inputs[0].clone()]
+          module_inputs = [module_inputs[0], module_inputs[0]]
         else:
           module_inputs = module_inputs[0]
       module_output = module(module_inputs, igammas, ibetas, bcoords)

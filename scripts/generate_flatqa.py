@@ -439,25 +439,6 @@ class Sampler:
     return self._rejection_sample()
 
 
-class BelowRedSampler(Sampler):
-
-  def sample_relation(self):
-    if self._test:
-      return 'below'
-    else:
-      return super().sample_relation()
-
-  def sample_shape_color(self, purpose, relation):
-    red_objects = [(shape, 'red') for shape in self.shapes]
-    if self._test:
-      # only 'below'
-      return self._rejection_sample(red_objects)
-    else:
-      if relation == 'below':
-        return self._choose(red_objects)
-      return self._rejection_sample()
-
-
 class _HoldRelationColorSampler(Sampler):
   """At training time the relation 'hold_rel' is only explained with 'hold_color'.
   At test time we test the generalization of 'hold_rel' to other colors.
@@ -514,28 +495,6 @@ class _HoldRelationShapeSampler(Sampler):
 
 def HoldRelationShapeSampler(hold_rel, hold_shape):
   return partial(_HoldRelationShapeSampler, hold_rel=hold_rel, hold_shape=hold_shape)
-
-
-class BelowSquaresSampler(Sampler):
-  """At training time the relation 'below' is only explained with squares.
-  At test time we test the generalization of 'below' to other types of objects.
-  """
-
-  def sample_relation(self):
-    if self._test:
-      return 'below'
-    else:
-      return super().sample_relation()
-
-  def sample_shape_color(self, purpose, relation):
-    squares = [('square', color) for color in self.colors]
-    if self._test:
-      # only 'below'
-      return self._rejection_sample(squares)
-    else:
-      if relation == 'below':
-        return self._choose(squares)
-      return self._rejection_sample()
 
 
 class BelowExcludeDiagSampler(Sampler):

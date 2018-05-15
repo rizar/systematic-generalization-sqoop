@@ -46,7 +46,14 @@ class ModuleNet(nn.Module):
     super(ModuleNet, self).__init__()
     
     self.module_dim = module_dim
+    
+    # should be 0 or 1 to indicate the use of film block or not (0 would bring you back to the original EE model)
     self.use_film = use_film
+    
+    # this should be a list of two elements (either 0 or 1). It's only active if self.use_film == 1
+    # The first element of 1 indicates the sharing of CNN weights in the film blocks, 0 otheriwse
+    # The second element of 1 indicate the sharing of film coefficient in the film blocks, 0 otherwise
+    # so [1,0] would be sharing the CNN weights while having different film coefficients for different modules in the program
     self.sharing_patterns = sharing_patterns
 
     self.stem = build_stem(feature_dim[0], module_dim,

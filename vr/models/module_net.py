@@ -93,17 +93,14 @@ class ModuleNet(nn.Module):
       
       if self.use_film:
           if self.sharing_patterns[1] == 1:
-            numId = 1 if fn_str == 'scene' else num_inputs
-            self.fn_str_2_filmId[str(numId)] = numId-1
+            self.fn_str_2_filmId[fn_str] = 0
           else:
             self.fn_str_2_filmId[fn_str] = len(self.fn_str_2_filmId)
       
       if fn_str == 'scene' or num_inputs == 1:
         if self.use_film:
-          if self.sharing_patterns[0] == 1 and '1' in self.function_modules:
-              mod = self.function_modules['1']
-              stored_name = '1'
-              newModule = False
+          if self.sharing_patterns[0] == 1:
+              mod = None
           else:
               mod = FiLMedResBlock(module_dim, with_residual=module_residual,
                                    with_intermediate_batchnorm=False, with_batchnorm=False,
@@ -118,8 +115,6 @@ class ModuleNet(nn.Module):
                                    num_layers=1,
                                    condition_method='bn-film',
                                    debug_every=float('inf'))
-              stored_name = '1' if self.sharing_patterns[0] == 1 else fn_str
-              newModule = True
         else:
           mod = ResidualBlock(
                   module_dim,
@@ -128,10 +123,8 @@ class ModuleNet(nn.Module):
                   with_batchnorm=module_batchnorm)
       elif num_inputs == 2:
         if self.use_film: 
-          if self.sharing_patterns[0] == 1 and '2' in self.function_modules:
-            mod = self.function_modules['2']
-            stored_name = '2'
-            newModule = False
+          if self.sharing_patterns[0] == 1:
+            mod = None
           else:
             mod = ConcatFiLMedResBlock(2, module_dim, with_residual=module_residual,
                           with_intermediate_batchnorm=False, with_batchnorm=False,
@@ -146,22 +139,35 @@ class ModuleNet(nn.Module):
                           num_layers=1,
                           condition_method='bn-film',
                           debug_every=float('inf'))
-            stored_name = '2' if self.sharing_patterns[0] == 1 else fn_str
-            newModule = True
         else:
           mod = ConcatBlock(
                     module_dim,
                     kernel_size=module_kernel_size,
                     with_residual=module_residual,
                     with_batchnorm=module_batchnorm)
+      else:
+        raise Exception('Not implemented!')
       
-      if self.use_film:
-        if newModule:
-          self.add_module(stored_name, mod)
-          self.function_modules[stored_name] = mod
-      else: 
+      if mode is not None:
         self.add_module(fn_str, mod)
         self.function_modules[fn_str] = mod
+    
+    if self.use_film and self.sharing_patterns[0] == 1:
+      mod = ConcatFiLMedResBlock(2, module_dim, with_residual=module_residual,
+                    with_intermediate_batchnorm=False, with_batchnorm=False,
+                    with_cond=[True, True],
+                    dropout=5e-2,
+                    num_extra_channels=2, #was 2 for original film,
+                    extra_channel_freq=1,
+                    with_input_proj=1,
+                    num_cond_maps=0,
+                    kernel_size=module_kernel_size,
+                    batchnorm_affine=False,
+                    num_layers=1,
+                    condition_method='bn-film',
+                    debug_every=float('inf'))
+      self.add_module('shared_film', mod)
+      self.function_modules['shared_film'] = mod
     
     self.declare_film_coefficients()
 
@@ -248,15 +254,11 @@ class ModuleNet(nn.Module):
     if fn_str == 'scene': num_inputs = 1
     
     if self.use_film:
-      if self.sharing_patterns[1] == 1:
-        query_id = str(num_inputs)
-      else:
-        query_id = fn_str
-      assert query_id in self.fn_str_2_filmId
-      midx = self.fn_str_2_filmId[query_id]
+      assert fn_str in self.fn_str_2_filmId
+      midx = self.fn_str_2_filmId[fn_str]
     
       if self.sharing_patterns[0] == 1:
-        query_id = str(num_inputs)
+        query_id = 'shared_film'
       else:
         query_id = fn_str
       assert query_id in self.function_modules
@@ -278,7 +280,11 @@ class ModuleNet(nn.Module):
       igammas = self.gammas[:,midx,:]
       ibetas =  self.betas[:,midx,:]
       bcoords = self.coords.unsqueeze(0)
-      if len(module_inputs) == 1: module_inputs = module_inputs[0]
+      if len(module_inputs) == 1:
+        if self.sharing_patterns[0] == 1:
+          module_inputs = [module_inputs[0], module_inputs[0].clone()]
+        else:
+          module_inputs = module_inputs[0]
       module_output = module(module_inputs, igammas, ibetas, bcoords)
     else:
       module_output = module(*module_inputs)

@@ -148,7 +148,7 @@ class ModuleNet(nn.Module):
       else:
         raise Exception('Not implemented!')
       
-      if mode is not None:
+      if mod is not None:
         self.add_module(fn_str, mod)
         self.function_modules[fn_str] = mod
     

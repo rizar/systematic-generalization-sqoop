@@ -32,6 +32,7 @@ def _gen_subsample_mask(num, percent=1.0):
   mask[selected_ids] = True
   return mask
 
+
 class ClevrDataset(Dataset):
   def __init__(self, question_h5, feature_h5_path, vocab, mode='prefix',
                image_h5=None, load_features=False, max_samples=None, question_families=None,
@@ -191,20 +192,27 @@ class ClevrDataLoader(DataLoader):
 
 def clevr_collate(batch):
   transposed = list(zip(*batch))
-  question_batch = transposed[0]
-  __import__('pdb').set_trace()
-  question_batch = default_collate(transposed[0])
+  # sort in decreasing order of question length
+  question_lengths = [question.nonzero().size(0) for question in transposed[0]]
+  sort_idx = np.argsort(question_lengths)[::-1].tolist()
+
+  question_batch = default_collate(transposed[0])[sort_idx]
+
   image_batch = transposed[1]
-  if any(img is not None for img in image_batch):
-    image_batch = default_collate(image_batch)
+  if all(img is not None for img in image_batch):
+    image_batch = default_collate(image_batch)[sort_idx]
+
   feat_batch = transposed[2]
-  if any(f is not None for f in feat_batch):
-    feat_batch = default_collate(feat_batch)
+  if all(f is not None for f in feat_batch):
+    feat_batch = default_collate(feat_batch)[sort_idx]
+
   answer_batch = transposed[3]
   if transposed[3][0] is not None:
-    answer_batch = default_collate(transposed[3])
+    answer_batch = default_collate(transposed[3])[sort_idx]
+
   program_seq_batch = transposed[4]
   if transposed[4][0] is not None:
-    program_seq_batch = default_collate(transposed[4])
-  program_struct_batch = transposed[5]
+    program_seq_batch = default_collate(transposed[4])[sort_idx]
+
+  program_struct_batch = [transposed[5][i] for i in sort_idx]
   return [question_batch, image_batch, feat_batch, answer_batch, program_seq_batch, program_struct_batch]

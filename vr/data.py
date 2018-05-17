@@ -191,6 +191,8 @@ class ClevrDataLoader(DataLoader):
 
 def clevr_collate(batch):
   transposed = list(zip(*batch))
+  question_batch = transposed[0]
+  __import__('pdb').set_trace()
   question_batch = default_collate(transposed[0])
   image_batch = transposed[1]
   if any(img is not None for img in image_batch):

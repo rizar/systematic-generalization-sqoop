@@ -81,10 +81,7 @@ class Seq2Seq(nn.Module):
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
     x, idx = self.before_rnn(x)
     embed = self.encoder_embed(x)
-    h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
-    c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
-
-    out, _ = self.encoder_rnn(embed, (h0, c0))
+    out, _ = self.encoder_rnn(embed)
 
     # Pull out the hidden state for the last non-null value in each input
     idx = idx.view(N, 1, 1).expand(N, 1, H)

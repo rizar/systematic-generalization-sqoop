@@ -17,16 +17,15 @@ from vr.embedding import expand_embedding_vocab
 
 class Seq2Seq(nn.Module):
   def __init__(self,
+    null_token=0,
+    start_token=1,
+    end_token=2,
     encoder_vocab_size=100,
     decoder_vocab_size=100,
     wordvec_dim=300,
     hidden_dim=256,
     rnn_num_layers=2,
     rnn_dropout=0,
-    null_token=0,
-    start_token=1,
-    end_token=2,
-    encoder_embed=None
   ):
     super(Seq2Seq, self).__init__()
     self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)

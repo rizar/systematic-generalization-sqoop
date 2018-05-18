@@ -2,6 +2,7 @@ import os
 import json
 from matplotlib import pyplot
 import pandas
+import scipy.stats as stats
 
 
 def load_log(root, file_, data_train, data_val, args):
@@ -47,15 +48,20 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
                                 linestyle='dotted')
       if val_quantity:
         val_values = df_root[val_quantity]['mean']
+        val_std = df_root[val_quantity]['std']
         if window:
           val_values = val_values.rolling(window).mean()
+          val_std = val_std.rolling(window).mean()
         pyplot.plot(df_root.index.get_level_values(1),
                     val_values,
                     label=root + " val",
                     color=train_lines[0].get_color())
-      to_print = [root, train_values.iloc[-1]]
+      n_seeds = len(df[df['root'] == root]['slurmid'].unique())
+      to_print = [root, "{} seeds".format(n_seeds), 100 * train_values.iloc[-1]]
       if val_quantity:
-        to_print.append(val_values.iloc[-1])
+        std = val_std.iloc[-1]
+        width = std * stats.t.ppf(0.975, n_seeds - 1) / (n_seeds ** 0.5)
+        to_print.append("{}+-{}".format(100 * val_values.iloc[-1], 100 * width))
       print(*to_print)
     pyplot.legend()
 

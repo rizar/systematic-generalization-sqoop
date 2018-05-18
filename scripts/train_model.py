@@ -30,6 +30,7 @@ from vr.data import (ClevrDataset,
                      ClevrDataLoader)
 from vr.models import (ModuleNet,
                        Seq2Seq,
+                       Seq2SeqAtt,
                        LstmModel,
                        CnnLstmModel,
                        CnnLstmSaModel,
@@ -87,11 +88,12 @@ parser.add_argument('--program_generator_start_from', default=None)
 parser.add_argument('--execution_engine_start_from', default=None)
 parser.add_argument('--baseline_start_from', default=None)
 
-# RNN options
+# RNN options (for PG)
 parser.add_argument('--rnn_wordvec_dim', default=300, type=int)
 parser.add_argument('--rnn_hidden_dim', default=256, type=int)
 parser.add_argument('--rnn_num_layers', default=2, type=int)
 parser.add_argument('--rnn_dropout', default=0, type=float)
+parser.add_argument('--rnn_attention', action='store_true')
 
 # Module net / FiLMedNet options
 parser.add_argument('--module_stem_num_layers', default=2, type=int)
@@ -463,7 +465,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       compute_start_time = time.time()
 
       t += 1
-      questions, _, feats, answers, programs, _ = batch
+      questions, _, feats, answers, programs, _, question_lengths = batch
       if isinstance(questions, list):
         questions = questions[0]
       questions_var = Variable(questions.cuda())
@@ -476,7 +478,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       if args.model_type == 'PG':
         # Train program generator with ground-truth programs
         pg_optimizer.zero_grad()
-        loss = program_generator(questions_var, programs_var)
+        loss = program_generator(questions_var, question_lengths, programs_var)
         loss.backward()
         pg_optimizer.step()
       elif args.model_type in ['EE', 'Hetero']:
@@ -494,7 +496,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         baseline_optimizer.step()
       elif args.model_type == 'PG+EE':
-        programs_pred = program_generator.reinforce_sample(questions_var)
+        programs_pred = program_generator.reinforce_sample(questions_var, question_lengths)
         scores = execution_engine(feats_var, programs_pred)
 
         loss = loss_fn(scores, answers_var)
@@ -759,6 +761,8 @@ def get_program_generator(args):
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
       pg = FiLMGen(**kwargs)
+    elif args.rnn_attention:
+      pg = Seq2SeqAtt(**kwargs)
     else:
       pg = Seq2Seq(**kwargs)
   pg.cuda()
@@ -945,6 +949,7 @@ def get_execution_engine(args):
   ee.train()
   return ee, kwargs
 
+
 def get_baseline_model(args):
   vocab = vr.utils.load_vocab(args.vocab_json)
   if args.baseline_start_from is not None:
@@ -1019,7 +1024,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   set_mode('eval', [program_generator, execution_engine, baseline_model])
   num_correct, num_samples = 0, 0
   for batch in loader:
-    questions, _, feats, answers, programs, _ = batch
+    questions, _, feats, answers, programs, _, question_lengths = batch
     if isinstance(questions, list):
       questions = questions[0]
 
@@ -1033,7 +1038,8 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     if args.model_type == 'PG':
       vocab = vr.utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
-        program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True))
+        program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True),
+                                                Variable(question_lengths[i:i+1].cuda(), volatile=True))
         program_pred_str = vr.preprocess.decode(program_pred, vocab['program_idx_to_token'])
         program_str = vr.preprocess.decode(programs[i], vocab['program_idx_to_token'])
         if program_pred_str == program_str:
@@ -1043,7 +1049,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
       programs_pred = program_generator.reinforce_sample(
-                          questions_var, argmax=True)
+                          questions_var, question_lengths, argmax=True)
       scores = execution_engine(feats_var, programs_pred)
     elif args.model_type == 'FiLM' or args.model_type == 'RTfilm':
       programs_pred = program_generator(questions_var)
@@ -1072,6 +1078,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   acc = float(num_correct) / num_samples
   return acc
 
+
 def check_grad_num_nans(model, model_name='model'):
     grads = [p.grad for p in model.parameters() if p.grad is not None]
     num_nans = [np.sum(np.isnan(grad.data.cpu().numpy())) for grad in grads]
@@ -1081,6 +1088,7 @@ def check_grad_num_nans(model, model_name='model'):
       print(num_nans)
       pdb.set_trace()
       raise(Exception)
+
 
 if __name__ == '__main__':
   args = parser.parse_args()

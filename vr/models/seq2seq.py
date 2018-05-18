@@ -14,6 +14,7 @@ from torch.autograd import Variable
 
 from vr.embedding import expand_embedding_vocab
 
+
 class Seq2Seq(nn.Module):
   def __init__(self,
     encoder_vocab_size=100,
@@ -135,7 +136,7 @@ class Seq2Seq(nn.Module):
     loss = F.cross_entropy(out_masked, y_masked)
     return loss
 
-  def forward(self, x, y):
+  def forward(self, x, x_lengths, y):
     encoded = self.encoder(x)
 
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
@@ -149,7 +150,7 @@ class Seq2Seq(nn.Module):
     loss = self.compute_loss(output_logprobs, y)
     return loss
 
-  def sample(self, x, max_length=50):
+  def sample(self, x, x_lengths, max_length=50):
     # TODO: Handle sampling for minibatch inputs
     # TODO: Beam search?
     self.multinomial_outputs = None
@@ -166,7 +167,7 @@ class Seq2Seq(nn.Module):
         break
     return y
 
-  def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
+  def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):
     N, T = x.size(0), max_length
     encoded = self.encoder(x)
     y = torch.LongTensor(N, T).fill_(self.NULL)

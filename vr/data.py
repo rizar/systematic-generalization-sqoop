@@ -95,6 +95,7 @@ class ClevrDataset(Dataset):
       question_family = self.all_question_families[index]
     q_type = None if self.all_types is None else self.all_types[index]
     question = self.all_questions[index]
+    question_length = question.nonzero().size(0)
     image_idx = self.all_image_idxs[index]
     answer = None
     if self.all_answers is not None:
@@ -131,8 +132,8 @@ class ClevrDataset(Dataset):
         program_json = self.program_converter.to_list(program_json_seq)
 
     if q_type is None:
-      return (question, image, feats, answer, program_seq, program_json)
-    return ([question, q_type], image, feats, answer, program_seq, program_json)
+      return (question, image, feats, answer, program_seq, program_json, question_length)
+    return ([question, q_type], image, feats, answer, program_seq, program_json, question_length)
 
   def __len__(self):
     if self.max_samples is None:
@@ -193,26 +194,28 @@ class ClevrDataLoader(DataLoader):
 def clevr_collate(batch):
   transposed = list(zip(*batch))
   # sort in decreasing order of question length
-  question_lengths = [question.nonzero().size(0) for question in transposed[0]]
-  sort_idx = np.argsort(question_lengths)[::-1].tolist()
+  question_length_batch = default_collate(transposed[6])
+  question_length_batch, sort_indices = torch.sort(question_length_batch, descending=True)
+  question_length_batch = list(question_length_batch) # TODO(mnoukhov): remove for pytorch 0.4+
 
-  question_batch = default_collate(transposed[0])[sort_idx]
+  question_batch = default_collate(transposed[0])[sort_indices]
 
   image_batch = transposed[1]
   if all(img is not None for img in image_batch):
-    image_batch = default_collate(image_batch)[sort_idx]
+    image_batch = default_collate(image_batch)[sort_indices]
 
   feat_batch = transposed[2]
   if all(f is not None for f in feat_batch):
-    feat_batch = default_collate(feat_batch)[sort_idx]
+    feat_batch = default_collate(feat_batch)[sort_indices]
 
   answer_batch = transposed[3]
   if transposed[3][0] is not None:
-    answer_batch = default_collate(transposed[3])[sort_idx]
+    answer_batch = default_collate(transposed[3])[sort_indices]
 
   program_seq_batch = transposed[4]
   if transposed[4][0] is not None:
-    program_seq_batch = default_collate(transposed[4])[sort_idx]
+    program_seq_batch = default_collate(transposed[4])[sort_indices]
 
-  program_struct_batch = [transposed[5][i] for i in sort_idx]
-  return [question_batch, image_batch, feat_batch, answer_batch, program_seq_batch, program_struct_batch]
+  program_struct_batch = [transposed[5][i] for i in sort_indices]
+
+  return [question_batch, image_batch, feat_batch, answer_batch, program_seq_batch, program_struct_batch, question_length_batch]

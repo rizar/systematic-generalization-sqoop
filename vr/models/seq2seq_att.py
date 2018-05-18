@@ -15,7 +15,7 @@ from torch.autograd import Variable
 from vr.embedding import expand_embedding_vocab
 
 
-class Seq2Seq(nn.Module):
+class Seq2SeqAtt(nn.Module):
   def __init__(self,
     null_token=0,
     start_token=1,
@@ -27,7 +27,7 @@ class Seq2Seq(nn.Module):
     rnn_num_layers=2,
     rnn_dropout=0,
   ):
-    super(Seq2Seq, self).__init__()
+    super().__init__()
     self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)
     self.encoder_rnn = nn.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
                                dropout=rnn_dropout, batch_first=True)
@@ -77,15 +77,19 @@ class Seq2Seq(nn.Module):
     x[x.data == self.NULL] = replace
     return x, Variable(idx)
 
-  def encoder(self, x):
+  def encoder(self, x, x_lengths):
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
-    x, idx = self.before_rnn(x)
+    _, idx = self.before_rnn(x)
+
     embed = self.encoder_embed(x)
-    out, _ = self.encoder_rnn(embed)
+    packed = torch.nn.utils.rnn.pack_padded_sequence(x, x_lengths, batch_first=True)
+    out_packed, hid = self.encoder_rnn(packed)
+    out, out_lengths = torch.nn.utils.rnn.pad_packed_sequence(out_packed)
 
     # Pull out the hidden state for the last non-null value in each input
-    idx = idx.view(N, 1, 1).expand(N, 1, H)
-    return out.gather(1, idx).view(N, H)
+    # idx = idx.view(N, 1, 1).expand(N, 1, H)
+    # old_out = out.gather(1, idx).view(N, H)
+    # TODO(mnoukhov) new out
 
   def decoder(self, encoded, y, h0=None, c0=None):
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
@@ -132,8 +136,8 @@ class Seq2Seq(nn.Module):
     loss = F.cross_entropy(out_masked, y_masked)
     return loss
 
-  def forward(self, x, y):
-    encoded = self.encoder(x)
+  def forward(self, x, x_lengths, y):
+    encoded = self.encoder(x, x_lengths)
 
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
     T_out = 15
@@ -146,7 +150,7 @@ class Seq2Seq(nn.Module):
     loss = self.compute_loss(output_logprobs, y)
     return loss
 
-  def sample(self, x, max_length=50):
+  def sample(self, x, x_lengths, max_length=50):
     # TODO: Handle sampling for minibatch inputs
     # TODO: Beam search?
     self.multinomial_outputs = None
@@ -163,7 +167,7 @@ class Seq2Seq(nn.Module):
         break
     return y
 
-  def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
+  def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):
     N, T = x.size(0), max_length
     encoded = self.encoder(x)
     y = torch.LongTensor(N, T).fill_(self.NULL)

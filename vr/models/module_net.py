@@ -112,7 +112,7 @@ class ModuleNet(nn.Module):
               mod = FiLMedResBlock(module_dim, with_residual=module_residual,
                                    with_intermediate_batchnorm=False, with_batchnorm=False,
                                    with_cond=[True, True],
-                                   dropout=5e-2,
+                                   dropout=0e-2,
                                    num_extra_channels=2, # was 2 for original film,
                                    extra_channel_freq=1,
                                    with_input_proj=1,

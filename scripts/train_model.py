@@ -773,6 +773,7 @@ def get_execution_engine(args):
       'module_dim': args.module_dim,
       'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
+      'module_input_proj': args.module_input_proj,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
       'classifier_downsample': args.classifier_downsample,

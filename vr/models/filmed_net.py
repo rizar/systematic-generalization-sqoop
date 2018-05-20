@@ -239,8 +239,6 @@ class FiLMedResBlock(nn.Module):
     self.condition_method = condition_method
     self.debug_every = debug_every
 
-    if self.with_input_proj % 2 == 0:
-      raise(NotImplementedError)
     if self.kernel_size % 2 == 0:
       raise(NotImplementedError)
     if self.num_layers >= 2:

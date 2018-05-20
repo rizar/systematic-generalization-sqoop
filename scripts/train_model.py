@@ -465,7 +465,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       compute_start_time = time.time()
 
       t += 1
-      questions, _, feats, answers, programs, _, question_lengths = batch
+      (questions, _, feats, answers, programs, _,
+       question_lengths, program_lengths) = batch
       if isinstance(questions, list):
         questions = questions[0]
       questions_var = Variable(questions.cuda())
@@ -1024,7 +1025,8 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   set_mode('eval', [program_generator, execution_engine, baseline_model])
   num_correct, num_samples = 0, 0
   for batch in loader:
-    questions, _, feats, answers, programs, _, question_lengths = batch
+    (questions, _, feats, answers, programs, _,
+     question_lengths, program_lengths) = batch
     if isinstance(questions, list):
       questions = questions[0]
 

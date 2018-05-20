@@ -101,8 +101,10 @@ class ClevrDataset(Dataset):
     if self.all_answers is not None:
       answer = self.all_answers[index]
     program_seq = None
+    program_length = None
     if self.all_programs is not None:
       program_seq = self.all_programs[index]
+      program_length = program_seq.nonzero().size(0)
 
     image = None
     if self.image_h5 is not None:
@@ -132,8 +134,8 @@ class ClevrDataset(Dataset):
         program_json = self.program_converter.to_list(program_json_seq)
 
     if q_type is None:
-      return (question, image, feats, answer, program_seq, program_json, question_length)
-    return ([question, q_type], image, feats, answer, program_seq, program_json, question_length)
+      return (question, image, feats, answer, program_seq, program_json, question_length, program_length)
+    return ([question, q_type], image, feats, answer, program_seq, program_json, question_length, program_length)
 
   def __len__(self):
     if self.max_samples is None:
@@ -210,12 +212,18 @@ def clevr_collate(batch):
 
   answer_batch = transposed[3]
   if transposed[3][0] is not None:
-    answer_batch = default_collate(transposed[3])[sort_indices]
+    answer_batch = default_collate(answer_batch)[sort_indices]
 
   program_seq_batch = transposed[4]
   if transposed[4][0] is not None:
-    program_seq_batch = default_collate(transposed[4])[sort_indices]
+    program_seq_batch = default_collate(program_seq_batch)[sort_indices]
 
   program_struct_batch = [transposed[5][i] for i in sort_indices]
 
-  return [question_batch, image_batch, feat_batch, answer_batch, program_seq_batch, program_struct_batch, question_length_batch]
+  program_length_batch = transposed[7]
+  if transposed[4][0] is not None:
+    program_length_batch = default_collate(program_length_batch)[sort_indices]
+
+  return [question_batch, image_batch, feat_batch, answer_batch,
+          program_seq_batch, program_struct_batch, question_length_batch,
+          program_length_batch]

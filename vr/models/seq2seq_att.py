@@ -11,8 +11,59 @@ import torch.cuda
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torch.nn.utils.rnn import (pack_padded_sequence,
+                                pad_packed_sequence)
 
 from vr.embedding import expand_embedding_vocab
+
+
+
+class Attn(nn.Module):
+  def __init__(self, method, wordvec_size, hidden_size):
+    super(Attn, self).__init__()
+
+    self.method = method
+    self.hidden_size = hidden_size
+    self.wordvec_size = wordvec_size
+
+    if self.method == 'general':
+      self.attn = nn.Linear(self.hidden_size, hidden_size)
+
+    elif self.method == 'concat':
+      self.attn = nn.Linear(self.hidden_size * 2, hidden_size)
+      self.v = nn.Parameter(torch.FloatTensor(1, hidden_size))
+
+  def forward(self, hidden, encoder_outputs):
+    max_len = encoder_outputs.size(0)
+    this_batch_size = encoder_outputs.size(1)
+
+    # Create variable to store attention energies
+    attn_energies = Variable(torch.zeros(this_batch_size, max_len)) # B x S
+    attn_energies = attn_energies.cuda()
+
+    # For each batch of encoder outputs
+    for b in range(this_batch_size):
+      # Calculate energy for each encoder output
+      for i in range(max_len):
+        attn_energies[b, i] = self.score(hidden[:, b], encoder_outputs[i, b].unsqueeze(0))
+
+    # Normalize energies to weights in range 0 to 1, resize to 1 x B x S
+    return F.softmax(attn_energies).unsqueeze(1)
+
+  def score(self, hidden, encoder_output):
+    if self.method == 'dot':
+      energy = hidden.dot(encoder_output)
+      return energy
+
+    elif self.method == 'general':
+      energy = self.attn(encoder_output)
+      energy = hidden.dot(energy)
+      return energy
+
+    elif self.method == 'concat':
+      energy = self.attn(torch.cat((hidden, encoder_output), 1))
+      energy = self.v.dot(energy)
+      return energy
 
 
 class Seq2SeqAtt(nn.Module):
@@ -34,9 +85,9 @@ class Seq2SeqAtt(nn.Module):
     self.decoder_embed = nn.Embedding(decoder_vocab_size, wordvec_dim)
     self.decoder_rnn = nn.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
                                dropout=rnn_dropout, batch_first=True)
-    self.decoder_rnn_new = nn.LSTM(hidden_dim, hidden_dim, rnn_num_layers,
-                                   dropout=rnn_dropout, batch_first=True)
     self.decoder_linear = nn.Linear(hidden_dim, decoder_vocab_size)
+    self.decoder_attn = Attn('general', wordvec_dim, hidden_dim)
+    self.rnn_num_layers = rnn_num_layers
     self.NULL = null_token
     self.START = start_token
     self.END = end_token
@@ -74,41 +125,66 @@ class Seq2SeqAtt(nn.Module):
           idx[i] = t
           break
     idx = idx.type_as(x.data)
-    x[x.data == self.NULL] = replace
+    # x[x.data == self.NULL] = replace
     return x, Variable(idx)
 
   def encoder(self, x, x_lengths):
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
-    _, idx = self.before_rnn(x)
 
     embed = self.encoder_embed(x)
-    packed = torch.nn.utils.rnn.pack_padded_sequence(x, x_lengths, batch_first=True)
-    out_packed, hid = self.encoder_rnn(packed)
-    out, out_lengths = torch.nn.utils.rnn.pad_packed_sequence(out_packed)
+    packed = pack_padded_sequence(embed, x_lengths, batch_first=True)
+    out_packed, (hn, cn) = self.encoder_rnn(packed)
+    out, _ = pad_packed_sequence(out_packed, batch_first=True)
+    hn = hn.transpose(1,0)
+    cn = cn.transpose(1,0)
 
+    # TODO(mnoukhov) there is a better way to do this
     # Pull out the hidden state for the last non-null value in each input
-    # idx = idx.view(N, 1, 1).expand(N, 1, H)
-    # old_out = out.gather(1, idx).view(N, H)
-    # TODO(mnoukhov) new out
+    last_idx = Variable(torch.cuda.LongTensor(x_lengths) - 1)
+    last_idx = last_idx.view(N, 1, 1).expand(N, 1, H)
+    out = out.gather(1, last_idx).view(N, H)
+
+    return out, (hn, cn)
 
   def decoder(self, encoded, y, h0=None, c0=None):
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
-
-    if T_out > 1:
-      y, _ = self.before_rnn(y)
-    y_embed = self.decoder_embed(y)
-    encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-    rnn_input = torch.cat([encoded_repeat, y_embed], 2)
     if h0 is None:
       h0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
     if c0 is None:
       c0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
+
+    # embed current input
+    word_embedded = self.decoder_embed(y)
+
+    # calculate attention weights, apply to encoder
+    attn_weights = self.decoder_attn(h0, c0, encoded)
+
+    # create input of concat(previous true state, encoder_out)
+    encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
+    rnn_input = torch.cat([encoded_repeat, y_embed], 2)
     rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
 
     rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)
     output_logprobs = self.decoder_linear(rnn_output_2d).view(N, T_out, V_out)
 
     return output_logprobs, ht, ct
+
+  def decoder_with_hidden(self, encoder_outputs, word_inputs, prev_hidden):
+    word_embedded = self.decoder_embed(word_inputs)
+
+    attn_weights = self.attn(prev_hidden[-1], encoder_outputs)
+    context = attn_weights.bmm(encoder_outputs.transpose(0, 1)) # B x 1 x N
+    context = context.transpose(0, 1) # 1 x B x N
+
+    # Combine embedded input word and attended context, run through RNN
+    rnn_input = torch.cat((word_embedded, context), 2)
+    output, hidden = self.decoder_rnn(rnn_input, prev_hidden)
+
+    # Final output layer
+    output = output.squeeze(0) # B x N
+    output = F.log_softmax(self.decoder_linear(torch.cat((output, context), 1)))
+
+    return output, hidden, attn_weights
 
   def compute_loss(self, output_logprobs, y):
     """
@@ -137,16 +213,10 @@ class Seq2SeqAtt(nn.Module):
     return loss
 
   def forward(self, x, x_lengths, y):
-    encoded = self.encoder(x, x_lengths)
-
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
-    T_out = 15
-    encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-    h0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    c0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    rnn_output, (ht, ct) = self.decoder_rnn_new(encoded_repeat, (h0, c0))
 
-    output_logprobs, _, _ = self.decoder(encoded, y)
+    encoder_out, (encoder_hn, encoder_cn) = self.encoder(x, x_lengths)
+    output_logprobs, _, _ = self.decoder(encoder_out, y)
     loss = self.compute_loss(output_logprobs, y)
     return loss
 
@@ -155,7 +225,7 @@ class Seq2SeqAtt(nn.Module):
     # TODO: Beam search?
     self.multinomial_outputs = None
     assert x.size(0) == 1, "Sampling minibatches not implemented"
-    encoded = self.encoder(x)
+    encoded = self.encoder(x, x_lengths)
     y = [self.START]
     h0, c0 = None, None
     while True:
@@ -169,7 +239,7 @@ class Seq2SeqAtt(nn.Module):
 
   def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):
     N, T = x.size(0), max_length
-    encoded = self.encoder(x)
+    encoded = self.encoder(x, x_lengths)
     y = torch.LongTensor(N, T).fill_(self.NULL)
     done = torch.ByteTensor(N).fill_(0)
     cur_input = Variable(x.data.new(N, 1).fill_(self.START))

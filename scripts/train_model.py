@@ -479,7 +479,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       if args.model_type == 'PG':
         # Train program generator with ground-truth programs
         pg_optimizer.zero_grad()
-        loss = program_generator(questions_var, question_lengths, programs_var)
+        loss = program_generator(questions_var, question_lengths, programs_var, program_lengths)
         loss.backward()
         pg_optimizer.step()
       elif args.model_type in ['EE', 'Hetero']:
@@ -497,7 +497,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         baseline_optimizer.step()
       elif args.model_type == 'PG+EE':
-        programs_pred = program_generator.reinforce_sample(questions_var, question_lengths)
+        programs_pred = program_generator.reinforce_sample(questions_var, question_lengths, program_lengths)
         scores = execution_engine(feats_var, programs_pred)
 
         loss = loss_fn(scores, answers_var)
@@ -1038,10 +1038,11 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
 
     scores = None  # Use this for everything but PG
     if args.model_type == 'PG':
+      #TODO(mnoukhov) change to scores for attention
       vocab = vr.utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
         program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True),
-                                                Variable(question_lengths[i:i+1].cuda(), volatile=True))
+                                                question_lengths[i:i+1])
         program_pred_str = vr.preprocess.decode(program_pred, vocab['program_idx_to_token'])
         program_str = vr.preprocess.decode(programs[i], vocab['program_idx_to_token'])
         if program_pred_str == program_str:

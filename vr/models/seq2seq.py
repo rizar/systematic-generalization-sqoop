@@ -136,7 +136,7 @@ class Seq2Seq(nn.Module):
     loss = F.cross_entropy(out_masked, y_masked)
     return loss
 
-  def forward(self, x, x_lengths, y):
+  def forward(self, x, x_lengths, y, y_lengths):
     encoded = self.encoder(x)
 
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)

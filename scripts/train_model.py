@@ -78,7 +78,10 @@ parser.add_argument('--percent_of_data_for_training', default=1., type=float)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC', 'TMAC'])
+  choices=['RTfilm', 'Tfilm', 'FiLM',
+           'PG', 'EE', 'PG+EE',
+           'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
+           'Hetero', 'MAC', 'TMAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)

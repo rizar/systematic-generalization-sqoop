@@ -11,8 +11,8 @@ import json
 import torch
 
 from vr.models import (
-  ModuleNet, Seq2Seq, LstmModel, CnnLstmModel, CnnLstmSaModel, FiLMedNet,
-  FiLMGen, MAC)
+  ModuleNet, Seq2Seq, Seq2SeqAtt, LstmModel, CnnLstmModel, CnnLstmSaModel,
+  FiLMedNet, FiLMGen, MAC)
 
 def invert_dict(d):
   return {v: k for k, v in d.items()}
@@ -51,9 +51,12 @@ def load_program_generator(path, model_type='PG+EE'):
     model = FiLMGen(**kwargs)
   elif model_type == 'PG+EE':
     print('Loading PG from ' + path)
-    model = Seq2Seq(**kwargs)
+    if kwargs.rnn_attention:
+      model = Seq2SeqAtt(**kwargs)
+    else:
+      model = Seq2Seq(**kwargs)
   elif model_type == 'EE':
-    return None, kwargs
+    model = None
   else:
     raise ValueError()
   model.load_state_dict(state)

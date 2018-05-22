@@ -5,6 +5,7 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+import math
 
 import torch
 import torch.cuda
@@ -17,31 +18,60 @@ from torch.nn.utils.rnn import (pack_padded_sequence,
 from vr.embedding import expand_embedding_vocab
 
 
-
 class Attn(nn.Module):
   def __init__(self, hidden_size):
     super(Attn, self).__init__()
-
     self.hidden_size = hidden_size
-    self.attn = nn.Linear(self.hidden_size, hidden_size)
+    self.attn = nn.Linear(self.hidden_size * 2, hidden_size)
+    self.v = nn.Parameter(torch.rand(hidden_size))
+    stdv = 1. / math.sqrt(self.v.size(0))
+    self.v.data.normal_(mean=0, std=stdv)
 
-  def forward(self, encoder_outputs, hn):
-    batch_size = encoder_outputs.size(0)
+  def forward(self, encoder_outputs, hidden):
+    '''
+    :param hidden:
+      previous hidden state of the decoder, in shape (layers*directions, H)
+    :param encoder_outputs:
+      encoder outputs from Encoder, in shape (B,T,H)
+    :return
+      attention energies in shape (B,T)
+    '''
     seq_len = encoder_outputs.size(1)
+    H = hidden.repeat(seq_len, 1, 1).transpose(0,1)
+    attn_energies = self.score(H, encoder_outputs) # B*1*T
+    return F.softmax(attn_energies, dim=2)
 
-    attn_energies = Variable(torch.zeros(batch_size, seq_len)) # B x S
-    attn_energies = attn_energies.cuda()
-
-    for b in range(batch_size):
-      for i in range(seq_len):
-        attn_energies[b, i] = self.score(hn[b], encoder_outputs[b, i].unsqueeze(0))
-
-    return F.softmax(attn_energies, dim=1).unsqueeze(1)
-
-  def score(self, hidden, encoder_output):
-    energy = self.attn(encoder_output)
-    energy = hidden.dot(energy)
+  def score(self, hidden, encoder_outputs):
+    energy = F.tanh(self.attn(torch.cat([hidden, encoder_outputs], 2))) # [B*T*2H]->[B*T*H]
+    energy = energy.transpose(2,1) # [B*H*T]
+    v = self.v.repeat(encoder_outputs.data.shape[0],1).unsqueeze(1) #[B*1*H]
+    energy = torch.bmm(v, energy) # [B*1*T]
     return energy
+
+# class Attn(nn.Module):
+  # def __init__(self, hidden_size):
+    # super(Attn, self).__init__()
+
+    # self.hidden_size = hidden_size
+    # self.attn = nn.Linear(self.hidden_size, hidden_size)
+
+  # def forward(self, encoder_outputs, hn):
+    # batch_size = encoder_outputs.size(0)
+    # seq_len = encoder_outputs.size(1)
+
+    # attn_energies = Variable(torch.zeros(batch_size, seq_len)) # B x S
+    # attn_energies = attn_energies.cuda()
+
+    # for b in range(batch_size):
+      # for i in range(seq_len):
+        # attn_energies[b, i] = self.score(hn[b], encoder_outputs[b, i].unsqueeze(0))
+
+    # return F.softmax(attn_energies, dim=1).unsqueeze(1)
+
+  # def score(self, hidden, encoder_output):
+    # energy = self.attn(encoder_output)
+    # energy = hidden.dot(energy)
+    # return energy
 
 
 class Seq2SeqAtt(nn.Module):
@@ -88,34 +118,11 @@ class Seq2SeqAtt(nn.Module):
     T_out = y.size(1) if y is not None else None
     return V_in, V_out, D, H, L, N, T_in, T_out
 
-  def before_rnn(self, x, replace=0):
-    # TODO: Use PackedSequence instead of manually plucking out the last
-    # non-NULL entry of each sequence; it is cleaner and more efficient.
-    N, T = x.size()
-    idx = torch.LongTensor(N).fill_(T - 1)
-
-    # Find the last non-null element in each sequence. Is there a clean
-    # way to do this?
-    x_cpu = x.cpu()
-    for i in range(N):
-      for t in range(T - 1):
-        if x_cpu.data[i, t] != self.NULL and x_cpu.data[i, t + 1] == self.NULL:
-          idx[i] = t
-          break
-    idx = idx.type_as(x.data)
-    # x[x.data == self.NULL] = replace
-    return x, Variable(idx)
-
   def encoder(self, x, x_lengths):
     embed = self.encoder_embed(x)
     packed = pack_padded_sequence(embed, x_lengths, batch_first=True)
     out_packed, hidden = self.encoder_rnn(packed)
     out, _ = pad_packed_sequence(out_packed, batch_first=True)
-
-    # Pull out the output state for the last non-null value in each input
-    # last_idx = Variable(torch.cuda.LongTensor(x_lengths) - 1)
-    # last_idx = last_idx.view(N, 1, 1).expand(N, 1, H)
-    # out = out.gather(1, last_idx).view(N, H)
 
     return out, hidden
 
@@ -147,6 +154,7 @@ class Seq2SeqAtt(nn.Module):
     - output_logprobs: Variable of shape (N, T_out, V_out)
     - y: LongTensor Variable of shape (N, T_out)
     """
+    #TODO(mnoukhov) use y_lengths to mask
     self.multinomial_outputs = None
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
     mask = y.data != self.NULL
@@ -161,10 +169,7 @@ class Seq2SeqAtt(nn.Module):
     return loss
 
   def forward(self, x, x_lengths, y, y_lengths):
-    # V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x, y=y)
-
     max_target_length = max(y_lengths)
-    # decoder_all_outputs = Variable(torch.zeros(max_target_length, N, decoder.output_size)).cuda()
 
     encoder_outputs, encoder_hidden = self.encoder(x, x_lengths)
     decoder_inputs = y
@@ -176,7 +181,6 @@ class Seq2SeqAtt(nn.Module):
       decoder_outputs.append(decoder_out)
 
     decoder_outputs = torch.stack(decoder_outputs, dim=1)
-    __import__('pdb').set_trace()
     loss = self.compute_loss(decoder_outputs, y, y_lengths)
     return loss
 
@@ -185,30 +189,42 @@ class Seq2SeqAtt(nn.Module):
     # TODO: Beam search?
     self.multinomial_outputs = None
     assert x.size(0) == 1, "Sampling minibatches not implemented"
-    encoded = self.encoder(x, x_lengths)
-    y = [self.START]
-    h0, c0 = None, None
-    while True:
-      cur_y = Variable(torch.LongTensor([y[-1]]).type_as(x.data).view(1, 1))
-      logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
-      _, next_y = logprobs.data.max(2, keepdim=True)
-      y.append(next_y[0, 0, 0])
-      if len(y) >= max_length or y[-1] == self.END:
+
+    encoder_outputs, encoder_hidden = self.encoder(x, x_lengths)
+    decoder_hidden = encoder_hidden
+    sampled_output = [self.START]
+    for t in range(max_length):
+      decoder_input = Variable(torch.cuda.LongTensor([sampled_output[-1]]))
+      decoder_out, decoder_hidden = self.decoder(
+        decoder_input, encoder_outputs, decoder_hidden)
+      _, argmax = decoder_out.data.max(1)
+      output = argmax[0]
+      sampled_output.append(output)
+      if output == self.END:
         break
-    return y
+
+    # while True:
+      # cur_y = Variable(torch.LongTensor([y[-1]]).type_as(x.data).view(1, 1))
+      # __import__('pdb').set_trace()
+      # logprobs, decoder_hidden = self.decoder(cur_y, encoder_outputs, decoder_hidden)
+      # _, next_y = logprobs.data.max(2, keepdim=True)
+      # y.append(next_y[0, 0, 0])
+      # if len(y) >= max_length or y[-1] == self.END:
+        # break
+    return sampled_output
 
   def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):
     N, T = x.size(0), max_length
-    encoded = self.encoder(x, x_lengths)
+    encoder_outputs, encoder_hidden = self.encoder(x, x_lengths)
     y = torch.LongTensor(N, T).fill_(self.NULL)
     done = torch.ByteTensor(N).fill_(0)
     cur_input = Variable(x.data.new(N, 1).fill_(self.START))
-    h, c = None, None
+    decoder_hidden = encoder_hidden
     self.multinomial_outputs = []
     self.multinomial_probs = []
     for t in range(T):
       # logprobs is N x 1 x V
-      logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
+      logprobs, decoder_hidden = self.decoder(cur_input, encoder_outputs, decoder_hidden)
       logprobs = logprobs / temperature
       probs = F.softmax(logprobs.view(N, -1), dim=1) # Now N x V
       if argmax:

@@ -10,6 +10,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
 from torch.nn.init import uniform, xavier_uniform, constant
+from bonobo.activation import query
 
 class FiLMGen(nn.Module):
   def __init__(self,
@@ -38,6 +39,8 @@ class FiLMGen(nn.Module):
     taking_context = False,
     variational_embedding_dropout = 0.,
     embedding_uniform_boundary = 0.,
+    
+    use_attention=False,
   ):
     super(FiLMGen, self).__init__()
     self.encoder_type = encoder_type
@@ -55,10 +58,13 @@ class FiLMGen(nn.Module):
     self.START = start_token
     self.END = end_token
     
-    self.taking_context = taking_context
-    self.variational_embedding_dropout = variational_embedding_dropout
+    self.use_attention = use_attention
     
-    if self.taking_context: self.bidirectional = True
+    self.taking_context = taking_context
+    if self.use_attention: self.taking_context = True #if we want to use attention, the full context should be computed
+    if self.taking_context: self.bidirectional = True #if we want to use the full context, it makes sense to use bidirectional modeling.
+    
+    self.variational_embedding_dropout = variational_embedding_dropout
     
     if self.bidirectional: # and not self.taking_context:
       if decoder_type != 'linear':
@@ -89,6 +95,11 @@ class FiLMGen(nn.Module):
         elif n.startswith('bias'): constant(p, 0.)
     else:
       self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
+    
+    if self.use_attention:
+      attention_dim = self.module_dim #Need to change this if we want a different mechanism to compute attention weights
+      self.attention_weight_scorer = nn.Linear(attention_dim, 1) # to compute attention weights
+      self.attention_coefficient_weight_transformer = nn.Linear(self.module_dim, 2*self.module_dim) # to transform control vector to film coefficients
     
     if self.output_batchnorm:
       self.output_bn = nn.BatchNorm1d(self.cond_feat_size, affine=True)
@@ -224,16 +235,41 @@ class FiLMGen(nn.Module):
     output_shaped = linear_output.view(N, T_out, V_out)
     return output_shaped, (ht, ct)
 
+  def dotProduct_Attention(self, context, initQuery, mask):
+    
+    out = []
+    query = initQuery
+    for i in range(self.num_modules):
+      scores = self.attention_weight_scorer(context * query.unsqueeze(1)).squeeze(2) #NxLxd -> NxLx1 -> NxL
+      
+      # softmax
+      scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to eliminate padding words
+      scores = scores / scores.sum(1, keepdim=True) #NxL
+
+      control = (context * scores.unsqueeze(2)).sum(1) #Nxd
+      
+      coefficients = self.attention_coefficient_weight_transformer(control).unsqueeze(1) #Nxd -> Nx2d -> Nx1x2d
+      out.append(coefficients)
+      
+      query = control
+    
+    if len(out) == 0: return None
+    if len(out) == 1: return out[0]
+    return torch.cat(out, 1) #N x num_module x 2d
+
   def forward(self, x, isTest=False):
     if self.debug_every <= -2:
       pdb.set_trace()
     encoded, whole_context, last_vector, mask = self.encoder(x, isTest=isTest)
     
-    if self.taking_context:
+    if self.taking_context and not self.use_attention:
       #whole_context = self.decoder(whole_context, None)
       return (whole_context, last_vector, mask)
     
-    film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
+    if self.use_attention: #make sure taking_context is True as well if we want to use this.
+        film_pre_mod = self.dotProduct_Attention(context, initQuery, mask)
+    else:
+        film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
     film = self.modify_output(film_pre_mod, gamma_option=self.gamma_option,
                               gamma_shift=self.gamma_baseline)
     return film

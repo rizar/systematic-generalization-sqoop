@@ -132,6 +132,8 @@ parser.add_argument('--grad_clip', default=0, type=float)  # <= 0 for no grad cl
 parser.add_argument('--debug_every', default=float('inf'), type=float)  # inf for no pdb
 parser.add_argument('--print_verbose_every', default=float('inf'), type=float)  # inf for min print
 
+parser.add_argument('--film_use_attention', default=0, type=int)
+
 #Tfilm options
 parser.add_argument('--max_program_module_arity', default=2, type=int)
 parser.add_argument('--max_program_tree_depth', default=5, type=int)
@@ -733,6 +735,9 @@ def get_program_generator(args):
       kwargs['decoder_type'] = args.decoder_type
       kwargs['gamma_option'] = args.gamma_option
       kwargs['gamma_baseline'] = args.gamma_baseline
+      
+      kwargs['use_attention'] = args.film_use_attention == 1
+      
       if args.model_type == 'FiLM' or args.model_type == 'MAC':
         kwargs['num_modules'] = args.num_modules
       elif args.model_type == 'Tfilm':
@@ -742,6 +747,7 @@ def get_program_generator(args):
         kwargs['num_modules'] = len(treeArities)
       if args.model_type == 'MAC' or args.model_type == 'TMAC':
         kwargs['taking_context'] = True
+        kwargs['use_attention'] = False
         kwargs['variational_embedding_dropout'] = args.variational_embedding_dropout
         kwargs['embedding_uniform_boundary'] = args.mac_embedding_uniform_boundary
       kwargs['module_num_layers'] = args.module_num_layers

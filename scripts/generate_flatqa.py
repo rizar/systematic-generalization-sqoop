@@ -208,13 +208,13 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
   elif args.level == 'relations':
     max_question_len = 8
     if args.program == 'best':
-      max_program_len = 12
+      max_program_len = 13
     elif args.program == 'noand':
-      max_program_len = 8
+      max_program_len = 9
     elif args.program == 'chain':
-      max_program_len = 7
+      max_program_len = 8
     elif args.program == 'chain_shortcut':
-      max_program_len = 11
+      max_program_len = 12
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
                     + sampler.colors + sampler.shapes + RELATIONS)
@@ -250,7 +250,7 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
     text_token_to_idx[word] = idx
 
   def arity(token):
-    if (token == 'And' or token.startswith('Relate[') 
+    if (token == 'And' or token.startswith('Relate[')
         or token.startswith('Color2[') or token.startswith('Shape2[')):
       return 2
     elif token == 'scene':
@@ -364,23 +364,28 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
                     color1, shape1, rel, color2, shape2]
         if args.program == 'best':
           program = ["<START>", relation_module(rel),
-                      "And", shape_module(shape1), "scene", color_module(color1), "scene",
-                      "And", shape_module(shape2), "scene", color_module(color2), "scene"]
+                     "And", shape_module(shape1), "scene", color_module(color1), "scene",
+                     "And", shape_module(shape2), "scene", color_module(color2), "scene",
+                     "<END>"]
         elif args.program == 'noand':
           program = ["<START>", relation_module(rel),
                      shape_module(shape1), color_module(color1), "scene",
-                     shape_module(shape2), color_module(color2), "scene"]
+                     shape_module(shape2), color_module(color2), "scene",
+                     "<END>"]
         elif args.program == 'chain':
-          program = ["<START>", 
-                     shape_module(shape1), color_module(color1), 
+          program = ["<START>",
+                     shape_module(shape1), color_module(color1),
                      unary_relation_module(rel),
                      shape_module(shape2), color_module(color2), 
-                     "scene"]
+                     "scene", "<END>"]
         elif args.program == 'chain_shortcut':
           program = ["<START>", 
-                     binary_shape_module(shape1), 'scene', binary_color_module(color1), 'scene', 
+                     binary_shape_module(shape1), 'scene', 
+                     binary_color_module(color1), 'scene', 
                      unary_relation_module(rel),
-                     binary_shape_module(shape2), 'scene', binary_color_module(color2), 'scene', 'scene']
+                     binary_shape_module(shape2), 'scene', 
+                     binary_color_module(color2), 'scene',
+                     'scene', "<END>"]
 
       scenes.append(scene)
       buffer_ = io.BytesIO()
@@ -396,7 +401,7 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
 
       i += 1
 
-  print("{} examples per second".format((time.time() - before) / num_examples))
+  print("{} seconds per example".format((time.time() - before) / num_examples))
 
   with open(prefix + '_scenes.json', 'w') as dst:
     json.dump(scenes, dst, indent=2, cls=CustomJSONEncoder)
@@ -439,45 +444,62 @@ class Sampler:
     return self._rejection_sample()
 
 
-class BelowRedSampler(Sampler):
-
-  def sample_relation(self):
-    if self._test:
-      return 'below'
-    else:
-      return super().sample_relation()
-
-  def sample_shape_color(self, purpose, relation):
-    red_objects = [(shape, 'red') for shape in self.shapes]
-    if self._test:
-      # only 'below'
-      return self._rejection_sample(red_objects)
-    else:
-      if relation == 'below':
-        return self._choose(red_objects)
-      return self._rejection_sample()
-
-
-class BelowSquaresSampler(Sampler):
-  """At training time the relation 'below' is only explained with squares.
-  At test time we test the generalization of 'below' to other types of objects.
+class _HoldRelationColorSampler(Sampler):
+  """At training time the relation 'hold_rel' is only explained with 'hold_color'.
+  At test time we test the generalization of 'hold_rel' to other colors.
   """
+  def __init__(self, test, seed, colors, shapes, hold_rel, hold_color):
+    super().__init__(test, seed, colors, shapes)
+    self.hold_rel = hold_rel
+    self.hold_color = hold_color
 
   def sample_relation(self):
     if self._test:
-      return 'below'
+      return self.hold_rel
     else:
       return super().sample_relation()
 
   def sample_shape_color(self, purpose, relation):
-    squares = [('square', color) for color in self.colors]
+    hold_objects = [(shape, self.hold_color) for shape in self.shapes]
     if self._test:
-      # only 'below'
-      return self._rejection_sample(squares)
+      return self._rejection_sample(hold_objects)
     else:
-      if relation == 'below':
-        return self._choose(squares)
+      if relation == self.hold_rel:
+        return self._choose(hold_objects)
       return self._rejection_sample()
+
+
+def HoldRelationColorSampler(hold_rel, hold_color):
+  return partial(_HoldRelationColorSampler, hold_rel=hold_rel, hold_color=hold_color)
+
+
+class _HoldRelationShapeSampler(Sampler):
+  """At training time the relation 'hold_rel' is only explained with 'hold_color'.
+  At test time we test the generalization of 'hold_rel' to other colors.
+  """
+  def __init__(self, test, seed, colors, shapes, hold_rel, hold_shape):
+    super().__init__(test, seed, colors, shapes)
+    self.hold_rel = hold_rel
+    self.hold_shape = hold_shape
+
+  def sample_relation(self):
+    if self._test:
+      return self.hold_rel
+    else:
+      return super().sample_relation()
+
+  def sample_shape_color(self, purpose, relation):
+    hold_objects = [(self.hold_shape, color) for color in self.colors]
+    if self._test:
+      return self._rejection_sample(hold_objects)
+    else:
+      if relation == self.hold_rel:
+        return self._choose(hold_objects)
+      return self._rejection_sample()
+
+
+def HoldRelationShapeSampler(hold_rel, hold_shape):
+  return partial(_HoldRelationShapeSampler, hold_rel=hold_rel, hold_shape=hold_shape)
 
 
 class BelowExcludeDiagSampler(Sampler):
@@ -552,20 +574,22 @@ def main():
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
 
-  sampler_class = Sampler
-
-  if args.split == 'CoGenT':
+  if args.split == 'none':
+    sampler_class = Sampler
+  elif args.split == 'CoGenT':
     sampler_class = CoGenTSampler
-  if args.split == 'HoldDiag':
+  elif args.split == 'HoldDiag':
     sampler_class = HoldDiagSampler
-  if args.split == 'HoldRedSquare':
+  elif args.split == 'HoldRedSquare':
     sampler_class = HoldRedSquareSampler
-  if args.split == 'BelowRed':
-    sampler_class = BelowRedSampler
-  if args.split == 'BelowHoldDiag':
+  elif args.split == 'BelowHoldDiag':
     sampler_class = BelowExcludeDiagSampler
-  if args.split == 'BelowSquares':
-    sampler_class = BelowSquaresSampler
+  elif args.split.startswith('Below'):
+    hold = args.split[5:].lower()
+    if hold in COLORS:
+      sampler_class = HoldRelationColorSampler('below', hold)
+    elif hold in SHAPES:
+      sampler_class = HoldRelationShapeSampler('below', hold)
 
   train_sample = sampler_class(False, 1, colors, shapes)
   val_sample = sampler_class(True, 2, colors, shapes)
@@ -577,8 +601,10 @@ def main():
 
 
 if __name__ == '__main__':
+  below_colors = ['Below{}'.format(color.capitalize()) for color in COLORS]
+  below_shapes = ['Below{}'.format(shape.capitalize()) for shape in SHAPES]
   level_splits = {'shapecolor': ['none', 'CoGenT', 'HoldDiag', 'HoldRedSquare'],
-                  'relations': ['none', 'BelowRed', 'BelowSquares', 'BelowHoldDiag']}
+                  'relations': ['none', 'BelowHoldDiag'] + below_colors + below_shapes}
 
   parser = argparse.ArgumentParser()
   parser.add_argument('--train', type=int, default=1000,
@@ -588,7 +614,7 @@ if __name__ == '__main__':
   parser.add_argument('--test', type=int, default=1000,
                       help="Size of the test set")
   parser.add_argument('--level', type=str, choices=('shapecolor', 'relations'), default='shapecolor')
-  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'))
+  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'), default='best')
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--num-objects', type=int, default=5)

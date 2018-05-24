@@ -282,8 +282,9 @@ def run_single_example(args, model, dtype, question_raw, feats_var=None):
 
 
 def run_our_model_batch(args, pg, ee, loader, dtype):
-  pg.type(dtype)
-  pg.eval()
+  if pg:
+    pg.type(dtype)
+    pg.eval()
   ee.type(dtype)
   ee.eval()
 
@@ -316,7 +317,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     print('Last %d words of each question shuffled.' % args.num_last_words_shuffled)
   start = time.time()
   for batch in tqdm(loader):
-    assert(not pg.training)
+    assert(not pg or not pg.training)
     assert(not ee.training)
     questions, images, feats, answers, programs, program_lists = batch
 
@@ -353,10 +354,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
           programs_pred[:,:,pg.module_dim:2*pg.module_dim])
       film_params += [programs_pred.cpu().data.numpy()]
     elif args.model_type == 'EE':
-      programs_pred = pg.reinforce_sample(
-                        questions_var,
-                        temperature=args.temperature,
-                        argmax=(args.sample_argmax == 1))
+      programs_pred = Variable(programs)
     else:
       programs_pred = pg(questions_var)
 
@@ -374,7 +372,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
       all_read_scores.append(ee.read_scores.data.cpu().clone())
     if hasattr(ee, 'vib_costs'):
       all_vib_costs.append(ee.vib_costs.data.cpu().clone())
-    if ee.connections:
+    if hasattr(ee, 'connections'):
       all_connections.append(torch.cat([conn.unsqueeze(1) for conn in ee.connections], 1).data.cpu().clone())
     if answers[0] is not None:
       num_correct += (preds == answers).sum()

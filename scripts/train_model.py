@@ -63,6 +63,7 @@ parser.add_argument('--valB_features_h5', default=None)
 parser.add_argument('--feature_dim', default='1024,14,14')
 parser.add_argument('--vocab_json', default='vocab.json')
 
+parser.add_argument('--load_features', action="store_true")
 parser.add_argument('--loader_num_workers', type=int, default=1)
 parser.add_argument('--use_local_copies', default=0, type=int)
 parser.add_argument('--cleanup_local_copies', default=1, type=int)
@@ -299,6 +300,7 @@ def main(args):
   train_loader_kwargs = {
     'question_h5': args.train_question_h5,
     'feature_h5': args.train_features_h5,
+    'load_features': args.load_features,
     'vocab': vocab,
     'batch_size': args.batch_size,
     'shuffle': args.shuffle_train_data == 1,
@@ -310,6 +312,7 @@ def main(args):
   val_loader_kwargs = {
     'question_h5': args.val_question_h5,
     'feature_h5': args.val_features_h5,
+    'load_features': args.load_features,
     'vocab': vocab,
     'batch_size': args.batch_size,
     'question_families': question_families,
@@ -321,6 +324,7 @@ def main(args):
     valB_loader_kwargs = {
       'question_h5': args.valB_question_h5,
       'feature_h5': args.valB_features_h5,
+      'load_features': args.load_features,
       'vocab': vocab,
       'batch_size': args.batch_size,
       'question_families': question_families,
@@ -779,6 +783,7 @@ def get_execution_engine(args):
       'module_dim': args.module_dim,
       'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
+      'module_input_proj': args.module_input_proj,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
       'classifier_downsample': args.classifier_downsample,

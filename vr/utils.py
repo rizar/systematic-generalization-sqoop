@@ -49,9 +49,11 @@ def load_program_generator(path, model_type='PG+EE'):
     print('Loading FiLMGen from ' + path)
     kwargs = get_updated_args(kwargs, FiLMGen)
     model = FiLMGen(**kwargs)
-  elif model_type == 'EE':
+  elif model_type == 'PG+EE':
     print('Loading PG from ' + path)
     model = Seq2Seq(**kwargs)
+  elif model_type == 'EE':
+    return None, kwargs
   else:
     raise ValueError()
   model.load_state_dict(state)

@@ -2,6 +2,7 @@ import os
 import json
 from matplotlib import pyplot
 import pandas
+import scipy.stats as stats
 
 
 def load_log(root, file_, data_train, data_val, args):
@@ -34,29 +35,52 @@ def load_logs(root, data_train, data_val, args):
                 load_log(root, file_, data_train, data_val, args)
 
 
-def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=None):
+def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=1):
     pyplot.figure(figsize=(15, 5))
-    df_mean = df.groupby(['root', 'step']).agg(['mean', 'std'])
-    for root, df_root in df_mean.groupby('root'):
-      train_values = df_root[train_quantity]['mean']
-      if window:
-        train_values = train_values.rolling(window).mean()
-      train_lines = pyplot.plot(df_root.index.get_level_values(1),
+    for root, df_root in df.groupby('root'):
+      # Plot train
+      df_agg = df_root.groupby(['step']).agg(['mean', 'std'])
+      train_values = df_agg[train_quantity]['mean']
+      train_values = train_values.rolling(window).mean()
+      train_lines = pyplot.plot(df_agg.index,
                                 train_values,
                                 label=root + ' train',
                                 linestyle='dotted')
+
+      # Plot validation
       if val_quantity:
-        val_values = df_root[val_quantity]['mean']
-        if window:
-          val_values = val_values.rolling(window).mean()
-        pyplot.plot(df_root.index.get_level_values(1),
+        val_values = df_agg[val_quantity]['mean']
+        val_std = df_agg[val_quantity]['std']
+        val_values = val_values.rolling(window).mean()
+        val_std = val_std.rolling(window).mean()
+        pyplot.plot(df_agg.index,
                     val_values,
                     label=root + " val",
                     color=train_lines[0].get_color())
-      to_print = [root, train_values.iloc[-1]]
+
+      # Count number of successes
+      n_seeds = len(df[df['root'] == root]['slurmid'].unique())
+      n_train_successes = 0
+      n_val_successes = 0
+      for slurmid, df_slurmid in df_root.groupby('slurmid'):
+        slurmid_values = df_slurmid[train_quantity].rolling(window).mean()
+        if slurmid_values.iloc[-1] > 0.99:
+          n_train_successes += 1
+        if val_quantity:
+          slurmid_values = df_slurmid[val_quantity].rolling(window).mean()
+          if slurmid_values.iloc[-1] > 0.99:
+            n_val_successes += 1
+      success_report = "{} out of {}".format(n_train_successes, n_seeds)
+
+      # Print
+      to_print = [root + ":", success_report, "({:.1f})".format(100 * train_values.iloc[-1])]
       if val_quantity:
-        to_print.append(val_values.iloc[-1])
+        std = val_std.iloc[-1]
+        width = std * stats.t.ppf(0.975, n_seeds - 1) / (n_seeds ** 0.5)
+        to_print.append("{} out of {}".format(n_val_successes, n_seeds))
+        to_print.append("({:.1f}+-{:.1f})".format(100 * val_values.iloc[-1], 100 * width))
       print(*to_print)
+
     pyplot.legend()
 
 

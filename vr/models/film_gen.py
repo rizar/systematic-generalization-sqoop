@@ -97,7 +97,9 @@ class FiLMGen(nn.Module):
       self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
     
     if self.use_attention:
+      self.attention_non_linear = nn.Tanh()
       attention_dim = self.module_dim #Need to change this if we want a different mechanism to compute attention weights
+      self.attention_context_mapper = nn.Linear(hidden_dim * self.num_dir, self.module_dim)
       self.attention_weight_scorer = nn.Linear(attention_dim, 1) # to compute attention weights
       self.attention_coefficient_weight_transformer = nn.Linear(self.module_dim, 2*self.module_dim) # to transform control vector to film coefficients
     
@@ -248,7 +250,7 @@ class FiLMGen(nn.Module):
 
       control = (context * scores.unsqueeze(2)).sum(1) #Nxd
       
-      coefficients = self.attention_coefficient_weight_transformer(control).unsqueeze(1) #Nxd -> Nx2d -> Nx1x2d
+      coefficients = self.attention_non_linear(self.attention_coefficient_weight_transformer(control).unsqueeze(1)) #Nxd -> Nx2d -> Nx1x2d
       out.append(coefficients)
       
       query = control
@@ -267,9 +269,11 @@ class FiLMGen(nn.Module):
       return (whole_context, last_vector, mask)
     
     if self.use_attention: #make sure taking_context is True as well if we want to use this.
-        film_pre_mod = self.dotProduct_Attention(whole_context, last_vector, mask)
+      whole_context = self.attention_context_mapper(whole_context)
+      last_vector = self.attention_context_mapper(last_vector)
+      film_pre_mod = self.dotProduct_Attention(whole_context, last_vector, mask)
     else:
-        film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
+      film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
     film = self.modify_output(film_pre_mod, gamma_option=self.gamma_option,
                               gamma_shift=self.gamma_baseline)
     return film

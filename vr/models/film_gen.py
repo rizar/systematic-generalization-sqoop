@@ -267,7 +267,7 @@ class FiLMGen(nn.Module):
       return (whole_context, last_vector, mask)
     
     if self.use_attention: #make sure taking_context is True as well if we want to use this.
-        film_pre_mod = self.dotProduct_Attention(context, initQuery, mask)
+        film_pre_mod = self.dotProduct_Attention(whole_context, last_vector, mask)
     else:
         film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
     film = self.modify_output(film_pre_mod, gamma_option=self.gamma_option,

@@ -203,14 +203,6 @@ class Seq2SeqAtt(nn.Module):
       if output == self.END:
         break
 
-    # while True:
-      # cur_y = Variable(torch.LongTensor([y[-1]]).type_as(x.data).view(1, 1))
-      # __import__('pdb').set_trace()
-      # logprobs, decoder_hidden = self.decoder(cur_y, encoder_outputs, decoder_hidden)
-      # _, next_y = logprobs.data.max(2, keepdim=True)
-      # y.append(next_y[0, 0, 0])
-      # if len(y) >= max_length or y[-1] == self.END:
-        # break
     return sampled_output
 
   def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):

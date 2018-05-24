@@ -35,9 +35,9 @@ class FiLMGen(nn.Module):
     parameter_efficient=False,
     debug_every=float('inf'),
     
-    taking_context = False,
-    variational_embedding_dropout = 0.,
-    embedding_uniform_boundary = 0.,
+    taking_context=False,
+    variational_embedding_dropout=0.,
+    embedding_uniform_boundary=0.,
     
     use_attention=False,
   ):
@@ -46,9 +46,13 @@ class FiLMGen(nn.Module):
     self.use_attention = use_attention
     
     self.taking_context = taking_context
-    if self.use_attention: self.taking_context = True #if we want to use attention, the full context should be computed
-    if self.taking_context: self.bidirectional = True #if we want to use the full context, it makes sense to use bidirectional modeling.
-    
+    if self.use_attention:
+      #if we want to use attention, the full context should be computed
+      self.taking_context = True
+    if self.taking_context:
+      #if we want to use the full context, it makes sense to use bidirectional modeling.
+      self.bidirectional = True
+
     self.encoder_type = encoder_type
     self.decoder_type = decoder_type
     self.output_batchnorm = output_batchnorm
@@ -97,11 +101,16 @@ class FiLMGen(nn.Module):
       self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
     
     if self.use_attention:
-      self.attention_non_linear = nn.Tanh()
-      attention_dim = self.module_dim #Need to change this if we want a different mechanism to compute attention weights
+      # Florian Strub used Tanh here, but let's use identity to make this model
+      # closer to the baseline film version
+      self.attention_non_linear = lambda x: x
+      #Need to change this if we want a different mechanism to compute attention weights
+      attention_dim = self.module_dim 
       self.attention_context_mapper = nn.Linear(hidden_dim * self.num_dir, self.module_dim)
-      self.attention_weight_scorer = nn.Linear(attention_dim, 1) # to compute attention weights
-      self.attention_coefficient_weight_transformer = nn.Linear(self.module_dim, 2*self.module_dim) # to transform control vector to film coefficients
+      # to compute attention weights
+      self.attention_weight_scorer = nn.Linear(attention_dim, 1) 
+      # to transform control vector to film coefficients
+      self.attention_coefficient_weight_transformer = nn.Linear(self.module_dim, 2*self.module_dim) 
     
     if self.output_batchnorm:
       self.output_bn = nn.BatchNorm1d(self.cond_feat_size, affine=True)

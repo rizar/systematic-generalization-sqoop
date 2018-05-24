@@ -10,7 +10,6 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
 from torch.nn.init import uniform, xavier_uniform, constant
-from bonobo.activation import query
 
 class FiLMGen(nn.Module):
   def __init__(self,
@@ -43,6 +42,13 @@ class FiLMGen(nn.Module):
     use_attention=False,
   ):
     super(FiLMGen, self).__init__()
+    
+    self.use_attention = use_attention
+    
+    self.taking_context = taking_context
+    if self.use_attention: self.taking_context = True #if we want to use attention, the full context should be computed
+    if self.taking_context: self.bidirectional = True #if we want to use the full context, it makes sense to use bidirectional modeling.
+    
     self.encoder_type = encoder_type
     self.decoder_type = decoder_type
     self.output_batchnorm = output_batchnorm
@@ -57,12 +63,6 @@ class FiLMGen(nn.Module):
     self.NULL = null_token
     self.START = start_token
     self.END = end_token
-    
-    self.use_attention = use_attention
-    
-    self.taking_context = taking_context
-    if self.use_attention: self.taking_context = True #if we want to use attention, the full context should be computed
-    if self.taking_context: self.bidirectional = True #if we want to use the full context, it makes sense to use bidirectional modeling.
     
     self.variational_embedding_dropout = variational_embedding_dropout
     

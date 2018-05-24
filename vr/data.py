@@ -18,8 +18,8 @@ import vr.programs
 from vr.programs import ProgramConverter
 
 
-def _dataset_to_tensor(dset, mask=None):
-  arr = np.asarray(dset, dtype=np.int64)
+def _dataset_to_tensor(dset, mask=None, dtype=None):
+  arr = np.asarray(dset, dtype=np.int64 if dtype is None else dtype)
   if mask is not None:
     arr = arr[mask]
   tensor = torch.LongTensor(arr)
@@ -34,7 +34,7 @@ def _gen_subsample_mask(num, percent=1.0):
 
 class ClevrDataset(Dataset):
   def __init__(self, question_h5, feature_h5_path, vocab, mode='prefix',
-               image_h5=None, max_samples=None, question_families=None,
+               image_h5=None, load_features=False, max_samples=None, question_families=None,
                image_idx_start_from=None, percent_of_data=1.0):
     mode_choices = ['prefix', 'postfix']
     if mode not in mode_choices:
@@ -44,9 +44,12 @@ class ClevrDataset(Dataset):
     self.program_converter = ProgramConverter(vocab)
     self.feature_h5_path = feature_h5_path
     self.feature_h5 = None
+    self.all_features = None
+    self.load_features = load_features
     self.mode = mode
     self.max_samples = max_samples
 
+    # Compute the mask
     mask = None
     if question_families is not None:
       # Use only the specified families
@@ -58,10 +61,10 @@ class ClevrDataset(Dataset):
     if image_idx_start_from is not None:
       all_image_idxs = np.asarray(question_h5['image_idxs'])
       mask = all_image_idxs >= image_idx_start_from
-    
     if percent_of_data < 1.0:
       num_example = np.asarray(question_h5['image_idxs']).shape[0]
       mask = _gen_subsample_mask(num_example, percent_of_data)
+    self.mask = mask
 
     # Data from the question file is small, so read it all into memory
     print('Reading question data into memory')
@@ -81,11 +84,15 @@ class ClevrDataset(Dataset):
       self.all_answers = _dataset_to_tensor(question_h5['answers'], mask)
 
   def __getitem__(self, index):
+    # Open the feature or load them if requested
+    if not self.feature_h5:
+      self.feature_h5 = h5py.File(self.feature_h5_path, 'r')
+      if self.load_features:
+        self.features = self.feature_h5['features'].value
+
     if self.all_question_families is not None:
       question_family = self.all_question_families[index]
     q_type = None if self.all_types is None else self.all_types[index]
-    if not self.feature_h5:
-      self.feature_h5 = h5py.File(self.feature_h5_path, 'r')
     question = self.all_questions[index]
     image_idx = self.all_image_idxs[index]
     answer = None
@@ -100,7 +107,10 @@ class ClevrDataset(Dataset):
       image = self.image_h5['images'][image_idx]
       image = torch.FloatTensor(np.asarray(image, dtype=np.float32))
 
-    feats = self.feature_h5['features'][image_idx]
+    if self.load_features:
+      feats = self.features[image_idx]
+    else:
+      feats = self.feature_h5['features'][image_idx]
     if feats.ndim == 1:
      feats = np.array(PIL.Image.open(io.BytesIO(feats))).transpose(2, 0, 1) / 255.0
     feats = torch.FloatTensor(np.asarray(feats, dtype=np.float32))
@@ -150,9 +160,8 @@ class ClevrDataLoader(DataLoader):
 
     vocab = kwargs.pop('vocab')
     mode = kwargs.pop('mode', 'prefix')
-    
+    load_features = kwargs.pop('load_features')
     percent_of_data = kwargs.pop('percent_of_data', 1.)
-
     question_families = kwargs.pop('question_families', None)
     max_samples = kwargs.pop('max_samples', None)
     question_h5_path = kwargs.pop('question_h5')
@@ -161,6 +170,7 @@ class ClevrDataLoader(DataLoader):
     with h5py.File(question_h5_path, 'r') as question_h5:
       self.dataset = ClevrDataset(question_h5, feature_h5_path, vocab, mode,
                                   image_h5=self.image_h5,
+                                  load_features=load_features,
                                   max_samples=max_samples,
                                   question_families=question_families,
                                   image_idx_start_from=image_idx_start_from,

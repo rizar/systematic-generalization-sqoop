@@ -3,15 +3,15 @@
 THIS_SCRIPT_DIR=`dirname $0`
 
 python $THIS_SCRIPT_DIR/../train_model.py \
-  --model_type MAC \
   --feature_dim=3,64,64 \
+  --model_type MAC \
   --num_iterations 50000 \
   --checkpoint_every 100 \
   --record_loss_every 10 \
   --num_val_samples 1000 \
   --optimizer Adam \
   --learning_rate 1e-4 \
-  --batch_size 64 \
+  --batch_size 128 \
   --use_coords 1 \
   --module_stem_batchnorm 1 \
   --module_stem_num_layers 6 \

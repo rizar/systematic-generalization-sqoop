@@ -2,7 +2,6 @@
 
 set -x
 
-export CUDA_VISIBLE_DEVICES=$ID
 export PYTHONUNBUFFERED=1
 export NMN=/workspace/nmn-iwp
 export PYTHONPATH=$PYTHONPATH:$NMN

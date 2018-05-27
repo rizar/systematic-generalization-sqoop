@@ -360,6 +360,10 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
                 relation_holds = True
           if relation_holds:
             continue
+
+        if not sampler.check_whole_qa(shape1, color1, shape2, color2, rel, answer):
+          continue
+
         question = ["is", "there", "a",
                     color1, shape1, rel, color2, shape2]
         if args.program == 'best':
@@ -442,6 +446,9 @@ class Sampler:
 
   def sample_shape_color(self, *args, **kwargs):
     return self._rejection_sample()
+
+  def check_whole_qa(self, shape1, color1, shape2, color2, rel, answer):
+    return True
 
 
 class _HoldRelationColorSampler(Sampler):
@@ -570,6 +577,25 @@ class CoGenTSampler(Sampler):
       return self._rejection_sample(self._restrict)
 
 
+class HashQuestionSampler(Sampler):
+
+  def __init__(self, *args, **kwargs):
+    super().__init__(*args, **kwargs)
+    self._train_groups = [[],[]]
+    split_rng = numpy.random.RandomState(1)
+    for color1 in self.colors:
+      for shape1 in self.shapes:
+        for color2 in self.colors:
+          for shape2 in self.shapes:
+            for rel in RELATIONS:
+              answer = split_rng.randint(2)
+              self._train_groups[answer].append((shape1, color1, shape2, color2, rel))
+
+  def check_whole_qa(self, shape1, color1, shape2, color2, rel, answer):
+    q = (shape1, color1, shape2, color2, rel) 
+    return self._test != ((q in self._train_groups[1]) == bool(answer))
+
+
 def main():
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
@@ -584,6 +610,8 @@ def main():
     sampler_class = HoldRedSquareSampler
   elif args.split == 'BelowHoldDiag':
     sampler_class = BelowExcludeDiagSampler
+  elif args.split == 'HashQuestions':
+    sampler_class = HashQuestionSampler
   elif args.split.startswith('Below'):
     hold = args.split[5:].lower()
     if hold in COLORS:
@@ -604,7 +632,8 @@ if __name__ == '__main__':
   below_colors = ['Below{}'.format(color.capitalize()) for color in COLORS]
   below_shapes = ['Below{}'.format(shape.capitalize()) for shape in SHAPES]
   level_splits = {'shapecolor': ['none', 'CoGenT', 'HoldDiag', 'HoldRedSquare'],
-                  'relations': ['none', 'BelowHoldDiag'] + below_colors + below_shapes}
+                  'relations': ['none', 'BelowHoldDiag', 'HashQuestions'] 
+                               + below_colors + below_shapes}
 
   parser = argparse.ArgumentParser()
   parser.add_argument('--train', type=int, default=1000,

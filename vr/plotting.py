@@ -37,9 +37,13 @@ def load_logs(root, data_train, data_val, args):
 
 def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=1):
     pyplot.figure(figsize=(15, 5))
+
     for root, df_root in df.groupby('root'):
-      # Plot train
+      min_progress = min([df_slurmid['step'].max() for _, df_slurmid in df_root.groupby('slurmid')])
+      df_root = df_root[df_root['step'] <= min_progress]
       df_agg = df_root.groupby(['step']).agg(['mean', 'std'])
+
+      # Plot train
       train_values = df_agg[train_quantity]['mean']
       train_values = train_values.rolling(window).mean()
       train_lines = pyplot.plot(df_agg.index,
@@ -59,7 +63,7 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
                     color=train_lines[0].get_color())
 
       # Count number of successes
-      n_seeds = len(df[df['root'] == root]['slurmid'].unique())
+      n_seeds = len(df_root['slurmid'].unique())
       n_train_successes = 0
       n_val_successes = 0
       for slurmid, df_slurmid in df_root.groupby('slurmid'):
@@ -73,7 +77,8 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
       success_report = "{} out of {}".format(n_train_successes, n_seeds)
 
       # Print
-      to_print = [root + ":", success_report, "({:.1f})".format(100 * train_values.iloc[-1])]
+      to_print = ["{} ({} steps)".format(root, str(min_progress)), 
+                  success_report, "({:.1f})".format(100 * train_values.iloc[-1])]
       if val_quantity:
         std = val_std.iloc[-1]
         width = std * stats.t.ppf(0.975, n_seeds - 1) / (n_seeds ** 0.5)

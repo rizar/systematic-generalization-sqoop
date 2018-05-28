@@ -160,7 +160,7 @@ class ClevrDataLoader(DataLoader):
 
     vocab = kwargs.pop('vocab')
     mode = kwargs.pop('mode', 'prefix')
-    load_features = kwargs.pop('load_features')
+    load_features = kwargs.pop('load_features', False)
     percent_of_data = kwargs.pop('percent_of_data', 1.)
     question_families = kwargs.pop('question_families', None)
     max_samples = kwargs.pop('max_samples', None)

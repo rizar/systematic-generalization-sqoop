@@ -103,14 +103,19 @@ class FiLMGen(nn.Module):
     if self.use_attention:
       # Florian Strub used Tanh here, but let's use identity to make this model
       # closer to the baseline film version
-      self.attention_non_linear = lambda x: x
       #Need to change this if we want a different mechanism to compute attention weights
       attention_dim = self.module_dim 
-      self.attention_context_mapper = nn.Linear(hidden_dim * self.num_dir, self.module_dim)
-      # to compute attention weights
-      self.attention_weight_scorer = nn.Linear(attention_dim, 1) 
+      self.context2key = nn.Linear(hidden_dim * self.num_dir, self.module_dim)
       # to transform control vector to film coefficients
-      self.attention_coefficient_weight_transformer = nn.Linear(self.module_dim, 2*self.module_dim) 
+      self.last_vector2key = []
+      self.decoders_att = []
+      for i in range(num_modules):
+        mod = nn.Linear(hidden_dim * self.num_dir, attention_dim)
+        self.add_module("last_vector2key{}".format(i), mod)
+        self.last_vector2key.append(mod)
+        mod = nn.Linear(hidden_dim * self.num_dir, 2*self.module_dim) 
+        self.add_module("decoders_att{}".format(i), mod)
+        self.decoders_att.append(mod)
     
     if self.output_batchnorm:
       self.output_bn = nn.BatchNorm1d(self.cond_feat_size, affine=True)
@@ -246,12 +251,14 @@ class FiLMGen(nn.Module):
     output_shaped = linear_output.view(N, T_out, V_out)
     return output_shaped, (ht, ct)
 
-  def dotProduct_Attention(self, context, initQuery, mask):
-    
+  def attention_decoder(self, context, last_vector, mask):
+    context_keys = self.context2key(context)
+
     out = []
-    query = initQuery
     for i in range(self.num_modules):
-      scores = self.attention_weight_scorer(context * query.unsqueeze(1)).squeeze(2) #NxLxd -> NxLx1 -> NxL
+      # vanilla dot-product attention in the key space
+      query = self.last_vector2key[i](last_vector)
+      scores = (context_keys * query.unsqueeze(1)).sum(2) #NxLxd -> NxL
       
       # softmax
       scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to eliminate padding words
@@ -259,10 +266,8 @@ class FiLMGen(nn.Module):
 
       control = (context * scores.unsqueeze(2)).sum(1) #Nxd
       
-      coefficients = self.attention_non_linear(self.attention_coefficient_weight_transformer(control).unsqueeze(1)) #Nxd -> Nx2d -> Nx1x2d
+      coefficients = self.decoders_att[i](control).unsqueeze(1) #Nxd -> Nx2d -> Nx1x2d
       out.append(coefficients)
-      
-      query = control
     
     if len(out) == 0: return None
     if len(out) == 1: return out[0]
@@ -278,9 +283,7 @@ class FiLMGen(nn.Module):
       return (whole_context, last_vector, mask)
     
     if self.use_attention: #make sure taking_context is True as well if we want to use this.
-      whole_context = self.attention_context_mapper(whole_context)
-      last_vector = self.attention_context_mapper(last_vector)
-      film_pre_mod = self.dotProduct_Attention(whole_context, last_vector, mask)
+      film_pre_mod = self.attention_decoder(whole_context, last_vector, mask)
     else:
       film_pre_mod, _ = self.decoder(encoded, self.get_dims(x=x))
     film = self.modify_output(film_pre_mod, gamma_option=self.gamma_option,

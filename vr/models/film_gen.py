@@ -51,7 +51,7 @@ class FiLMGen(nn.Module):
       self.taking_context = True
     if self.taking_context:
       #if we want to use the full context, it makes sense to use bidirectional modeling.
-      self.bidirectional = True
+      bidirectional = True
 
     self.encoder_type = encoder_type
     self.decoder_type = decoder_type
@@ -123,6 +123,9 @@ class FiLMGen(nn.Module):
     init_modules(self.modules())
     if embedding_uniform_boundary > 0.:
       uniform(self.encoder_embed.weight, -1.*embedding_uniform_boundary, embedding_uniform_boundary)
+
+    # The attention scores will be saved here if the attention is used.
+    self.scores = None
 
   def expand_encoder_vocab(self, token_to_idx, word2vec=None, std=0.01):
     expand_embedding_vocab(self.encoder_embed, token_to_idx,
@@ -255,6 +258,7 @@ class FiLMGen(nn.Module):
     context_keys = self.context2key(context)
 
     out = []
+    self.scores = []
     for i in range(self.num_modules):
       # vanilla dot-product attention in the key space
       query = self.last_vector2key[i](last_vector)
@@ -263,12 +267,14 @@ class FiLMGen(nn.Module):
       # softmax
       scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to eliminate padding words
       scores = scores / scores.sum(1, keepdim=True) #NxL
+      self.scores.append(scores)
 
       control = (context * scores.unsqueeze(2)).sum(1) #Nxd
       
       coefficients = self.decoders_att[i](control).unsqueeze(1) #Nxd -> Nx2d -> Nx1x2d
       out.append(coefficients)
-    
+    self.scores = torch.cat([t.unsqueeze(0) for t in self.scores], 0)    
+  
     if len(out) == 0: return None
     if len(out) == 1: return out[0]
     return torch.cat(out, 1) #N x num_module x 2d

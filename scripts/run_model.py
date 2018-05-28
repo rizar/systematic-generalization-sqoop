@@ -293,6 +293,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
   all_correct = []
   all_probs = []
   all_preds = []
+  all_film_scores = []
   all_read_scores = []
   all_control_scores = []
   all_connections = []
@@ -367,6 +368,8 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     all_probs.append(probs.data.cpu().clone())
     all_preds.append(preds.cpu().clone())
     all_correct.append(preds == answers)
+    if args.model_type == 'FiLM' and pg.scores is not None:
+      all_film_scores.append(pg.scores.data.cpu().clone())
     if args.model_type == 'MAC':
       all_control_scores.append(ee.control_scores.data.cpu().clone())
       all_read_scores.append(ee.read_scores.data.cpu().clone())
@@ -398,6 +401,8 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     fout.create_dataset('scores', data=torch.cat(all_scores, 0).numpy())
     fout.create_dataset('probs', data=torch.cat(all_probs, 0).numpy())
     fout.create_dataset('correct', data=torch.cat(all_correct, 0).numpy())
+    if all_film_scores:
+      fout.create_dataset('film_scores', data=torch.cat(all_film_scores, 1).numpy())
     if all_vib_costs:
       fout.create_dataset('vib_costs', data=torch.cat(all_vib_costs, 0).numpy())
     if all_read_scores:

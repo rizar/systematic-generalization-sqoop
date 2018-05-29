@@ -151,6 +151,7 @@ parser.add_argument('--mac_vib_coof', default=0., type=float)
 parser.add_argument('--mac_use_self_attention', default=1, type=int)
 parser.add_argument('--mac_use_memory_gate', default=1, type=int)
 parser.add_argument('--mac_nonlinearity', default='ELU', type=str)
+parser.add_argument('--mac_question2output', default=1, type=int)
 
 parser.add_argument('--mac_question_embedding_dropout', default=0.08, type=float)
 parser.add_argument('--mac_stem_dropout', default=0.18, type=float)
@@ -877,6 +878,7 @@ def get_execution_engine(args):
                 'read_dropout': args.mac_read_dropout,
                 'write_unit': args.mac_write_unit,
                 'read_connect': args.mac_read_connect,
+                'question2output': args.mac_question2output,
                 'noisy_controls': bool(args.mac_vib_coof),
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
                 'use_self_attention': args.mac_use_self_attention,

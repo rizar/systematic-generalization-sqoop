@@ -35,6 +35,7 @@ class MAC(nn.Module):
                use_prior_control_in_control_unit,
                use_self_attention,
                use_memory_gate,
+               question2output,
                classifier_batchnorm,
                classifier_fc_layers,
                classifier_dropout,
@@ -64,6 +65,7 @@ class MAC(nn.Module):
     self.module_dim = module_dim
 
     self.read_connect = read_connect
+    self.question2output = question2output
     self.use_self_attention = use_self_attention == 1
     self.use_memory_gate = use_memory_gate == 1
 
@@ -128,7 +130,7 @@ class MAC(nn.Module):
     self.classifier = OutputUnit(
       module_dim, classifier_fc_layers, num_answers,
       with_batchnorm=classifier_batchnorm, dropout=classifier_dropout,
-      nonlinearity=nonlinearity)
+      nonlinearity=nonlinearity, question2output=question2output)
 
 
     self.pre_connects = []
@@ -278,14 +280,16 @@ class MAC(nn.Module):
 
 class OutputUnit(nn.Module):
   def __init__(self, module_dim, hidden_units, num_outputs, 
-               nonlinearity, with_batchnorm, dropout):
+               nonlinearity, with_batchnorm, dropout, question2output):
     super().__init__()
 
     self.dropout = dropout
+    self.question2output = question2output
 
-    self.question_transformer = nn.Linear(module_dim, module_dim)
+    if question2output:
+      self.question_transformer = nn.Linear(module_dim, module_dim)
 
-    input_dim = 2*module_dim
+    input_dim = 2*module_dim if question2output else module_dim
     hidden_units = [input_dim] + [h for h in hidden_units] + [num_outputs]
     self.linears = []
     self.batchnorms = []
@@ -304,8 +308,11 @@ class OutputUnit(nn.Module):
 
   def forward(self, final_memory, original_q_rep, isTest=False):
 
-    transformed_question = self.question_transformer(original_q_rep)
-    features = torch.cat([final_memory, transformed_question], 1)
+    if self.question2output:
+      transformed_question = self.question_transformer(original_q_rep)
+      features = torch.cat([final_memory, transformed_question], 1)
+    else:
+      features = final_memory
 
     for i, (linear, batchnorm) in enumerate(zip(self.linears, self.batchnorms)):
       if batchnorm is not None:

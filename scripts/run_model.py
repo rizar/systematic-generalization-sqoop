@@ -375,7 +375,7 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
       all_read_scores.append(ee.read_scores.data.cpu().clone())
     if hasattr(ee, 'vib_costs'):
       all_vib_costs.append(ee.vib_costs.data.cpu().clone())
-    if hasattr(ee, 'connections'):
+    if hasattr(ee, 'connections') and ee.connections:
       all_connections.append(torch.cat([conn.unsqueeze(1) for conn in ee.connections], 1).data.cpu().clone())
     if answers[0] is not None:
       num_correct += (preds == answers).sum()

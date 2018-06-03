@@ -468,8 +468,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       compute_start_time = time.time()
 
       t += 1
-      (questions, _, feats, answers, programs, _,
-       question_lengths, program_lengths) = batch
+      (questions, _, feats, answers, programs, _) = batch
       if isinstance(questions, list):
         questions = questions[0]
       questions_var = Variable(questions.cuda())
@@ -482,7 +481,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       if args.model_type == 'PG':
         # Train program generator with ground-truth programs
         pg_optimizer.zero_grad()
-        loss = program_generator(questions_var, question_lengths, programs_var, program_lengths)
+        loss = program_generator(questions_var, programs_var)
         loss.backward()
         pg_optimizer.step()
       elif args.model_type in ['EE', 'Hetero']:
@@ -500,7 +499,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         baseline_optimizer.step()
       elif args.model_type == 'PG+EE':
-        programs_pred = program_generator.reinforce_sample(questions_var, question_lengths, program_lengths)
+        programs_pred = program_generator.reinforce_sample(questions_var)
         scores = execution_engine(feats_var, programs_pred)
 
         loss = loss_fn(scores, answers_var)
@@ -1028,8 +1027,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   set_mode('eval', [program_generator, execution_engine, baseline_model])
   num_correct, num_samples = 0, 0
   for batch in loader:
-    (questions, _, feats, answers, programs, _,
-     question_lengths, program_lengths) = batch
+    (questions, _, feats, answers, programs, _) = batch
     if isinstance(questions, list):
       questions = questions[0]
 
@@ -1044,8 +1042,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       #TODO(mnoukhov) change to scores for attention
       vocab = vr.utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
-        program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True),
-                                                question_lengths[i:i+1])
+        program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True))
         program_pred_str = vr.preprocess.decode(program_pred, vocab['program_idx_to_token'])
         program_str = vr.preprocess.decode(programs[i], vocab['program_idx_to_token'])
         if program_pred_str == program_str:
@@ -1054,8 +1051,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type in ['EE', 'Hetero']:
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
-      programs_pred = program_generator.reinforce_sample(
-                          questions_var, question_lengths, argmax=True)
+      programs_pred = program_generator.reinforce_sample(questions_var, argmax=True)
       scores = execution_engine(feats_var, programs_pred)
     elif args.model_type == 'FiLM' or args.model_type == 'RTfilm':
       programs_pred = program_generator(questions_var)

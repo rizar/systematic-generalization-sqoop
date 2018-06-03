@@ -118,11 +118,15 @@ class Seq2SeqAtt(nn.Module):
     T_out = y.size(1) if y is not None else None
     return V_in, V_out, D, H, L, N, T_in, T_out
 
-  def encoder(self, x, x_lengths):
+  def encoder(self, x):
+    x, x_lengths, inverse_index = sort_for_rnn(x, null=self.NULL)
     embed = self.encoder_embed(x)
     packed = pack_padded_sequence(embed, x_lengths, batch_first=True)
     out_packed, hidden = self.encoder_rnn(packed)
     out, _ = pad_packed_sequence(out_packed, batch_first=True)
+
+    out = out[inverse_index]
+    hidden = [h[:,inverse_index] for h in hidden]
 
     return out, hidden
 
@@ -141,7 +145,7 @@ class Seq2SeqAtt(nn.Module):
 
     return output, hidden
 
-  def compute_loss(self, output_logprobs, y, y_lengths):
+  def compute_loss(self, output_logprobs, y):
     """
     Compute loss. We assume that the first element of the output sequence y is
     a start token, and that each element of y is left-aligned and right-padded
@@ -154,7 +158,6 @@ class Seq2SeqAtt(nn.Module):
     - output_logprobs: Variable of shape (N, T_out, V_out)
     - y: LongTensor Variable of shape (N, T_out)
     """
-    #TODO(mnoukhov) use y_lengths to mask
     self.multinomial_outputs = None
     V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
     mask = y.data != self.NULL
@@ -168,10 +171,10 @@ class Seq2SeqAtt(nn.Module):
     loss = F.cross_entropy(out_masked, y_masked)
     return loss
 
-  def forward(self, x, x_lengths, y, y_lengths):
-    max_target_length = max(y_lengths)
+  def forward(self, x, y):
+    max_target_length = y.size(1)
 
-    encoder_outputs, encoder_hidden = self.encoder(x, x_lengths)
+    encoder_outputs, encoder_hidden = self.encoder(x)
     decoder_inputs = y
     decoder_hidden = encoder_hidden
     decoder_outputs = []
@@ -181,16 +184,16 @@ class Seq2SeqAtt(nn.Module):
       decoder_outputs.append(decoder_out)
 
     decoder_outputs = torch.stack(decoder_outputs, dim=1)
-    loss = self.compute_loss(decoder_outputs, y, y_lengths)
+    loss = self.compute_loss(decoder_outputs, y)
     return loss
 
-  def sample(self, x, x_lengths, max_length=50):
+  def sample(self, x, max_length=50):
     # TODO: Handle sampling for minibatch inputs
     # TODO: Beam search?
     self.multinomial_outputs = None
     assert x.size(0) == 1, "Sampling minibatches not implemented"
 
-    encoder_outputs, encoder_hidden = self.encoder(x, x_lengths)
+    encoder_outputs, encoder_hidden = self.encoder(x)
     decoder_hidden = encoder_hidden
     sampled_output = [self.START]
     for t in range(max_length):
@@ -205,9 +208,9 @@ class Seq2SeqAtt(nn.Module):
 
     return sampled_output
 
-  def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):
+  def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
     N, T = x.size(0), max_length
-    encoder_outputs, encoder_hidden = self.encoder(x, x_lengths)
+    encoder_outputs, encoder_hidden = self.encoder(x)
     y = torch.LongTensor(N, T).fill_(self.NULL)
     done = torch.ByteTensor(N).fill_(0)
     cur_input = Variable(x.data.new(N, 1).fill_(self.START))
@@ -263,3 +266,15 @@ def logical_or(x, y):
 
 def logical_not(x):
   return x == 0
+
+def sort_for_rnn(x, null=0):
+  lengths = torch.sum(x != null, dim=1).long()
+  sorted_lengths, sorted_idx = torch.sort(lengths, dim=0, descending=True)
+  sorted_lengths = sorted_lengths.data.tolist() # remove for pytorch 0.4+
+  # ugly
+  inverse_sorted_idx = torch.LongTensor(sorted_idx.shape).fill_(0).cuda()
+  for i, v in enumerate(sorted_idx):
+    inverse_sorted_idx[v.data] = i
+
+  return x[sorted_idx], sorted_lengths, inverse_sorted_idx
+

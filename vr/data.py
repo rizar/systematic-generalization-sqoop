@@ -32,6 +32,7 @@ def _gen_subsample_mask(num, percent=1.0):
   mask[selected_ids] = True
   return mask
 
+
 class ClevrDataset(Dataset):
   def __init__(self, question_h5, feature_h5_path, vocab, mode='prefix',
                image_h5=None, load_features=False, max_samples=None, question_families=None,
@@ -192,17 +193,24 @@ class ClevrDataLoader(DataLoader):
 def clevr_collate(batch):
   transposed = list(zip(*batch))
   question_batch = default_collate(transposed[0])
+
   image_batch = transposed[1]
-  if any(img is not None for img in image_batch):
+  if all(img is not None for img in image_batch):
     image_batch = default_collate(image_batch)
+
   feat_batch = transposed[2]
-  if any(f is not None for f in feat_batch):
+  if all(f is not None for f in feat_batch):
     feat_batch = default_collate(feat_batch)
+
   answer_batch = transposed[3]
   if transposed[3][0] is not None:
-    answer_batch = default_collate(transposed[3])
+    answer_batch = default_collate(answer_batch)
+
   program_seq_batch = transposed[4]
   if transposed[4][0] is not None:
-    program_seq_batch = default_collate(transposed[4])
+    program_seq_batch = default_collate(program_seq_batch)
+
   program_struct_batch = transposed[5]
-  return [question_batch, image_batch, feat_batch, answer_batch, program_seq_batch, program_struct_batch]
+
+  return [question_batch, image_batch, feat_batch, answer_batch,
+          program_seq_batch, program_struct_batch]

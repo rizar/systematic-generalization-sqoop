@@ -5,39 +5,97 @@
 #
 # This source code is licensed under the license found in the
 # LICENSE file in the root directory of this source tree.
+import math
 
 import torch
 import torch.cuda
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
+from torch.nn.utils.rnn import (pack_padded_sequence,
+                                pad_packed_sequence)
 
 from vr.embedding import expand_embedding_vocab
 
 
-class Seq2Seq(nn.Module):
+class Attn(nn.Module):
+  def __init__(self, hidden_size):
+    super(Attn, self).__init__()
+    self.hidden_size = hidden_size
+    self.attn = nn.Linear(self.hidden_size * 2, hidden_size)
+    self.v = nn.Parameter(torch.rand(hidden_size))
+    stdv = 1. / math.sqrt(self.v.size(0))
+    self.v.data.normal_(mean=0, std=stdv)
+
+  def forward(self, encoder_outputs, hidden):
+    '''
+    :param hidden:
+      previous hidden state of the decoder, in shape (layers*directions, H)
+    :param encoder_outputs:
+      encoder outputs from Encoder, in shape (B,T,H)
+    :return
+      attention energies in shape (B,T)
+    '''
+    seq_len = encoder_outputs.size(1)
+    H = hidden.repeat(seq_len, 1, 1).transpose(0,1)
+    attn_energies = self.score(H, encoder_outputs) # B*1*T
+    return F.softmax(attn_energies, dim=2)
+
+  def score(self, hidden, encoder_outputs):
+    energy = F.tanh(self.attn(torch.cat([hidden, encoder_outputs], 2))) # [B*T*2H]->[B*T*H]
+    energy = energy.transpose(2,1) # [B*H*T]
+    v = self.v.repeat(encoder_outputs.data.shape[0],1).unsqueeze(1) #[B*1*H]
+    energy = torch.bmm(v, energy) # [B*1*T]
+    return energy
+
+# class Attn(nn.Module):
+  # def __init__(self, hidden_size):
+    # super(Attn, self).__init__()
+
+    # self.hidden_size = hidden_size
+    # self.attn = nn.Linear(self.hidden_size, hidden_size)
+
+  # def forward(self, encoder_outputs, hn):
+    # batch_size = encoder_outputs.size(0)
+    # seq_len = encoder_outputs.size(1)
+
+    # attn_energies = Variable(torch.zeros(batch_size, seq_len)) # B x S
+    # attn_energies = attn_energies.cuda()
+
+    # for b in range(batch_size):
+      # for i in range(seq_len):
+        # attn_energies[b, i] = self.score(hn[b], encoder_outputs[b, i].unsqueeze(0))
+
+    # return F.softmax(attn_energies, dim=1).unsqueeze(1)
+
+  # def score(self, hidden, encoder_output):
+    # energy = self.attn(encoder_output)
+    # energy = hidden.dot(energy)
+    # return energy
+
+
+class Seq2SeqAtt(nn.Module):
   def __init__(self,
+    null_token=0,
+    start_token=1,
+    end_token=2,
     encoder_vocab_size=100,
     decoder_vocab_size=100,
     wordvec_dim=300,
     hidden_dim=256,
     rnn_num_layers=2,
     rnn_dropout=0,
-    null_token=0,
-    start_token=1,
-    end_token=2,
-    encoder_embed=None
   ):
-    super(Seq2Seq, self).__init__()
+    super().__init__()
     self.encoder_embed = nn.Embedding(encoder_vocab_size, wordvec_dim)
     self.encoder_rnn = nn.LSTM(wordvec_dim, hidden_dim, rnn_num_layers,
                                dropout=rnn_dropout, batch_first=True)
     self.decoder_embed = nn.Embedding(decoder_vocab_size, wordvec_dim)
     self.decoder_rnn = nn.LSTM(wordvec_dim + hidden_dim, hidden_dim, rnn_num_layers,
                                dropout=rnn_dropout, batch_first=True)
-    self.decoder_rnn_new = nn.LSTM(hidden_dim, hidden_dim, rnn_num_layers,
-                                   dropout=rnn_dropout, batch_first=True)
     self.decoder_linear = nn.Linear(hidden_dim, decoder_vocab_size)
+    self.decoder_attn = Attn(hidden_dim)
+    self.rnn_num_layers = rnn_num_layers
     self.NULL = null_token
     self.START = start_token
     self.END = end_token
@@ -60,55 +118,32 @@ class Seq2Seq(nn.Module):
     T_out = y.size(1) if y is not None else None
     return V_in, V_out, D, H, L, N, T_in, T_out
 
-  def before_rnn(self, x, replace=0):
-    # TODO: Use PackedSequence instead of manually plucking out the last
-    # non-NULL entry of each sequence; it is cleaner and more efficient.
-    N, T = x.size()
-    idx = torch.LongTensor(N).fill_(T - 1)
-
-    # Find the last non-null element in each sequence. Is there a clean
-    # way to do this?
-    x_cpu = x.cpu()
-    for i in range(N):
-      for t in range(T - 1):
-        if x_cpu.data[i, t] != self.NULL and x_cpu.data[i, t + 1] == self.NULL:
-          idx[i] = t
-          break
-    idx = idx.type_as(x.data)
-    x[x.data == self.NULL] = replace
-    return x, Variable(idx)
-
   def encoder(self, x):
-    V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
-    x, idx = self.before_rnn(x)
+    x, x_lengths, inverse_index = sort_for_rnn(x, null=self.NULL)
     embed = self.encoder_embed(x)
-    h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
-    c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
+    packed = pack_padded_sequence(embed, x_lengths, batch_first=True)
+    out_packed, hidden = self.encoder_rnn(packed)
+    out, _ = pad_packed_sequence(out_packed, batch_first=True)
 
-    out, _ = self.encoder_rnn(embed, (h0, c0))
+    out = out[inverse_index]
+    hidden = [h[:,inverse_index] for h in hidden]
 
-    # Pull out the hidden state for the last non-null value in each input
-    idx = idx.view(N, 1, 1).expand(N, 1, H)
-    return out.gather(1, idx).view(N, H)
+    return out, hidden
 
-  def decoder(self, encoded, y, h0=None, c0=None):
-    V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(y=y)
+  def decoder(self, word_inputs, encoder_outputs, prev_hidden):
+    hn, cn = prev_hidden
+    word_embedded = self.decoder_embed(word_inputs).unsqueeze(1) # batch x 1 x embed
 
-    if T_out > 1:
-      y, _ = self.before_rnn(y)
-    y_embed = self.decoder_embed(y)
-    encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-    rnn_input = torch.cat([encoded_repeat, y_embed], 2)
-    if h0 is None:
-      h0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    if c0 is None:
-      c0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    rnn_output, (ht, ct) = self.decoder_rnn(rnn_input, (h0, c0))
+    attn_weights = self.decoder_attn(encoder_outputs, hn[-1])
+    context = attn_weights.bmm(encoder_outputs) # batch x 1 x hidden
 
-    rnn_output_2d = rnn_output.contiguous().view(N * T_out, H)
-    output_logprobs = self.decoder_linear(rnn_output_2d).view(N, T_out, V_out)
+    rnn_input = torch.cat((word_embedded, context), 2)
+    output, hidden = self.decoder_rnn(rnn_input, prev_hidden)
 
-    return output_logprobs, ht, ct
+    output = output.squeeze(1) # batch x hidden
+    output = self.decoder_linear(output)
+
+    return output, hidden
 
   def compute_loss(self, output_logprobs, y):
     """
@@ -136,49 +171,55 @@ class Seq2Seq(nn.Module):
     loss = F.cross_entropy(out_masked, y_masked)
     return loss
 
-  def forward(self, x, x_lengths, y, y_lengths):
-    encoded = self.encoder(x)
+  def forward(self, x, y):
+    max_target_length = y.size(1)
 
-    V_in, V_out, D, H, L, N, T_in, T_out = self.get_dims(x=x)
-    T_out = 15
-    encoded_repeat = encoded.view(N, 1, H).expand(N, T_out, H)
-    h0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    c0 = Variable(torch.zeros(L, N, H).type_as(encoded.data))
-    rnn_output, (ht, ct) = self.decoder_rnn_new(encoded_repeat, (h0, c0))
+    encoder_outputs, encoder_hidden = self.encoder(x)
+    decoder_inputs = y
+    decoder_hidden = encoder_hidden
+    decoder_outputs = []
+    for t in range(max_target_length):
+      decoder_out, decoder_hidden = self.decoder(
+        decoder_inputs[:,t], encoder_outputs, decoder_hidden)
+      decoder_outputs.append(decoder_out)
 
-    output_logprobs, _, _ = self.decoder(encoded, y)
-    loss = self.compute_loss(output_logprobs, y)
+    decoder_outputs = torch.stack(decoder_outputs, dim=1)
+    loss = self.compute_loss(decoder_outputs, y)
     return loss
 
-  def sample(self, x, x_lengths, max_length=50):
+  def sample(self, x, max_length=50):
     # TODO: Handle sampling for minibatch inputs
     # TODO: Beam search?
     self.multinomial_outputs = None
     assert x.size(0) == 1, "Sampling minibatches not implemented"
-    encoded = self.encoder(x)
-    y = [self.START]
-    h0, c0 = None, None
-    while True:
-      cur_y = Variable(torch.LongTensor([y[-1]]).type_as(x.data).view(1, 1))
-      logprobs, h0, c0 = self.decoder(encoded, cur_y, h0=h0, c0=c0)
-      _, next_y = logprobs.data.max(2, keepdim=True)
-      y.append(next_y[0, 0, 0])
-      if len(y) >= max_length or y[-1] == self.END:
-        break
-    return y
 
-  def reinforce_sample(self, x, x_lengths, max_length=30, temperature=1.0, argmax=False):
+    encoder_outputs, encoder_hidden = self.encoder(x)
+    decoder_hidden = encoder_hidden
+    sampled_output = [self.START]
+    for t in range(max_length):
+      decoder_input = Variable(torch.cuda.LongTensor([sampled_output[-1]]))
+      decoder_out, decoder_hidden = self.decoder(
+        decoder_input, encoder_outputs, decoder_hidden)
+      _, argmax = decoder_out.data.max(1)
+      output = argmax[0]
+      sampled_output.append(output)
+      if output == self.END:
+        break
+
+    return sampled_output
+
+  def reinforce_sample(self, x, max_length=30, temperature=1.0, argmax=False):
     N, T = x.size(0), max_length
-    encoded = self.encoder(x)
+    encoder_outputs, encoder_hidden = self.encoder(x)
     y = torch.LongTensor(N, T).fill_(self.NULL)
     done = torch.ByteTensor(N).fill_(0)
     cur_input = Variable(x.data.new(N, 1).fill_(self.START))
-    h, c = None, None
+    decoder_hidden = encoder_hidden
     self.multinomial_outputs = []
     self.multinomial_probs = []
     for t in range(T):
       # logprobs is N x 1 x V
-      logprobs, h, c = self.decoder(encoded, cur_input, h0=h, c0=c)
+      logprobs, decoder_hidden = self.decoder(cur_input, encoder_outputs, decoder_hidden)
       logprobs = logprobs / temperature
       probs = F.softmax(logprobs.view(N, -1), dim=1) # Now N x V
       if argmax:
@@ -220,11 +261,20 @@ class Seq2Seq(nn.Module):
     torch.autograd.backward(self.multinomial_outputs, grad_output, retain_variables=True)
 
 
-def logical_and(x, y):
-  return x * y
-
 def logical_or(x, y):
   return (x + y).clamp_(0, 1)
 
 def logical_not(x):
   return x == 0
+
+def sort_for_rnn(x, null=0):
+  lengths = torch.sum(x != null, dim=1).long()
+  sorted_lengths, sorted_idx = torch.sort(lengths, dim=0, descending=True)
+  sorted_lengths = sorted_lengths.data.tolist() # remove for pytorch 0.4+
+  # ugly
+  inverse_sorted_idx = torch.LongTensor(sorted_idx.shape).fill_(0).cuda()
+  for i, v in enumerate(sorted_idx):
+    inverse_sorted_idx[v.data] = i
+
+  return x[sorted_idx], sorted_lengths, inverse_sorted_idx
+

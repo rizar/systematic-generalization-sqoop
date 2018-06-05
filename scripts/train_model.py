@@ -30,6 +30,7 @@ from vr.data import (ClevrDataset,
                      ClevrDataLoader)
 from vr.models import (ModuleNet,
                        Seq2Seq,
+                       Seq2SeqAtt,
                        LstmModel,
                        CnnLstmModel,
                        CnnLstmSaModel,
@@ -77,7 +78,10 @@ parser.add_argument('--percent_of_data_for_training', default=1., type=float)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
-  choices=['RTfilm', 'Tfilm', 'FiLM', 'PG', 'EE', 'PG+EE', 'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA', 'Hetero', 'MAC', 'TMAC'])
+  choices=['RTfilm', 'Tfilm', 'FiLM',
+           'PG', 'EE', 'PG+EE',
+           'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
+           'Hetero', 'MAC', 'TMAC'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -87,11 +91,12 @@ parser.add_argument('--program_generator_start_from', default=None)
 parser.add_argument('--execution_engine_start_from', default=None)
 parser.add_argument('--baseline_start_from', default=None)
 
-# RNN options
+# RNN options (for PG)
 parser.add_argument('--rnn_wordvec_dim', default=300, type=int)
 parser.add_argument('--rnn_hidden_dim', default=256, type=int)
 parser.add_argument('--rnn_num_layers', default=2, type=int)
 parser.add_argument('--rnn_dropout', default=0, type=float)
+parser.add_argument('--rnn_attention', action='store_true')
 
 # Module net / FiLMedNet options
 parser.add_argument('--module_stem_num_layers', default=2, type=int)
@@ -463,7 +468,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       compute_start_time = time.time()
 
       t += 1
-      questions, _, feats, answers, programs, _ = batch
+      (questions, _, feats, answers, programs, _) = batch
       if isinstance(questions, list):
         questions = questions[0]
       questions_var = Variable(questions.cuda())
@@ -759,6 +764,8 @@ def get_program_generator(args):
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
       pg = FiLMGen(**kwargs)
+    elif args.rnn_attention:
+      pg = Seq2SeqAtt(**kwargs)
     else:
       pg = Seq2Seq(**kwargs)
   pg.cuda()
@@ -945,6 +952,7 @@ def get_execution_engine(args):
   ee.train()
   return ee, kwargs
 
+
 def get_baseline_model(args):
   vocab = vr.utils.load_vocab(args.vocab_json)
   if args.baseline_start_from is not None:
@@ -1019,7 +1027,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   set_mode('eval', [program_generator, execution_engine, baseline_model])
   num_correct, num_samples = 0, 0
   for batch in loader:
-    questions, _, feats, answers, programs, _ = batch
+    (questions, _, feats, answers, programs, _) = batch
     if isinstance(questions, list):
       questions = questions[0]
 
@@ -1031,6 +1039,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
 
     scores = None  # Use this for everything but PG
     if args.model_type == 'PG':
+      #TODO(mnoukhov) change to scores for attention
       vocab = vr.utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
         program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True))
@@ -1042,8 +1051,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type in ['EE', 'Hetero']:
       scores = execution_engine(feats_var, programs_var)
     elif args.model_type == 'PG+EE':
-      programs_pred = program_generator.reinforce_sample(
-                          questions_var, argmax=True)
+      programs_pred = program_generator.reinforce_sample(questions_var, argmax=True)
       scores = execution_engine(feats_var, programs_pred)
     elif args.model_type == 'FiLM' or args.model_type == 'RTfilm':
       programs_pred = program_generator(questions_var)
@@ -1072,6 +1080,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
   acc = float(num_correct) / num_samples
   return acc
 
+
 def check_grad_num_nans(model, model_name='model'):
     grads = [p.grad for p in model.parameters() if p.grad is not None]
     num_nans = [np.sum(np.isnan(grad.data.cpu().numpy())) for grad in grads]
@@ -1081,6 +1090,7 @@ def check_grad_num_nans(model, model_name='model'):
       print(num_nans)
       pdb.set_trace()
       raise(Exception)
+
 
 if __name__ == '__main__':
   args = parser.parse_args()

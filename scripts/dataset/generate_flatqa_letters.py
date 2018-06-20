@@ -23,29 +23,29 @@ import io
 import json
 import logging
 import math
+import string
 import time
 from functools import partial
 
 import h5py
 import numpy
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 
 
 logger = logging.getLogger(__name__)
 RELATIONS = ['left_of', 'right_of', 'above', 'below']
 COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
-SHAPES = ['square', 'triangle',  'cross', 'bar',
-          'empty_square', 'empty_triangle']#, 'circle']
-MIN_OBJECT_SIZE = 8
+SHAPES = list(string.ascii_uppercase)
 
 
 class Object(object):
-  def __init__(self, size, angle, pos=None, shape=None, color=None):
-    self.size = size
+  def __init__(self, fontsize, angle=0, pos=None, shape=None, color=None):
+    self.font = ImageFont.truetype('FreeSans.ttf', fontsize)
+    width, self.size = self.font.getsize('A')
     self.angle = angle
     angle_rad = angle / 180 * math.pi
-    self.rotated_size =  math.ceil(size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
+    self.rotated_size =  math.ceil(self.size * (abs(math.sin(angle_rad)) + abs(math.cos(angle_rad))))
     self.pos = pos
     self.shape = shape
     self.color = color
@@ -66,6 +66,15 @@ class Object(object):
       return self.pos[1] < other.pos[1]
     raise ValueError(rel)
 
+  def draw(self):
+    img = Image.new('RGBA', (self.size, self.size))
+    draw = ImageDraw.Draw(img)
+    draw.text((0,0), self.shape, font=self.font, fill=self.color)
+
+    if self.angle != 0:
+      img = img.rotate(self.angle, expand=True, resample=Image.LINEAR)
+
+    return img
 
 class CustomJSONEncoder(json.JSONEncoder):
   def default(self, obj):
@@ -80,46 +89,10 @@ class CustomJSONEncoder(json.JSONEncoder):
       return super().default(obj)
 
 
-def draw_object(draw, obj):
-  if obj.size < MIN_OBJECT_SIZE:
-    raise ValueError("too small, can't draw")
-
-  img = Image.new('RGBA', (obj.size, obj.size))
-  draw = ImageDraw.Draw(img)
-  width, height = (obj.size, obj.size)
-
-  if obj.shape == 'square':
-    draw.rectangle([(0, 0), (width, height)], fill=obj.color)
-  elif obj.shape == 'circle':
-    draw.ellipse([(0, 0), (width, height)], fill=obj.color)
-  elif obj.shape == 'triangle':
-    polygon = [(0, 0),
-               (width // 2, height - 1),
-               (width - 1, 0)]
-    draw.polygon(polygon, fill=obj.color)
-  elif obj.shape == 'empty_triangle':
-    polygon = [(0, 0),
-               (width // 2, height - 1),
-               (width - 1, 0)]
-    draw.polygon(polygon, outline=obj.color)
-  elif obj.shape == 'empty_square':
-    draw.rectangle([(0, 0), (width-1, height-1)], outline=obj.color)
-  elif obj.shape == 'cross':
-    draw.rectangle([(width // 3, 0), (2 * width // 3, height)], fill=obj.color)
-    draw.rectangle([(0, height // 3), (width, 2 * height // 3)], fill=obj.color)
-  elif obj.shape == 'bar':
-    draw.rectangle([(0, height // 3), (width, 2 * height // 3)], fill=obj.color)
-  else:
-    raise ValueError()
-
-  return img.rotate(obj.angle, expand=True, resample=Image.LINEAR)
-
-
 def draw_scene(objects):
   img = Image.new('RGB', (args.image_size, args.image_size))
-  draw = ImageDraw.Draw(img)
   for obj in objects:
-    obj_img = draw_object(draw, obj)
+    obj_img = obj.draw()
     obj_pos = (obj.pos[0] - obj_img.size[0] // 2,
                obj.pos[1] - obj_img.size[1] // 2)
     img.paste(obj_img, obj_pos, obj_img)
@@ -150,30 +123,6 @@ def get_random_spot(rng, objects):
     return obj
   else:
     return None
-
-
-def shape_module(shape):
-  return "Shape[{}]".format(shape)
-
-
-def binary_shape_module(shape):
-  return "Shape2[{}]".format(shape)
-
-
-def color_module(color):
-  return "Color[{}]".format(color)
-
-
-def binary_color_module(color):
-  return "Color2[{}]".format(color)
-
-
-def relation_module(relation):
-  return "Relate[{}]".format(relation)
-
-
-def unary_relation_module(relation):
-  return "Relate1[{}]".format(relation)
 
 
 def generate_scene(rng, sampler, objects=[], **kwargs):
@@ -215,6 +164,24 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
       max_program_len = 8
     elif args.program == 'chain_shortcut':
       max_program_len = 12
+
+  def shape_module(shape):
+    return "Shape[{}]".format(shape)
+
+  def binary_shape_module(shape):
+    return "Shape2[{}]".format(shape)
+
+  def color_module(color):
+    return "Color[{}]".format(color)
+
+  def binary_color_module(color):
+    return "Color2[{}]".format(color)
+
+  def relation_module(relation):
+    return "Relate[{}]".format(relation)
+
+  def unary_relation_module(relation):
+    return "Relate1[{}]".format(relation)
 
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a']
                     + sampler.colors + sampler.shapes + RELATIONS)
@@ -424,7 +391,6 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
 
 
 class Sampler:
-
   def __init__(self, test, seed, colors, shapes):
     self._test = test
     self._rng = numpy.random.RandomState(seed)
@@ -451,195 +417,35 @@ class Sampler:
     return True
 
 
-class _HoldRelationColorSampler(Sampler):
-  """At training time the relation 'hold_rel' is only explained with 'hold_color'.
-  At test time we test the generalization of 'hold_rel' to other colors.
-  """
-  def __init__(self, test, seed, colors, shapes, hold_rel, hold_color):
-    super().__init__(test, seed, colors, shapes)
-    self.hold_rel = hold_rel
-    self.hold_color = hold_color
-
-  def sample_relation(self):
-    if self._test:
-      return self.hold_rel
-    else:
-      return super().sample_relation()
-
-  def sample_shape_color(self, purpose, relation):
-    hold_objects = [(shape, self.hold_color) for shape in self.shapes]
-    if self._test:
-      return self._rejection_sample(hold_objects)
-    else:
-      if relation == self.hold_rel:
-        return self._choose(hold_objects)
-      return self._rejection_sample()
-
-
-def HoldRelationColorSampler(hold_rel, hold_color):
-  return partial(_HoldRelationColorSampler, hold_rel=hold_rel, hold_color=hold_color)
-
-
-class _HoldRelationShapeSampler(Sampler):
-  """At training time the relation 'hold_rel' is only explained with 'hold_color'.
-  At test time we test the generalization of 'hold_rel' to other colors.
-  """
-  def __init__(self, test, seed, colors, shapes, hold_rel, hold_shape):
-    super().__init__(test, seed, colors, shapes)
-    self.hold_rel = hold_rel
-    self.hold_shape = hold_shape
-
-  def sample_relation(self):
-    if self._test:
-      return self.hold_rel
-    else:
-      return super().sample_relation()
-
-  def sample_shape_color(self, purpose, relation):
-    hold_objects = [(self.hold_shape, color) for color in self.colors]
-    if self._test:
-      return self._rejection_sample(hold_objects)
-    else:
-      if relation == self.hold_rel:
-        return self._choose(hold_objects)
-      return self._rejection_sample()
-
-
-def HoldRelationShapeSampler(hold_rel, hold_shape):
-  return partial(_HoldRelationShapeSampler, hold_rel=hold_rel, hold_shape=hold_shape)
-
-
-class BelowExcludeDiagSampler(Sampler):
-
-  def sample_relation(self):
-    if self._test:
-      return 'below'
-    else:
-      return super().sample_relation()
-
-  def sample_shape_color(self, purpose, relation):
-    diagonal = list(zip(self.shapes, self.colors))
-    if self._test:
-      if purpose == 'ask':
-        return self._choose(diagonal)
-      else:
-        return self._rejection_sample()
-    else:
-      if relation == 'below':
-        return self._rejection_sample(diagonal)
-      return self._rejection_sample()
-
-
-class HoldDiagSampler(Sampler):
-
-  def sample_shape_color(self, purpose):
-    diagonal = list(zip(self.shapes, self.colors))
-    if self._test:
-      if purpose == 'ask':
-        return self._choose(diagonal)
-      else:
-        return self._rejection_sample()
-    else:
-      return self._rejection_sample(diagonal)
-
-
-class HoldRedSquareSampler(Sampler):
-
-  def sample_shape_color(self, purpose):
-    if self._test:
-      if purpose == 'ask':
-        return ('square', 'red')
-      else:
-        return super().sample_shape_color()
-    else:
-      return self._rejection_sample([('square', 'red')])
-
-
-class CoGenTSampler(Sampler):
-
-  def __init__(self, test, seed, colors, shapes):
-    if colors != COLORS:
-      raise ValueError("can't do CoGenT with less than 8 colors")
-    set1 = ['gray', 'blue', 'brown', 'yellow']
-    set2 = ['red', 'green', 'purple', 'cyan']
-    self._restrict = ([('square', color) for color in set1] +
-                      [('triangle', color) for color in set2])
-    self._restrict_test = ([('square', color) for color in set2] +
-                            [('triangle', color) for color in set1])
-    super().__init__(test, seed, colors, shapes)
-
-  def sample_shape_color(self, purpose):
-    if self._test:
-      if purpose == 'ask':
-        return self._choose(self._restrict)
-      return self._rejection_sample(self._restrict_test)
-    else:
-      return self._rejection_sample(self._restrict)
-
-
-class _HashQuestionSampler(Sampler):
-
-  def __init__(self, force_all, *args, **kwargs):
+class _LongTailSampler(Sampler):
+  def __init__(self, long_tail_dist, *args, **kwargs):
     super().__init__(*args, **kwargs)
+    self.shape_probs = long_tail_dist
 
-    self._force_yes = set()
-    self._both_answers = set()
+  def sample_shape_color(self, *args, **kwargs):
+    if self._test:
+        return self._rejection_sample()
+    else:
+        return self._rejection_sample(self.shape_probs)
 
-    split_rng = numpy.random.RandomState(1)
-    for color1 in self.colors:
-      for shape1 in self.shapes:
-        for color2 in self.colors:
-          for shape2 in self.shapes:
-            for rel in RELATIONS:
-              q = (shape1, color1, shape2, color2, rel)
-
-              if force_all:
-                if split_rng.randint(2):
-                  self._force_yes.add(q)
-              else:
-                rand = split_rng.randint(4)
-                if rand == 0:
-                  pass
-                elif rand == 1:
-                  self._force_yes.add(q)
-                else:
-                  self._both_answers.add(q)
-
-  def check_whole_qa(self, shape1, color1, shape2, color2, rel, answer):
-    q = (shape1, color1, shape2, color2, rel)
-    if q in self._both_answers:
-      return True
-    return self._test != ((q in self._force_yes) == bool(answer))
+  def _rejection_sample(self, shape_probs=None):
+    shape = self._rng.choice(self.shapes, p=shape_probs)
+    color = self._rng.choice(self.colors)
+    return shape, color
 
 
-def HashQuestionSampler(force_all):
-  return partial(_HashQuestionSampler, force_all)
+def LongTailSampler(long_tail_dist):
+  return partial(_LongTailSampler, long_tail_dist)
 
 
 def main():
   shapes = SHAPES[:args.num_shapes]
   colors = COLORS[:args.num_colors]
 
-  if args.split == 'none':
-    sampler_class = Sampler
-  elif args.split == 'CoGenT':
-    sampler_class = CoGenTSampler
-  elif args.split == 'HoldDiag':
-    sampler_class = HoldDiagSampler
-  elif args.split == 'HoldRedSquare':
-    sampler_class = HoldRedSquareSampler
-  elif args.split == 'BelowHoldDiag':
-    sampler_class = BelowExcludeDiagSampler
-  elif args.split == 'HashQuestions':
-    sampler_class = HashQuestionSampler(True)
-  elif args.split == 'HashHalfQuestions':
-    sampler_class = HashQuestionSampler(False)
-  elif args.split.startswith('Below'):
-    hold = args.split[5:].lower()
-    if hold in COLORS:
-      sampler_class = HoldRelationColorSampler('below', hold)
-    elif hold in SHAPES:
-      sampler_class = HoldRelationShapeSampler('below', hold)
+  # 99% for first 7
+  # 1% for remaining 20
+  long_tail_dist = [0.99 / 6]*6 + [0.01 / 20]*20
+  sampler_class = LongTailSampler(long_tail_dist)
 
   train_sample = sampler_class(False, 1, colors, shapes)
   val_sample = sampler_class(True, 2, colors, shapes)
@@ -651,14 +457,6 @@ def main():
 
 
 if __name__ == '__main__':
-  below_colors = ['Below{}'.format(color.capitalize()) for color in COLORS]
-  below_shapes = ['Below{}'.format(shape.capitalize()) for shape in SHAPES]
-  level_splits = {
-    'shapecolor': ['none', 'CoGenT', 'HoldDiag', 'HoldRedSquare'],
-    'relations': ['none', 'BelowHoldDiag', 'HashQuestions', 'HashHalfQuestions']
-                  + below_colors + below_shapes,
-  }
-
   parser = argparse.ArgumentParser()
   parser.add_argument('--train', type=int, default=1000,
                       help="Size of the training set")
@@ -666,7 +464,6 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=1000,
                       help="Size of the test set")
-  parser.add_argument('--level', type=str, choices=('shapecolor', 'relations'), default='shapecolor')
   parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'), default='best')
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
@@ -674,20 +471,12 @@ if __name__ == '__main__':
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)
   parser.add_argument('--max-obj-size', type=int, default=15)
-  parser.add_argument('--rotate', type=int, default=1)
-  parser.add_argument('--split', type=str,
-                      choices=level_splits['shapecolor'] + level_splits['relations'],
-                      default='none',
-                      help="The split to use")
-  parser.add_argument('--restrict-scene', type=int, default=1,
-                      help="Make sure that held-out objects do not appeat in the scene"
-                      "during training")
+  parser.add_argument('--no-rotate', action='store_false', dest='rotate')
   args = parser.parse_args()
 
-  if not args.split in level_splits[args.level]:
-    raise ValueError()
+  args.level = 'relations'
+
   with open('args.txt', 'w') as dst:
     print(args, file=dst)
-
 
   main()

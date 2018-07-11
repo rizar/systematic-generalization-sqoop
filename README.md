@@ -15,7 +15,28 @@ The models available include:
 
 ## Installation
 
+Clone the repository. Create a Conda environment and install the code in the environment in development mode:
+
+```
+conda create -f environment.yaml
+pip install -e . 
+```
+
+Any time you want run the code, activate the environment first:
+
+```
+source activate nmn
+```
+
+When you are done, deactivate the environment:
+
+```
+source deactivate
+```
+
 ## Training Models
+
+Let `$ROOT` be the path to your checkout.
 
 ## Generating Datasets
 

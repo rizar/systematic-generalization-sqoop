@@ -18,7 +18,7 @@ The models available include:
 Clone the repository. Create a Conda environment and install the code in the environment in development mode:
 
 ```
-conda create -f environment.yaml
+conda env create -f environment.yaml
 pip install -e . 
 ```
 

@@ -45,6 +45,8 @@ Let `$ROOT` be the path to your checkout. A typical training commmands looks as 
 bash $ROOT/nmn-iwp/scripts/train/film_flatqa.sh  --data_dir /data/milatmp1/bahdanau/data/flatqa/relations_BelowSquare
 ```
 
+Make sure to have a GPU when you run the code, cause it doesn't work just CPU.
+
 ##  Datasets
 
 Most FlatQA datasets: `/data/milatmp1/bahdanau/data/flatqa/relations_BelowSquare`
@@ -53,7 +55,17 @@ CLEVR: `/data/milatmp1/bahdanau/data/clevr`
 
 ## Generating Datasets
 
-See `scripts/dataset/generate_flatqa.py`, `scripts/dataset/generate_flatqa_letters.py`
+See `scripts/dataset/generate_flatqa.py`, `scripts/dataset/generate_flatqa_letters.py`.
+
+## Visualing Datasets and Models
+
+We inspect datasets and models with IPython notebooks which we don't normally keep under version control
+(they are a bit of a pain to deal with). Inspiration can be drawn from:
+
+```
+/data/milatmp1/bahdanau/FlatQA_Relations_Results.ipynb
+/data/milatmp1/bahdanau/Explore_GridQA.ipynb
+```
 
 ### Acknowledgements.
 

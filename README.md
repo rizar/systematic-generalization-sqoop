@@ -22,6 +22,8 @@ conda create -f environment.yaml
 pip install -e . 
 ```
 
+(if you run this on MILA servers, environment creation will take some time ...)
+
 Any time you want run the code, activate the environment first:
 
 ```

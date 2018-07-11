@@ -49,9 +49,9 @@ Make sure to have a GPU when you run the code, cause it doesn't work just CPU.
 
 ##  Datasets
 
-Most FlatQA datasets: `/data/milatmp1/bahdanau/data/flatqa/relations_BelowSquare`
-FlatQA-Letters: `/data/milatmp1/noukhovm/cedar/flatqa-letters/`
-CLEVR: `/data/milatmp1/bahdanau/data/clevr`
+- Most FlatQA datasets: `/data/milatmp1/bahdanau/data/flatqa/relations_BelowSquare`
+- FlatQA-Letters: `/data/milatmp1/noukhovm/cedar/flatqa-letters/`
+- CLEVR: `/data/milatmp1/bahdanau/data/clevr`
 
 ## Generating Datasets
 

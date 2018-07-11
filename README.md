@@ -65,6 +65,7 @@ We inspect datasets and models with IPython notebooks which we don't normally ke
 ```
 /data/milatmp1/bahdanau/FlatQA_Relations_Results.ipynb
 /data/milatmp1/bahdanau/Explore_GridQA.ipynb
+/data/milatmp1/bahdanau/Error_Analysis.ipynb
 ```
 
 ### Acknowledgements.

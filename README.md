@@ -19,6 +19,7 @@ Clone the repository. Create a Conda environment and install the code in the env
 
 ```
 conda env create -f environment.yaml
+source activate nmn
 pip install -e . 
 ```
 

@@ -39,9 +39,21 @@ source deactivate
 
 ## Training Models
 
-Let `$ROOT` be the path to your checkout.
+Let `$ROOT` be the path to your checkout. A typical training commmands looks as follows:
+
+```
+bash $ROOT/nmn-iwp/scripts/train/film_flatqa.sh  --data_dir /data/milatmp1/bahdanau/data/flatqa/relations_BelowSquare
+```
+
+##  Datasets
+
+Most FlatQA datasets: `/data/milatmp1/bahdanau/data/flatqa/relations_BelowSquare`
+FlatQA-Letters: `/data/milatmp1/noukhovm/cedar/flatqa-letters/`
+CLEVR: `/data/milatmp1/bahdanau/data/clevr`
 
 ## Generating Datasets
+
+See `scripts/dataset/generate_flatqa.py`, `scripts/dataset/generate_flatqa_letters.py`
 
 ### Acknowledgements.
 

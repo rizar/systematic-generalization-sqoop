@@ -21,7 +21,6 @@ COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
 SHAPES = list(string.ascii_uppercase) + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 
-SHAPES = SHAPES[:5]
 
 # === Definition of modules for NMN === #
 def shape_module(shape):
@@ -73,10 +72,10 @@ class Object(object):
   def draw(self):
     img = Image.new('RGBA', (self.size, self.size))
     draw = ImageDraw.Draw(img)
-    draw.text((0,0), self.shape, font=self.font, fill='yellow')
+    draw.text((0,0), self.shape, font=self.font, fill='green')
 
-    if self.angle != 0:
-      img = img.rotate(self.angle, expand=True, resample=Image.LINEAR)
+    #if self.angle != 0:
+    #  img = img.rotate(self.angle, expand=True, resample=Image.LINEAR)
 
     return img
 
@@ -234,13 +233,13 @@ def flatQA_gen(vocab):
 
 
   # generate data vocabulary
-  question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a', 'yellow'] + vocab + RELATIONS)
+  question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a', 'green'] + vocab + RELATIONS)
   question_vocab = {word: i for i, word in enumerate(question_words)}
 
   program_words = (['<NULL>', '<START>', '<END>', 'scene', 'And']
-                   + [color_module('yellow')]
+                   + [color_module('green')]
                    + [shape_module(shape) for shape in vocab]
-                   + [binary_color_module('yellow') ]
+                   + [binary_color_module('green') ]
                    + [binary_shape_module(shape) for shape in vocab]
                    + [relation_module(rel) for rel in RELATIONS]
                    + [unary_relation_module(rel) for rel in RELATIONS])
@@ -251,7 +250,7 @@ def flatQA_gen(vocab):
   module_token_to_idx = {word: idx for idx, word in
                          enumerate(['find', 'relate', 'and'])}
   program_token_to_module_text = {}
-  program_token_to_module_text[color_module('yellow')] = ['find', 'yellow']
+  program_token_to_module_text[color_module('green')] = ['find', 'green']
   for shape in vocab:
     program_token_to_module_text[shape_module(shape)] = ['find', shape]
   for rel in RELATIONS:
@@ -262,7 +261,7 @@ def flatQA_gen(vocab):
 
   text_token_to_idx = {}
   for idx, word in enumerate(
-      ['null', 'yellow'] + vocab + RELATIONS):
+      ['null', 'green'] + vocab + RELATIONS):
     text_token_to_idx[word] = idx
 
   def arity(token):
@@ -320,9 +319,11 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
     # different seeds for train/dev/test
     rng = numpy.random.RandomState(seed)
     before = time.time()
+    scenes = []
     while i < len(obj_pairs):
       scene, question, program, success = generate_imgAndQuestion(obj_pairs[i], sampler, rng, (i % 2) == 0, vocab, presampled_relations[i])
       if success:
+        scenes.append(scene)
         buffer_ = io.BytesIO()
         image = draw_scene(scene)
         image.save(buffer_, format='png')
@@ -340,20 +341,6 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
 
   with open(prefix + '_scenes.json', 'w') as dst:
     json.dump(scenes, dst, indent=2, cls=CustomJSONEncoder)
-
-  if prefix == 'train':
-    with open('vocab.json', 'w') as dst:
-      json.dump({'question_token_to_idx': question_vocab,
-                 'program_token_to_idx': program_vocab,
-                 'program_token_arity': {
-                   name: arity(name) for name in program_vocab},
-                 'answer_token_to_idx': answer_token_to_idx,
-                 'program_token_to_module_text': program_token_to_module_text,
-                 'module_token_to_idx': module_token_to_idx,
-                 'text_token_to_idx': text_token_to_idx},
-                dst, indent=2)
-
-
 
 
 def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
@@ -398,8 +385,8 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
     elif not obj1.relate(rel, obj4): return None, None, None, False
     elif not obj3.relate(rel, obj2): return None, None, None, False
 
-  color1 = "yellow"
-  color2 = "yellow"
+  color1 = "green"
+  color2 = "green"
   shape1 = x
   shape2 = y
   question = ["is", "there", "a", color1 , x, rel, color2, y] 

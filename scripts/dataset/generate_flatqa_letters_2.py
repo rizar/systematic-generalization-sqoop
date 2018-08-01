@@ -128,14 +128,20 @@ def get_random_spot(rng, objects):
     return None
 
 
-def generate_scene(rng, sampler, objects=[], **kwargs):
+def generate_scene(rng, sampler, objects=[], restrict = False, **kwargs):
   orig_objects = objects
 
   objects = list(orig_objects)
   place_failures = 0
+
+  if restrict:
+    restricted_obj = [obj.shape for obj in orig_objects]
+  else:
+    restricted_obj = []
+
   while len(objects) < args.num_objects:
     # first, select which object to draw by rejection sampling
-    shape = sampler.sample_object(purpose='generate', **kwargs)
+    shape = sampler.sample_object(restricted_obj, [], **kwargs)
 
     new_object = get_random_spot(rng, objects)
     if new_object is None:
@@ -173,8 +179,11 @@ class Sampler:
     return self._choose(RELATIONS)
 
   def sample_object(self, *args, **kwargs):
-    return self._rejection_sample()
-
+    print(args)
+    if len(args) > 0:
+      return self._rejection_sample(args[0])
+    else:
+      return self._rejection_sample()
 
 
 class _LongTailSampler(Sampler):
@@ -182,15 +191,18 @@ class _LongTailSampler(Sampler):
     super().__init__(*args, **kwargs)
     self.object_probs = dist
 
-  def sample_object(self, *args, **kwargs):
+  def sample_object(self, restricted = [], *args, **kwargs):
     if self._test:
-        return self._rejection_sample()
+        return self._rejection_sample(restricted = restricted)
     else:
-        return self._rejection_sample(self.object_probs)
+        return self._rejection_sample(self.object_probs, restricted = restricted)
 
-  def _rejection_sample(self, shape_probs=None):
-    shape = self._rng.choice(self.objects, p=shape_probs)
-    return shape
+  def _rejection_sample(self, shape_probs=None, restricted = []):
+    while True:
+      rand_object = self._rng.choice(self.objects, p = shape_probs)
+      if rand_object not in restricted:
+        return rand_object 
+
 
 
 def LongTailSampler(long_tail_dist):
@@ -216,6 +228,8 @@ def flatQA_gen(vocab):
       if x == y: continue
       chosen.remove((x,y))
       train_pairs += [(x,y)]*args.num_repeats
+  
+  random.shuffle(train_pairs)
 
   left = list(chosen)
   print('number of zero shot pairs: %d' %len(left))
@@ -315,13 +329,15 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
     image_idxs_dataset = dst_questions.create_dataset('image_idxs', (num_examples,), dtype=numpy.int64)
 
     i = 0
+    rejection_sampling = {'a' : 0, 'b' : 0, 'c' : 0, 'd' : 0, 'e' : 0, 'f' : 0}
   
     # different seeds for train/dev/test
     rng = numpy.random.RandomState(seed)
     before = time.time()
     scenes = []
     while i < len(obj_pairs):
-      scene, question, program, success = generate_imgAndQuestion(obj_pairs[i], sampler, rng, (i % 2) == 0, vocab, presampled_relations[i])
+      scene, question, program, success, key = generate_imgAndQuestion(obj_pairs[i], sampler, rng, (i % 2) == 0, vocab, presampled_relations[i])
+      rejection_sampling[key] += 1
       if success:
         scenes.append(scene)
         buffer_ = io.BytesIO()
@@ -333,9 +349,13 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
         programs_dataset[i]   = [program_vocab[w] for w in program] 
         answers_dataset[i]    = int( (i%2) == 0) 
         image_idxs_dataset[i] = i
-        print("\r>> Done with %d/%d examples" %(i+1, len(obj_pairs)), end = '')
-        sys.stdout.flush() 
+          
         i += 1
+        if i % 1000 == 0:
+          time_data = "{} seconds per example".format((time.time() - before) / i )
+          print(time_data)
+        print("\r>> Done with %d/%d examples : %s " %(i+1, len(obj_pairs),  rejection_sampling), end = '')
+        sys.stdout.flush() 
 
   print("{} seconds per example".format((time.time() - before) / len(obj_pairs) ))
 
@@ -362,28 +382,27 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
   if label:
     obj1 = get_random_spot(rng, [])
     obj2 = get_random_spot(rng, [obj1])
-    if not obj2 or not obj1.relate(rel, obj2): return None, None, None, False
+    if not obj2 or not obj1.relate(rel, obj2): return None, None, None, False, 'a'
     obj1.shape = x
     obj2.shape = y
-    scene = generate_scene(rng, sampler, objects=[obj1, obj2], relation=rel)
+    scene = generate_scene(rng, sampler, objects=[obj1, obj2], restrict = False, relation=rel)
   else:
     # first generate a scene
-    scene = generate_scene(rng, sampler, relation=rel)
-    # choose x,y,x', y' st. x r' y, x r y', x' r y holds true
-    i, j, k, l = random.sample(range(len(scene)), 4)
-
-    obj1 = scene[i] #x
+    obj1 = get_random_spot(rng, [])
+    obj2 = get_random_spot(rng, [obj1])
+    if not obj2 or obj1.relate(rel, obj2): return None, None, None, False, 'b'
     obj1.shape = x
-    obj2 = scene[j] #y
     obj2.shape = y
-    obj3 = scene[k] #x'
-    obj4 = scene[l] #y'
+   
 
-    r_corrupted_1 = sampler.sample_relation()
-    if r_corrupted_1 == rel or obj3.shape == x or obj4.shape == y: return None, None, None, False 
-    elif not obj1.relate(r_corrupted_1, obj2): return None, None, None, False
-    elif not obj1.relate(rel, obj4): return None, None, None, False
-    elif not obj3.relate(rel, obj2): return None, None, None, False
+    scene = generate_scene(rng, sampler, objects = [obj1, obj2], restrict = True, relation=rel)
+    # choose x,y,x', y' st. x r' y, x r y', x' r y holds true
+
+    obj3 = scene[2] #x'
+    obj4 = scene[3] #y'
+
+    if not obj1.relate(rel, obj4): return None, None, None, False, 'c'
+    elif not obj3.relate(rel, obj2): return None, None, None, False, 'd'
 
   color1 = "green"
   color2 = "green"
@@ -415,7 +434,7 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
          binary_color_module(color2), 'scene',
          'scene', "<END>"]
 
-  return scene, question, program, True
+  return scene, question, program, True, 'f'
 
 
 def main():

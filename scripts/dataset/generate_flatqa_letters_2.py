@@ -19,7 +19,8 @@ logger = logging.getLogger(__name__)
 RELATIONS = ['left_of', 'right_of', 'above', 'below']
 COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
-SHAPES = list(string.ascii_uppercase) + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+#SHAPES = list(string.ascii_uppercase) + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+SHAPES =  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
 
 
 # === Definition of modules for NMN === #
@@ -45,7 +46,7 @@ def unary_relation_module(relation):
 
 class Object(object):
   def __init__(self, fontsize, angle=0, pos=None, shape=None):
-    self.font = ImageFont.truetype('FreeSans.ttf', fontsize)
+    self.font = ImageFont.truetype("arial.ttf", fontsize)
     width, self.size = self.font.getsize('A')
     self.angle = angle
     angle_rad = angle / 180 * math.pi
@@ -102,8 +103,18 @@ def draw_scene(objects):
 
   return img
 
+  def relate(self, rel, other):
+    if rel == 'left_of':
+      return self.pos[0] < other.pos[0]
+    if rel == 'right_of':
+      return self.pos[0] > other.pos[0]
+    if rel == 'above':
+      return self.pos[1] > other.pos[1]
+    if rel == 'below':
+      return self.pos[1] < other.pos[1]
+    raise ValueError(rel)
 
-def get_random_spot(rng, objects):
+def get_random_spot(rng, objects, rel = None,  rel_holds = False, rel_obj = 0):
   """Get a spot for a new object that does not overlap with existing ones."""
   # then, select the object size
   size = rng.randint(args.min_obj_size, args.max_obj_size + 1)
@@ -112,9 +123,32 @@ def get_random_spot(rng, objects):
 
   min_center = obj.rotated_size // 2 + 1
   max_center = args.image_size - obj.rotated_size // 2 - 1
+
+  if rel is not None:
+    if rel_holds == False:
+      # do not want the relation to be true
+      max_center_x = objects[rel_obj].pos[0] if rel == 'left_of' else max_center
+      min_center_x = objects[rel_obj].pos[0] if rel == 'right_of' else min_center
+      max_center_y = objects[rel_obj].pos[1] if rel == 'below' else max_center
+      min_center_y = objects[rel_obj].pos[1] if rel == 'above' else min_center 
+    else:
+      # want the relation to be true
+      min_center_x = objects[rel_obj].pos[0] if rel == 'left_of' else min_center
+      max_center_x = objects[rel_obj].pos[0] if rel == 'right_of' else max_center
+      min_center_y = objects[rel_obj].pos[1] if rel == 'below' else min_center
+      max_center_y = objects[rel_obj].pos[1] if rel == 'above' else max_center 
+
+    if min_center_x >= max_center_x: return None
+    if min_center_y >= max_center_y: return None
+
+  else:
+    min_center_x = min_center_y = min_center
+    max_center_x = max_center_y = max_center
+
+
   for attempt in range(10):
-    x = rng.randint(min_center, max_center)
-    y = rng.randint(min_center, max_center)
+    x = rng.randint(min_center_x, max_center_x)
+    y = rng.randint(min_center_y, max_center_y)
     obj.pos = (x, y)
 
     # make sure there is no overlap between bounding squares
@@ -344,7 +378,7 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
         image = draw_scene(scene)
         image.save(buffer_, format='png')
         buffer_.seek(0)
-        features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8') 
+        #features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8') 
         questions_dataset[i]  = [question_vocab[w] for w in question] 
         programs_dataset[i]   = [program_vocab[w] for w in program] 
         answers_dataset[i]    = int( (i%2) == 0) 
@@ -389,7 +423,7 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
   else:
     # first generate a scene
     obj1 = get_random_spot(rng, [])
-    obj2 = get_random_spot(rng, [obj1])
+    obj2 = get_random_spot(rng, [obj1], rel = rel, rel_holds = False)
     if not obj2 or obj1.relate(rel, obj2): return None, None, None, False, 'b'
     obj1.shape = x
     obj2.shape = y
@@ -466,6 +500,7 @@ if __name__ == '__main__':
 
   args.level = 'relations'
 
+  
   with open('args.txt', 'w') as dst:
     print(args, file=dst)
 

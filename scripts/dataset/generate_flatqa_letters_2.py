@@ -8,6 +8,7 @@ import string
 import time
 import random
 import sys
+import os
 from functools import partial
 
 import h5py
@@ -19,9 +20,9 @@ logger = logging.getLogger(__name__)
 RELATIONS = ['left_of', 'right_of', 'above', 'below']
 COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
-#SHAPES = list(string.ascii_uppercase) + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
-SHAPES =  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
-
+SHAPES = list(string.ascii_uppercase) + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+#SHAPES =  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
+FONT_OBJECTS = { font_size : ImageFont.truetype("arial.ttf") for font_size in range(10, 16) }
 
 # === Definition of modules for NMN === #
 def shape_module(shape):
@@ -46,7 +47,7 @@ def unary_relation_module(relation):
 
 class Object(object):
   def __init__(self, fontsize, angle=0, pos=None, shape=None):
-    self.font = ImageFont.truetype("arial.ttf", fontsize)
+    self.font = FONT_OBJECTS[fontsize]
     width, self.size = self.font.getsize('A')
     self.angle = angle
     angle_rad = angle / 180 * math.pi
@@ -277,8 +278,6 @@ def flatQA_gen(vocab):
   for pair in left[ dev_slice : ] :
     test_pairs += [pair]*args.num_repeats_eval 
 
-  
-
 
   # generate data vocabulary
   question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a', 'green'] + vocab + RELATIONS)
@@ -378,7 +377,7 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
         image = draw_scene(scene)
         image.save(buffer_, format='png')
         buffer_.seek(0)
-        #features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8') 
+        features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8') 
         questions_dataset[i]  = [question_vocab[w] for w in question] 
         programs_dataset[i]   = [program_vocab[w] for w in program] 
         answers_dataset[i]    = int( (i%2) == 0) 
@@ -490,6 +489,7 @@ if __name__ == '__main__':
   parser.add_argument('--rhs_variety', type=int, default=15)
   parser.add_argument('--num_repeats', type=int, default=1000)
   parser.add_argument('--num_repeats_eval', type=int, default=10)
+  parser.add_argument('--data_dir', type=str, default='/data/milatmp1/smurty')
   
 
   parser.add_argument('--image-size', type=int, default=64)
@@ -499,8 +499,11 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   args.level = 'relations'
-
+  data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
+  if not os.path.exists(data_full_dir):
+    os.makedirs(data_full_dir)
   
+  os.chdir(data_full_dir)
   with open('args.txt', 'w') as dst:
     print(args, file=dst)
 

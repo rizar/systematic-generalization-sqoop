@@ -471,8 +471,36 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
 
 
 def main():
-  flatQA_gen(SHAPES)
+  vocab = SHAPES
+  if args.mode == 'from_scratch':
+    flatQA_gen(SHAPES)
+  else:
+    uniform_dist = [1.0 / len(vocab) ]*len(vocab)
+    sampler_class = LongTailSampler(uniform_dist)
 
+    eval_sampler = sampler_class(True, 4, vocab)
+
+    question_file = h5py.File('train_questions.h5', 'r') 
+    questions = question_file['questions']
+    vocab_file = open('vocab.json'); vocab_obj = json.load(vocab_file); 
+
+    question_vocab = vocab_obj['question_token_to_idx']
+    program_vocab  = vocab_obj['program_token_to_idx']
+
+    inverse_vocab = {idx : sym for (sym, idx) in question_vocab.items() }
+
+    seen_pairs = []
+    for question in questions:
+      x,y = (inverse_vocab[question[4] ], inverse_vocab[question[7] ])
+      seen_pairs.append( (x,y) )
+    
+    seen_pairs_uniq = list(set(seen_pairs))
+    seen_pairs = []
+    for seen_pair in seen_pairs_uniq:
+      seen_pairs += [seen_pair]*args.num_repeats_eval
+
+
+    gen_data(seen_pairs, eval_sampler, 4, vocab, 'test_easy', question_vocab, program_vocab)
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
@@ -491,6 +519,7 @@ if __name__ == '__main__':
   parser.add_argument('--num_repeats_eval', type=int, default=10)
   parser.add_argument('--data_dir', type=str, default='/data/milatmp1/smurty')
   
+  parser.add_argument('--mode', type=str, choices=['from_scratch', 'gen_easy'], default='from_scratch') 
 
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)

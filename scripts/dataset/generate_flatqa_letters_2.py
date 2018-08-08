@@ -257,10 +257,9 @@ def flatQA_gen(vocab):
   test_pairs  = []  
 
   chosen = set([ (x,y) for x in vocab for y in vocab if x != y] )
-  for x in vocab:
-    ys = random.sample(vocab, args.rhs_variety)
+  for i, x in enumerate(vocab):
+    ys = random.sample(vocab[:i] + vocab[i+1:], args.rhs_variety)
     for y in ys:
-      if x == y: continue
       chosen.remove((x,y))
       train_pairs += [(x,y)]*args.num_repeats
   

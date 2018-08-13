@@ -23,7 +23,8 @@ class SimpleVisualBlock(nn.Module):
     self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=kernel_size, padding=kernel_size // 2)
 
   def forward(self, x):
-    return out = F.relu(self.conv1(x))
+    out = F.relu(self.conv(x))
+    return out
 
 
 

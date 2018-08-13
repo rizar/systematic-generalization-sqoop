@@ -175,6 +175,8 @@ parser.add_argument('--tmac_sharing_params_patterns', default='0,1,1,1')
 #NMNFilm2 options
 parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,0')
 parser.add_argument('--nmn_use_film', default=0, type=int)
+parser.add_argument('--nmn_use_simple_block', default=0, type=int)
+
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -947,6 +949,7 @@ def get_execution_engine(args):
     else:
       kwargs['sharing_patterns'] = parse_int_list(args.nmnfilm2_sharing_params_patterns)
       kwargs['use_film'] = args.nmn_use_film
+      kwargs['use_simple_block'] = args.nmn_use_simple_block
       ee = ModuleNet(**kwargs)
   ee.cuda()
   ee.train()

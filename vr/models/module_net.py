@@ -13,7 +13,7 @@ import torch.nn.functional as F
 from torch.autograd import Variable
 import torchvision.models
 
-from vr.models.layers import init_modules, ResidualBlock, GlobalAveragePool, Flatten
+from vr.models.layers import init_modules, ResidualBlock, SimpleVisualBlock, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem, ConcatBlock
 import vr.programs
 
@@ -26,6 +26,7 @@ from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 class ModuleNet(nn.Module):
   def __init__(self, vocab, feature_dim,
                use_film,
+               use_simple_block,
                sharing_patterns,
                stem_num_layers,
                stem_batchnorm,
@@ -50,6 +51,8 @@ class ModuleNet(nn.Module):
 
     # should be 0 or 1 to indicate the use of film block or not (0 would bring you back to the original EE model)
     self.use_film = use_film
+    # should be 0 or 1 to indicate if we are using ResNets or a simple 3x3 conv followed by ReLU
+    self.use_simple_block = use_simple_block
 
     # this should be a list of two elements (either 0 or 1). It's only active if self.use_film == 1
     # The first element of 1 indicates the sharing of CNN weights in the film blocks, 0 otheriwse
@@ -123,11 +126,14 @@ class ModuleNet(nn.Module):
                                    condition_method='bn-film',
                                    debug_every=float('inf'))
         else:
-          mod = ResidualBlock(
-                  module_dim,
-                  kernel_size=module_kernel_size,
-                  with_residual=module_residual,
-                  with_batchnorm=module_batchnorm)
+          if self.use_simple_block:
+            mod = SimpleVisualBlock(module_dim, kernel_size=module_kernel_size)
+          else:
+            mod = ResidualBlock(
+                    module_dim,
+                    kernel_size=module_kernel_size,
+                    with_residual=module_residual,
+                    with_batchnorm=module_batchnorm)
       elif num_inputs == 2:
         if self.use_film:
           if self.sharing_patterns[0] == 1:

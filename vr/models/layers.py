@@ -13,6 +13,20 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_normal, kaiming_uniform
 
 
+class SimpleVisualBlock(nn.Module):
+  def __init__(self, in_dim, out_dim=None, kernel_size=3):
+    if out_dim is None:
+      out_dim = in_dim
+    super(SimpleVisualBlock, self).__init__()
+    if kernel_size % 2 == 0:
+      raise NotImplementedError()
+    self.conv = nn.Conv2d(in_dim, out_dim, kernel_size=kernel_size, padding=kernel_size // 2)
+
+  def forward(self, x):
+    return out = F.relu(self.conv1(x))
+
+
+
 
 class ResidualBlock(nn.Module):
   def __init__(self, in_dim, out_dim=None, kernel_size=3, with_residual=True, with_batchnorm=True):

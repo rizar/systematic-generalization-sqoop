@@ -311,7 +311,7 @@ class ModuleNet(nn.Module):
     final_module_outputs = torch.cat(final_module_outputs, 0)
     return final_module_outputs
 
-  def forward(self, x, program):
+  def forward(self, x, program,save_activations = False ):
     N = x.size(0)
     assert N == len(program)
 

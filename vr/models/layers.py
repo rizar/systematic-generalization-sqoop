@@ -13,6 +13,7 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_normal, kaiming_uniform
 
 
+
 class ResidualBlock(nn.Module):
   def __init__(self, in_dim, out_dim=None, kernel_size=3, with_residual=True, with_batchnorm=True):
     if out_dim is None:

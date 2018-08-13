@@ -59,7 +59,8 @@ def load_program_generator(path, model_type='PG+EE'):
     model = None
   else:
     raise ValueError()
-  model.load_state_dict(state)
+  if model is not None:
+    model.load_state_dict(state)
   return model, kwargs
 
 

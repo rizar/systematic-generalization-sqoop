@@ -346,7 +346,7 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
     max_program_len = 13
   elif args.program == 'noand':
     max_program_len = 9
-  elif args.program == 'chain':
+  elif args.program in ['chain', 'chain2', 'chain3']:
     max_program_len = 8
   elif args.program == 'chain_shortcut':
     max_program_len = 12
@@ -403,7 +403,7 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
     max_program_len = 13
   elif args.program == 'noand':
     max_program_len = 9
-  elif args.program == 'chain':
+  elif args.program in ['chain', 'chain2', 'chain3']:
     max_program_len = 8
   elif args.program == 'chain_shortcut':
     max_program_len = 12
@@ -455,6 +455,18 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
     program = ["<START>",
          shape_module(shape1), color_module(color1),
          unary_relation_module(rel),
+         shape_module(shape2), color_module(color2),
+         "scene", "<END>"]
+  elif args.program == 'chain2':
+    program = ["<START>",
+         shape_module(shape1), color_module(color1),
+         shape_module(shape2), color_module(color2),
+         unary_relation_module(rel),
+         "scene", "<END>"]
+  elif args.program == 'chain3':
+    program = ["<START>",
+         unary_relation_module(rel),
+         shape_module(shape1), color_module(color1),
          shape_module(shape2), color_module(color2),
          "scene", "<END>"]
   elif args.program == 'chain_shortcut':
@@ -509,7 +521,7 @@ if __name__ == '__main__':
                       help="Size of the development set")
   parser.add_argument('--test', type=int, default=1000,
                       help="Size of the test set")
-  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain_shortcut'), default='best')
+  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain2', 'chain3', 'chain_shortcut'), default='best')
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
   parser.add_argument('--num-colors', type=int, default=len(COLORS))
   parser.add_argument('--num-objects', type=int, default=5)
@@ -527,7 +539,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   args.level = 'relations'
-  data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
+  data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d-program-%s" %(args.data_dir, args.rhs_variety, args.num_repeats, args.program)
   if not os.path.exists(data_full_dir):
     os.makedirs(data_full_dir)
   

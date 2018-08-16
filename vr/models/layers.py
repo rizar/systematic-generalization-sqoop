@@ -125,12 +125,14 @@ def build_classifier(module_C, module_H, module_W, num_answers,
                      with_batchnorm=True, dropout=0):
   layers = []
   prev_dim = module_C * module_H * module_W
+  cur_dim = module_C
   if proj_dim is not None and proj_dim > 0:
     layers.append(nn.Conv2d(module_C, proj_dim, kernel_size=1))
     if with_batchnorm:
       layers.append(nn.BatchNorm2d(proj_dim))
     layers.append(nn.ReLU(inplace=True))
     prev_dim = proj_dim * module_H * module_W
+    cur_dim = proj_dim
   if 'maxpool' in downsample or 'avgpool' in downsample:
     pool = nn.MaxPool2d if 'maxpool' in downsample else nn.AvgPool2d
     if 'full' in downsample:
@@ -142,8 +144,9 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     # Note: Potentially sub-optimal padding for non-perfectly aligned pooling
     padding = 0 if ((module_H % pool_size == 0) and (module_W % pool_size == 0)) else 1
     layers.append(pool(kernel_size=pool_size, stride=pool_size, padding=padding))
-    prev_dim = proj_dim * math.ceil(module_H / pool_size) * math.ceil(module_W / pool_size)
+    prev_dim = cur_dim * math.ceil(module_H / pool_size) * math.ceil(module_W / pool_size)
   if downsample == 'aggressive':
+    raise ValueError()
     layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
     layers.append(nn.AvgPool2d(kernel_size=module_H // 2, stride=module_W // 2))
     prev_dim = proj_dim

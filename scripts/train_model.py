@@ -41,7 +41,8 @@ from vr.models import (ModuleNet,
                        MAC,
                        TMAC,
                        SimpleEncoderBinary,
-                       HeteroModuleNet)
+                       HeteroModuleNet,
+                       RelationNet)
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
@@ -83,7 +84,7 @@ parser.add_argument('--model_type', default='PG',
   choices=['RTfilm', 'Tfilm', 'FiLM',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
-           'Hetero', 'MAC', 'TMAC'])
+           'Hetero', 'MAC', 'TMAC', 'RelNet'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -178,6 +179,9 @@ parser.add_argument('--tmac_sharing_params_patterns', default='0,1,1,1')
 parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,0')
 parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
+
+#RelationNet options
+parser.add_argument('--module_stem_feature_dim', default=24, type=int)
 
 
 # CNN options (for baselines)
@@ -380,12 +384,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE', 'RelNet']:
     program_generator, pg_kwargs = get_program_generator(args)
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'RelNet']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -749,9 +753,9 @@ def get_program_generator(args):
       kwargs['decoder_type'] = args.decoder_type
       kwargs['gamma_option'] = args.gamma_option
       kwargs['gamma_baseline'] = args.gamma_baseline
-      
+
       kwargs['use_attention'] = args.film_use_attention == 1
-      
+
       if args.model_type == 'FiLM' or args.model_type == 'MAC':
         kwargs['num_modules'] = args.num_modules
       elif args.model_type == 'Tfilm':
@@ -771,6 +775,11 @@ def get_program_generator(args):
         pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
       else:
         pg = FiLMGen(**kwargs)
+    elif args.model_type == 'RelNet':
+      kwargs['bidirectional'] = args.bidirectional == 1
+      kwargs['encoder_type'] = args.encoder_type
+      kwargs['taking_context'] = True   # return the last hidden state of LSTM
+      pg = FiLMGen(**kwargs)
     elif args.rnn_attention:
       pg = Seq2SeqAtt(**kwargs)
     else:
@@ -951,6 +960,11 @@ def get_execution_engine(args):
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
+    elif args.model_type == 'RelNet':
+      kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
+      kwargs['stem_feature_dim'] = args.module_stem_feature_dim
+      ee = RelationNet(**kwargs)
     else:
       kwargs['sharing_patterns'] = parse_int_list(args.nmnfilm2_sharing_params_patterns)
       kwargs['use_film'] = args.nmn_use_film

@@ -120,6 +120,7 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
     prev_dim = module_dim
   return nn.Sequential(*layers)
 
+
 def build_classifier(module_C, module_H, module_W, num_answers,
                      fc_dims=[], proj_dim=None, downsample='maxpool2',
                      with_batchnorm=True, dropout=0):

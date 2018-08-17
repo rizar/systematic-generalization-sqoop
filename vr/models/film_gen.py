@@ -34,17 +34,17 @@ class FiLMGen(nn.Module):
     module_dim=128,
     parameter_efficient=False,
     debug_every=float('inf'),
-    
+
     taking_context=False,
     variational_embedding_dropout=0.,
     embedding_uniform_boundary=0.,
-    
+
     use_attention=False,
   ):
     super(FiLMGen, self).__init__()
-    
+
     self.use_attention = use_attention
-    
+
     self.taking_context = taking_context
     if self.use_attention:
       #if we want to use attention, the full context should be computed
@@ -67,9 +67,9 @@ class FiLMGen(nn.Module):
     self.NULL = null_token
     self.START = start_token
     self.END = end_token
-    
+
     self.variational_embedding_dropout = variational_embedding_dropout
-    
+
     if self.bidirectional: # and not self.taking_context:
       if decoder_type != 'linear':
         raise(NotImplementedError)
@@ -91,7 +91,7 @@ class FiLMGen(nn.Module):
                                 dropout=rnn_dropout, bidirectional=self.bidirectional)
     self.decoder_rnn = init_rnn(self.decoder_type, hidden_dim, hidden_dim, rnn_num_layers,
                                 dropout=rnn_dropout, bidirectional=self.bidirectional)
-    
+
     if self.taking_context:
       self.decoder_linear = None #nn.Linear(2 * hidden_dim, hidden_dim)
       for n, p in self.encoder_rnn.named_parameters():
@@ -99,12 +99,12 @@ class FiLMGen(nn.Module):
         elif n.startswith('bias'): constant(p, 0.)
     else:
       self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
-    
+
     if self.use_attention:
       # Florian Strub used Tanh here, but let's use identity to make this model
       # closer to the baseline film version
       #Need to change this if we want a different mechanism to compute attention weights
-      attention_dim = self.module_dim 
+      attention_dim = self.module_dim
       self.context2key = nn.Linear(hidden_dim * self.num_dir, self.module_dim)
       # to transform control vector to film coefficients
       self.last_vector2key = []
@@ -113,10 +113,10 @@ class FiLMGen(nn.Module):
         mod = nn.Linear(hidden_dim * self.num_dir, attention_dim)
         self.add_module("last_vector2key{}".format(i), mod)
         self.last_vector2key.append(mod)
-        mod = nn.Linear(hidden_dim * self.num_dir, 2*self.module_dim) 
+        mod = nn.Linear(hidden_dim * self.num_dir, 2*self.module_dim)
         self.add_module("decoders_att{}".format(i), mod)
         self.decoders_att.append(mod)
-    
+
     if self.output_batchnorm:
       self.output_bn = nn.BatchNorm1d(self.cond_feat_size, affine=True)
 
@@ -147,7 +147,7 @@ class FiLMGen(nn.Module):
   def before_rnn(self, x, replace=0):
     N, T = x.size()
     idx = torch.LongTensor(N).fill_(T - 1)
-    
+
     #mask to specify non-null tokens
     mask = torch.FloatTensor(N, T).zero_()
 
@@ -158,12 +158,12 @@ class FiLMGen(nn.Module):
         if x_cpu.data[i, t] != self.NULL and x_cpu.data[i, t + 1] == self.NULL:
           idx[i] = t
           break
-    
+
     for i in range(N):
       for t in range(T):
         if x_cpu.data[i, t] not in [self.NULL]:
           mask[i, t] = 1.
-    
+
     idx = idx.type_as(x.data)
     x[x.data == self.NULL] = replace
     return x, Variable(idx), Variable(mask).type(torch.cuda.FloatTensor)
@@ -171,7 +171,7 @@ class FiLMGen(nn.Module):
   def encoder(self, x, isTest=False):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)
     x, idx, mask = self.before_rnn(x)  # Tokenized word sequences (questions), end index
-    
+
     if self.taking_context:
       lengths = torch.LongTensor(idx.shape).fill_(1) + idx.data.cpu()
       lengths = Variable(lengths.cuda())
@@ -180,17 +180,17 @@ class FiLMGen(nn.Module):
       for i, v in enumerate(perm_idx):
         iperm_idx[v.data] = i
       x = x[perm_idx]
-    
+
     embed = self.encoder_embed(x)
-    
+
     h0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
     if self.encoder_type == 'lstm':
       c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
-    
+
     if self.variational_embedding_dropout > 0. and not isTest:
       varDrop = Variable(torch.Tensor(N, D).fill_(self.variational_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
       embed = (embed / (1. - self.variational_embedding_dropout)) * varDrop.unsqueeze(1)
-      
+
     if self.taking_context:
       embed = pack_padded_sequence(embed, seq_lengths.data.cpu().numpy(), batch_first=True)
 
@@ -198,7 +198,7 @@ class FiLMGen(nn.Module):
       out, (hn, _) = self.encoder_rnn(embed, (h0, c0))
     elif self.encoder_type == 'gru':
       out, hn = self.encoder_rnn(embed, h0)
-    
+
     hn = hn.transpose(1,0).contiguous()
     hn = hn.view(hn.shape[0], -1)
 
@@ -207,30 +207,30 @@ class FiLMGen(nn.Module):
       idx_out = None
       out, _ = pad_packed_sequence(out, batch_first=True)
       out = out[iperm_idx]
-      
+
       if out.shape[1] < T_in:
         #zeros = Variable(torch.FloatTensor(out.shape[0], T_in - out.shape[1], out.shape[2]).fill_(0.).cuda())
         #out = torch.cat([out, zeros], 1)
         mask = mask[:, :(out.shape[1]-T_in)] #The packing truncate the original length so we need to change mask to fit it
-      
+
       hn = hn[iperm_idx]
     else:
       idx = idx.view(N, 1, 1).expand(N, 1, H_full)
       idx_out = out.gather(1, idx).view(N, H_full)
-      
+
       out = None
       hn = None
-      
-    
+
+
     return idx_out, out, hn, mask
 
   def decoder(self, encoded, dims, h0=None, c0=None):
-    
+
     #if self.taking_context:
     #  return self.decoder_linear(encoded)
-    
+
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = dims
-    
+
     if self.decoder_type == 'linear':
       # (N x H) x (H x T_out*V_out) -> (N x T_out*V_out) -> N x T_out x V_out
       return self.decoder_linear(encoded).view(N, T_out, V_out), (None, None)
@@ -263,18 +263,18 @@ class FiLMGen(nn.Module):
       # vanilla dot-product attention in the key space
       query = self.last_vector2key[i](last_vector)
       scores = (context_keys * query.unsqueeze(1)).sum(2) #NxLxd -> NxL
-      
+
       # softmax
       scores = torch.exp(scores - scores.max(1, keepdim=True)[0]) * mask #mask help to eliminate padding words
       scores = scores / scores.sum(1, keepdim=True) #NxL
       self.scores.append(scores)
 
       control = (context * scores.unsqueeze(2)).sum(1) #Nxd
-      
+
       coefficients = self.decoders_att[i](control).unsqueeze(1) #Nxd -> Nx2d -> Nx1x2d
       out.append(coefficients)
-    self.scores = torch.cat([t.unsqueeze(0) for t in self.scores], 0)    
-  
+    self.scores = torch.cat([t.unsqueeze(0) for t in self.scores], 0)
+
     if len(out) == 0: return None
     if len(out) == 1: return out[0]
     return torch.cat(out, 1) #N x num_module x 2d
@@ -283,11 +283,11 @@ class FiLMGen(nn.Module):
     if self.debug_every <= -2:
       pdb.set_trace()
     encoded, whole_context, last_vector, mask = self.encoder(x, isTest=isTest)
-    
+
     if self.taking_context and not self.use_attention:
       #whole_context = self.decoder(whole_context, None)
       return (whole_context, last_vector, mask)
-    
+
     if self.use_attention: #make sure taking_context is True as well if we want to use this.
       film_pre_mod = self.attention_decoder(whole_context, last_vector, mask)
     else:

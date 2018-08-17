@@ -40,6 +40,7 @@ from vr.models import (ModuleNet,
                        FiLMGen,
                        MAC,
                        TMAC,
+                       SimpleEncoderBinary,
                        HeteroModuleNet)
 from vr.treeGenerator import TreeGenerator
 
@@ -766,7 +767,10 @@ def get_program_generator(args):
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
-      pg = FiLMGen(**kwargs)
+      if args.simple_encoder:
+        pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
+      else:
+        pg = FiLMGen(**kwargs)
     elif args.rnn_attention:
       pg = Seq2SeqAtt(**kwargs)
     else:

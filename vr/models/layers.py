@@ -7,6 +7,7 @@
 # LICENSE file in the root directory of this source tree.
 
 import math
+
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
@@ -123,7 +124,7 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
 
 def build_classifier(module_C, module_H, module_W, num_answers,
                      fc_dims=[], proj_dim=None, downsample='maxpool2',
-                     with_batchnorm=True, dropout=0):
+                     with_batchnorm=True, dropout=[]):
   layers = []
   prev_dim = module_C * module_H * module_W
   cur_dim = module_C
@@ -153,13 +154,19 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     prev_dim = proj_dim
     fc_dims = []  # No FC layers here
   layers.append(Flatten())
-  for next_dim in fc_dims:
+
+  if len(dropout) == 0:
+    dropout = [0] * len(fc_dims)
+  elif len(dropout) == 1:
+    dropout = dropout * len(fc_dims)
+
+  for next_dim, next_dropout in zip(fc_dims, dropout):
     layers.append(nn.Linear(prev_dim, next_dim))
     if with_batchnorm:
       layers.append(nn.BatchNorm1d(next_dim))
     layers.append(nn.ReLU(inplace=True))
-    if dropout > 0:
-      layers.append(nn.Dropout(p=dropout))
+    if next_dropout > 0:
+      layers.append(nn.Dropout(p=next_dropout))
     prev_dim = next_dim
   layers.append(nn.Linear(prev_dim, num_answers))
   return nn.Sequential(*layers)

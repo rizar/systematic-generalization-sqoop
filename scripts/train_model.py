@@ -53,6 +53,11 @@ def parse_int_list(input_):
     return []
   return list(map(int, input_.split(',')))
 
+def parse_float_list(input_):
+  if input_ == None:
+    return []
+  return list(map(float, input_.split(',')))
+
 # Input data
 parser.add_argument('--data_dir', default='data')
 parser.add_argument('--train_question_h5', default='train_questions.h5')
@@ -202,7 +207,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default='1024')
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default='0')
+parser.add_argument('--classifier_dropout', default='2')
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -620,7 +625,21 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
+      elif args.model_type == 'RelNet':
+        programs_pred = program_generator(questions_var)
+        scores = execution_engine(feats_var, programs_pred)
+        loss = loss_fn(scores, answers_var)
 
+        pg_optimizer.zero_grad()
+        ee_optimizer.zero_grad()
+        loss.backward()
+
+        if args.train_program_generator == 1:
+          if args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
+          pg_optimizer.step()
+        if args.train_execution_engine == 1:
+          ee_optimizer.step()
 
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
@@ -813,7 +832,7 @@ def get_execution_engine(args):
       'classifier_downsample': args.classifier_downsample,
       'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
       'classifier_batchnorm': args.classifier_batchnorm == 1,
-      'classifier_dropout': parse_int_list(args.classifier_dropout),
+      'classifier_dropout': parse_float_list(args.classifier_dropout),
     }
     if args.model_type == 'FiLM':
       kwargs['num_modules'] = args.num_modules
@@ -910,7 +929,7 @@ def get_execution_engine(args):
 
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
-                'classifier_dropout': parse_int_list(args.classifier_dropout),
+                'classifier_dropout': parse_float_list(args.classifier_dropout),
                 'use_coords': args.use_coords,
                 'debug_every': args.debug_every,
                 'print_verbose_every': args.print_verbose_every,
@@ -941,7 +960,7 @@ def get_execution_engine(args):
                 #'use_memory_lstm': args.mac_use_memory_lstm == 1,
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
-                'classifier_dropout': parse_int_list(args.classifier_dropout),
+                'classifier_dropout': parse_float_list(args.classifier_dropout),
                 'use_coords': args.use_coords,
                 'debug_every': args.debug_every,
                 'print_verbose_every': args.print_verbose_every,
@@ -988,7 +1007,7 @@ def get_baseline_model(args):
       'rnn_dropout': args.rnn_dropout,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': parse_int_list(args.classifier_dropout),
+      'fc_dropout': parse_float_list(args.classifier_dropout),
     }
     model = LstmModel(**kwargs)
   elif args.model_type == 'CNN+LSTM':
@@ -1005,7 +1024,7 @@ def get_baseline_model(args):
       'cnn_pooling': args.cnn_pooling,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': parse_int_list(args.classifier_dropout),
+      'fc_dropout': parse_float_list(args.classifier_dropout),
     }
     model = CnnLstmModel(**kwargs)
   elif args.model_type == 'CNN+LSTM+SA':
@@ -1020,7 +1039,7 @@ def get_baseline_model(args):
       'num_stacked_attn': args.num_stacked_attn,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': parse_int_list(args.classifier_dropout),
+      'fc_dropout': parse_float_list(args.classifier_dropout),
     }
     model = CnnLstmSaModel(**kwargs)
   if model.rnn.token_to_idx != vocab['question_token_to_idx']:
@@ -1087,8 +1106,13 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type == 'TMAC':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred)
+    elif args.model_type == 'RelNet':
+      question_rep = program_generator(questions_var)
+      scores = execution_engine(feats_var, question_rep)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
+    else:
+      raise NotImplementedError('model ', args.model_type, ' check_accuracy not implemented')
 
     if scores is not None:
       _, preds = scores.data.cpu().max(1)

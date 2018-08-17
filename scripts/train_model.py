@@ -75,6 +75,7 @@ parser.add_argument('--num_val_samples', default=None, type=int)
 parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 parser.add_argument('--percent_of_data_for_training', default=1., type=float)
+parser.add_argument('--use_simple', default=0, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
@@ -397,7 +398,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     baseline_type = args.model_type
 
   if args.allow_resume and os.path.exists(args.checkpoint_path):
-    program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type)
+    program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type, use_simple=args.use_simple)
     execution_engine, _  = vr.utils.load_execution_engine(args.checkpoint_path, model_type=args.model_type)
     program_generator.cuda()
     execution_engine.cuda()

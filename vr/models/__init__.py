@@ -17,3 +17,4 @@ from vr.models.rtfilmed_net import RTFiLMedNet
 from vr.models.maced_net import MAC
 from vr.models.tmaced_met import TMAC
 from vr.models.baselines import LstmModel, CnnLstmModel, CnnLstmSaModel
+from vr.models.simple_encoder import SimpleEncoderBinary

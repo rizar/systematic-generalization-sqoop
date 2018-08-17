@@ -7,6 +7,7 @@
 # LICENSE file in the root directory of this source tree.
 
 from vr.models.module_net import ModuleNet
+from vr.models.simple_module_net import SimpleModuleNet
 from vr.models.hetero_net import HeteroModuleNet
 from vr.models.filmed_net import FiLMedNet
 from vr.models.seq2seq import Seq2Seq

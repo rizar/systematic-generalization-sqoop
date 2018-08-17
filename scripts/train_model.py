@@ -28,19 +28,7 @@ import vr.utils
 import vr.preprocess
 from vr.data import (ClevrDataset,
                      ClevrDataLoader)
-from vr.models import (ModuleNet,
-                       Seq2Seq,
-                       Seq2SeqAtt,
-                       LstmModel,
-                       CnnLstmModel,
-                       CnnLstmSaModel,
-                       FiLMedNet,
-                       TFiLMedNet,
-                       RTFiLMedNet,
-                       FiLMGen,
-                       MAC,
-                       TMAC,
-                       HeteroModuleNet)
+from vr.models import *
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
@@ -81,7 +69,8 @@ parser.add_argument('--model_type', default='PG',
   choices=['RTfilm', 'Tfilm', 'FiLM',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
-           'Hetero', 'MAC', 'TMAC'])
+           'Hetero', 'MAC', 'TMAC',
+           'SimpleNMN'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -383,7 +372,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -614,6 +603,15 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
+      elif args.model_type in ['SimpleNMN']:
+        # Train execution engine with ground-truth programs
+        ee_optimizer.zero_grad()
+        scores = execution_engine(feats_var, questions_var)
+        loss = loss_fn(scores, answers_var)
+        loss.backward()
+        ee_optimizer.step()
+      else:
+        raise ValueError()
 
 
       if t % args.record_loss_every == 0:
@@ -946,6 +944,8 @@ def get_execution_engine(args):
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
+    elif args.model_type == 'SimpleNMN':
+        ee = SimpleModuleNet(**kwargs)
     else:
       kwargs['sharing_patterns'] = parse_int_list(args.nmnfilm2_sharing_params_patterns)
       kwargs['use_film'] = args.nmn_use_film

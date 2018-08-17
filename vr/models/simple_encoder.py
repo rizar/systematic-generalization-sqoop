@@ -10,7 +10,6 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
 from torch.nn.init import uniform, xavier_uniform, constant
-["is", "there", "a", color1 , x, rel, color2, y] 
 
 class SimpleEncoderBinary(nn.Module):
 	'''

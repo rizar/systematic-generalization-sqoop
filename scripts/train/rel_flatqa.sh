@@ -1,8 +1,6 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
-python $THIS_SCRIPT_DIR/../train_model.py \
+python $NMN/scripts/train_model.py \
   --model_type RelNet \
   --num_iterations 50000 \
   --feature_dim 3,64,64 \
@@ -34,6 +32,7 @@ python $THIS_SCRIPT_DIR/../train_model.py \
   --rnn_wordvec_dim 32 \
   --rnn_hidden_dim 128 `#was 4096 in original FiLM` \
   --rnn_output_batchnorm 0 \
+  $@
 
 
 #RelNet CLEVR

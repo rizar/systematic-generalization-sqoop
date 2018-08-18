@@ -13,7 +13,9 @@ import pdb
 import random
 import shutil
 import sys
+import subprocess
 import time
+import logging
 import itertools
 
 import h5py
@@ -24,6 +26,7 @@ torch.backends.cudnn.enabled = True
 from torch.autograd import Variable
 import torch.nn.functional as F
 
+import vr
 import vr.utils
 import vr.preprocess
 from vr.data import (ClevrDataset,
@@ -32,6 +35,7 @@ from vr.models import *
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
+logger = logging.getLogger(__name__)
 
 
 def parse_int_list(input_):
@@ -207,6 +211,23 @@ parser.add_argument('--time', default=0, type=int)
 
 
 def main(args):
+  nmn_iwp_code = list(vr.__path__)[0]
+  try:
+    last_commit = subprocess.check_output(
+        'cd {}; git log -n1'.format(nmn_iwp_code), shell=True).decode('utf-8')
+    print('LAST COMMIT INFO:')
+    print(last_commit)
+  except subprocess.CalledProcessError:
+    print('Could not figure out the last commit')
+  try:
+    diff = subprocess.check_output(
+        'cd {}; git diff'.format(nmn_iwp_code), shell=True).decode('utf-8')
+    if diff:
+        print('GIT DIFF:')
+        print(diff)
+  except subprocess.CalledProcessError:
+    print('Could not figure out the last commit')
+
   if args.randomize_checkpoint_path == 1:
     name, ext = os.path.splitext(args.checkpoint_path)
     num = random.randint(1, 1000000)

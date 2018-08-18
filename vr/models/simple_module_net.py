@@ -92,12 +92,14 @@ class SimpleModuleNet(nn.Module):
       self.function_modules[fn_str] = mod
 
   def forward(self, image, question):
+    color_lhs = question[:, 3]
     lhs = question[:, 4]
+    color_rhs = question[:, 6]
     rhs = question[:, 7]
     rel = question[:, 5]
     h_cur = self.stem(image)
 
-    for input_ in [lhs, rhs, rel]:
+    for input_ in [color_lhs, lhs, color_rhs, rhs, rel]:
       h_next = []
       for j in range(input_.shape[0]):
         module_name = self.vocab['program_idx_to_token'][int(input_[j])]

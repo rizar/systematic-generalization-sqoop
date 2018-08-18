@@ -634,21 +634,19 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         start = time.time()
         train_acc = check_accuracy(args, program_generator, execution_engine,
                                    baseline_model, train_loader)
-        if args.time == 1:
-          train_pass_time = (time.time() - start)
-          train_pass_total_time += train_pass_time
-          print(colored('TRAIN PASS AVG TIME: ' + str(train_pass_total_time / num_checkpoints), 'red'))
-          print(colored('Train Pass Time      : ' + str(train_pass_time), 'red'))
+        train_pass_time = (time.time() - start)
+        train_pass_total_time += train_pass_time
+        print('TRAIN PASS AVG TIME: ' + str(train_pass_total_time / num_checkpoints))
+        print('Train Pass Time      : ' + str(train_pass_time))
         print('train accuracy is', train_acc)
         print('Checking validation accuracy ...')
         start = time.time()
         val_acc = check_accuracy(args, program_generator, execution_engine,
                                  baseline_model, val_loader)
-        if args.time == 1:
-          val_pass_time = (time.time() - start)
-          val_pass_total_time += val_pass_time
-          print(colored('VAL PASS AVG TIME:   ' + str(val_pass_total_time / num_checkpoints), 'cyan'))
-          print(colored('Val Pass Time        : ' + str(val_pass_time), 'cyan'))
+        val_pass_time = (time.time() - start)
+        val_pass_total_time += val_pass_time
+        print('VAL PASS AVG TIME:   ' + str(val_pass_total_time / num_checkpoints))
+        print('Val Pass Time        : ' + str(val_pass_time))
         print('val accuracy is ', val_acc)
         stats['train_accs'].append(train_acc)
         stats['val_accs'].append(val_acc)
@@ -1070,6 +1068,10 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       scores = execution_engine(feats_var, programs_pred)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
+    elif args.model_type in ['SimpleNMN']:
+      scores = execution_engine(feats_var, questions_var)
+    else:
+      raise ValueError()
 
     if scores is not None:
       _, preds = scores.data.cpu().max(1)

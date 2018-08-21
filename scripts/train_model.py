@@ -13,7 +13,9 @@ import pdb
 import random
 import shutil
 import sys
+import subprocess
 import time
+import logging
 import itertools
 
 import h5py
@@ -24,28 +26,16 @@ torch.backends.cudnn.enabled = True
 from torch.autograd import Variable
 import torch.nn.functional as F
 
+import vr
 import vr.utils
 import vr.preprocess
 from vr.data import (ClevrDataset,
                      ClevrDataLoader)
-from vr.models import (ModuleNet,
-                       Seq2Seq,
-                       Seq2SeqAtt,
-                       LstmModel,
-                       CnnLstmModel,
-                       CnnLstmSaModel,
-                       FiLMedNet,
-                       TFiLMedNet,
-                       RTFiLMedNet,
-                       FiLMGen,
-                       MAC,
-                       TMAC,
-                       SimpleEncoderBinary,
-                       HeteroModuleNet,
-                       RelationNet)
+from vr.models import *
 from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
+logger = logging.getLogger(__name__)
 
 
 def parse_int_list(input_):
@@ -89,7 +79,8 @@ parser.add_argument('--model_type', default='PG',
   choices=['RTfilm', 'Tfilm', 'FiLM',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
-           'Hetero', 'MAC', 'TMAC', 'RelNet'])
+           'Hetero', 'MAC', 'TMAC',
+           'SimpleNMN', 'RelNet'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -207,7 +198,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default='1024')
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default='2')
+parser.add_argument('--classifier_dropout', default='0')
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -229,6 +220,23 @@ parser.add_argument('--time', default=0, type=int)
 
 
 def main(args):
+  nmn_iwp_code = list(vr.__path__)[0]
+  try:
+    last_commit = subprocess.check_output(
+        'cd {}; git log -n1'.format(nmn_iwp_code), shell=True).decode('utf-8')
+    print('LAST COMMIT INFO:')
+    print(last_commit)
+  except subprocess.CalledProcessError:
+    print('Could not figure out the last commit')
+  try:
+    diff = subprocess.check_output(
+        'cd {}; git diff'.format(nmn_iwp_code), shell=True).decode('utf-8')
+    if diff:
+        print('GIT DIFF:')
+        print(diff)
+  except subprocess.CalledProcessError:
+    print('Could not figure out the last commit')
+
   if args.randomize_checkpoint_path == 1:
     name, ext = os.path.splitext(args.checkpoint_path)
     num = random.randint(1, 1000000)
@@ -394,7 +402,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'RelNet']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'RelNet']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -625,6 +633,13 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
+      elif args.model_type in ['SimpleNMN']:
+        # Train execution engine with ground-truth programs
+        ee_optimizer.zero_grad()
+        scores = execution_engine(feats_var, questions_var)
+        loss = loss_fn(scores, answers_var)
+        loss.backward()
+        ee_optimizer.step()
       elif args.model_type == 'RelNet':
         programs_pred = program_generator(questions_var)
         scores = execution_engine(feats_var, programs_pred)
@@ -633,6 +648,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         pg_optimizer.zero_grad()
         ee_optimizer.zero_grad()
         loss.backward()
+      else:
+        raise ValueError()
 
         if args.train_program_generator == 1:
           if args.grad_clip > 0:
@@ -661,21 +678,19 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         start = time.time()
         train_acc = check_accuracy(args, program_generator, execution_engine,
                                    baseline_model, train_loader)
-        if args.time == 1:
-          train_pass_time = (time.time() - start)
-          train_pass_total_time += train_pass_time
-          print(colored('TRAIN PASS AVG TIME: ' + str(train_pass_total_time / num_checkpoints), 'red'))
-          print(colored('Train Pass Time      : ' + str(train_pass_time), 'red'))
+        train_pass_time = (time.time() - start)
+        train_pass_total_time += train_pass_time
+        print('TRAIN PASS AVG TIME: ' + str(train_pass_total_time / num_checkpoints))
+        print('Train Pass Time      : ' + str(train_pass_time))
         print('train accuracy is', train_acc)
         print('Checking validation accuracy ...')
         start = time.time()
         val_acc = check_accuracy(args, program_generator, execution_engine,
                                  baseline_model, val_loader)
-        if args.time == 1:
-          val_pass_time = (time.time() - start)
-          val_pass_total_time += val_pass_time
-          print(colored('VAL PASS AVG TIME:   ' + str(val_pass_total_time / num_checkpoints), 'cyan'))
-          print(colored('Val Pass Time        : ' + str(val_pass_time), 'cyan'))
+        val_pass_time = (time.time() - start)
+        val_pass_total_time += val_pass_time
+        print('VAL PASS AVG TIME:   ' + str(val_pass_total_time / num_checkpoints))
+        print('Val Pass Time        : ' + str(val_pass_time))
         print('val accuracy is ', val_acc)
         stats['train_accs'].append(train_acc)
         stats['val_accs'].append(val_acc)
@@ -979,6 +994,8 @@ def get_execution_engine(args):
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
+    elif args.model_type == 'SimpleNMN':
+        ee = SimpleModuleNet(**kwargs)
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
@@ -1111,6 +1128,8 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       scores = execution_engine(feats_var, question_rep)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
+    elif args.model_type in ['SimpleNMN']:
+      scores = execution_engine(feats_var, questions_var)
     else:
       raise NotImplementedError('model ', args.model_type, ' check_accuracy not implemented')
 

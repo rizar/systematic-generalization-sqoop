@@ -198,7 +198,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default='1024')
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default='2')
+parser.add_argument('--classifier_dropout', default='0')
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)

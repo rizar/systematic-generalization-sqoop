@@ -73,14 +73,7 @@ class SimpleModuleNet(nn.Module):
       print('Here is my classifier:')
       print(self.classifier)
 
-    self.stem_times = []
-    self.module_times = []
-    self.classifier_times = []
-    self.timing = False
-
     self.function_modules = {}
-    self.function_modules_num_inputs = {}
-    self.fn_str_2_filmId = {}
     self.vocab = vocab
     for fn_str in vocab['program_token_to_idx']:
       mod = ResidualBlock(

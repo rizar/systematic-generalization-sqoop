@@ -43,6 +43,11 @@ def parse_int_list(input_):
     return []
   return list(map(int, input_.split(',')))
 
+def parse_float_list(input_):
+  if input_ == None:
+    return []
+  return list(map(float, input_.split(',')))
+
 # Input data
 parser.add_argument('--data_dir', default='data')
 parser.add_argument('--train_question_h5', default='train_questions.h5')
@@ -67,6 +72,7 @@ parser.add_argument('--num_val_samples', default=None, type=int)
 parser.add_argument('--shuffle_train_data', default=1, type=int)
 
 parser.add_argument('--percent_of_data_for_training', default=1., type=float)
+parser.add_argument('--simple_encoder', default=0, type=int)
 
 # What type of model to use and which parts to train
 parser.add_argument('--model_type', default='PG',
@@ -74,7 +80,7 @@ parser.add_argument('--model_type', default='PG',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
            'Hetero', 'MAC', 'TMAC',
-           'SimpleNMN'])
+           'SimpleNMN', 'RelNet'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -170,6 +176,9 @@ parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,0')
 parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
+#RelationNet options
+parser.add_argument('--module_stem_feature_dim', default=24, type=int)
+
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -189,7 +198,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default='1024')
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default=0, type=float)
+parser.add_argument('--classifier_dropout', default='2')
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -388,12 +397,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE', 'RelNet']:
     program_generator, pg_kwargs = get_program_generator(args)
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'RelNet']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -407,7 +416,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     baseline_type = args.model_type
 
   if args.allow_resume and os.path.exists(args.checkpoint_path):
-    program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type)
+    program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type, use_simple=args.simple_encoder)
     execution_engine, _  = vr.utils.load_execution_engine(args.checkpoint_path, model_type=args.model_type)
     program_generator.cuda()
     execution_engine.cuda()
@@ -631,9 +640,23 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         ee_optimizer.step()
+      elif args.model_type == 'RelNet':
+        programs_pred = program_generator(questions_var)
+        scores = execution_engine(feats_var, programs_pred)
+        loss = loss_fn(scores, answers_var)
+
+        pg_optimizer.zero_grad()
+        ee_optimizer.zero_grad()
+        loss.backward()
       else:
         raise ValueError()
 
+        if args.train_program_generator == 1:
+          if args.grad_clip > 0:
+            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
+          pg_optimizer.step()
+        if args.train_execution_engine == 1:
+          ee_optimizer.step()
 
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
@@ -764,9 +787,9 @@ def get_program_generator(args):
       kwargs['decoder_type'] = args.decoder_type
       kwargs['gamma_option'] = args.gamma_option
       kwargs['gamma_baseline'] = args.gamma_baseline
-      
+
       kwargs['use_attention'] = args.film_use_attention == 1
-      
+
       if args.model_type == 'FiLM' or args.model_type == 'MAC':
         kwargs['num_modules'] = args.num_modules
       elif args.model_type == 'Tfilm':
@@ -782,6 +805,14 @@ def get_program_generator(args):
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
+      if args.simple_encoder:
+        pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
+      else:
+        pg = FiLMGen(**kwargs)
+    elif args.model_type == 'RelNet':
+      kwargs['bidirectional'] = args.bidirectional == 1
+      kwargs['encoder_type'] = args.encoder_type
+      kwargs['taking_context'] = True   # return the last hidden state of LSTM
       pg = FiLMGen(**kwargs)
     elif args.rnn_attention:
       pg = Seq2SeqAtt(**kwargs)
@@ -816,7 +847,7 @@ def get_execution_engine(args):
       'classifier_downsample': args.classifier_downsample,
       'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
       'classifier_batchnorm': args.classifier_batchnorm == 1,
-      'classifier_dropout': args.classifier_dropout,
+      'classifier_dropout': parse_float_list(args.classifier_dropout),
     }
     if args.model_type == 'FiLM':
       kwargs['num_modules'] = args.num_modules
@@ -913,7 +944,7 @@ def get_execution_engine(args):
 
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
-                'classifier_dropout': args.classifier_dropout,
+                'classifier_dropout': parse_float_list(args.classifier_dropout),
                 'use_coords': args.use_coords,
                 'debug_every': args.debug_every,
                 'print_verbose_every': args.print_verbose_every,
@@ -944,7 +975,7 @@ def get_execution_engine(args):
                 #'use_memory_lstm': args.mac_use_memory_lstm == 1,
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
-                'classifier_dropout': args.classifier_dropout,
+                'classifier_dropout': parse_float_list(args.classifier_dropout),
                 'use_coords': args.use_coords,
                 'debug_every': args.debug_every,
                 'print_verbose_every': args.print_verbose_every,
@@ -965,6 +996,11 @@ def get_execution_engine(args):
       ee = HeteroModuleNet(**kwargs)
     elif args.model_type == 'SimpleNMN':
         ee = SimpleModuleNet(**kwargs)
+    elif args.model_type == 'RelNet':
+      kwargs['module_num_layers'] = args.module_num_layers
+      kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
+      kwargs['stem_feature_dim'] = args.module_stem_feature_dim
+      ee = RelationNet(**kwargs)
     else:
       kwargs['sharing_patterns'] = parse_int_list(args.nmnfilm2_sharing_params_patterns)
       kwargs['use_film'] = args.nmn_use_film
@@ -988,7 +1024,7 @@ def get_baseline_model(args):
       'rnn_dropout': args.rnn_dropout,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': args.classifier_dropout,
+      'fc_dropout': parse_float_list(args.classifier_dropout),
     }
     model = LstmModel(**kwargs)
   elif args.model_type == 'CNN+LSTM':
@@ -1005,7 +1041,7 @@ def get_baseline_model(args):
       'cnn_pooling': args.cnn_pooling,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': args.classifier_dropout,
+      'fc_dropout': parse_float_list(args.classifier_dropout),
     }
     model = CnnLstmModel(**kwargs)
   elif args.model_type == 'CNN+LSTM+SA':
@@ -1020,7 +1056,7 @@ def get_baseline_model(args):
       'num_stacked_attn': args.num_stacked_attn,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': args.classifier_dropout,
+      'fc_dropout': parse_float_list(args.classifier_dropout),
     }
     model = CnnLstmSaModel(**kwargs)
   if model.rnn.token_to_idx != vocab['question_token_to_idx']:
@@ -1087,12 +1123,15 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type == 'TMAC':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred)
+    elif args.model_type == 'RelNet':
+      question_rep = program_generator(questions_var)
+      scores = execution_engine(feats_var, question_rep)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
     elif args.model_type in ['SimpleNMN']:
       scores = execution_engine(feats_var, questions_var)
     else:
-      raise ValueError()
+      raise NotImplementedError('model ', args.model_type, ' check_accuracy not implemented')
 
     if scores is not None:
       _, preds = scores.data.cpu().max(1)

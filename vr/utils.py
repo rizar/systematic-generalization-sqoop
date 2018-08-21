@@ -10,9 +10,17 @@ import inspect
 import json
 import torch
 
-from vr.models import (
-  ModuleNet, Seq2Seq, Seq2SeqAtt, LstmModel, CnnLstmModel, CnnLstmSaModel,
-  FiLMedNet, FiLMGen, MAC)
+from vr.models import (ModuleNet,
+                       Seq2Seq,
+                       Seq2SeqAtt,
+                       LstmModel,
+                       CnnLstmModel,
+                       CnnLstmSaModel,
+                       FiLMedNet,
+                       FiLMGen,
+                       MAC,
+                       SimpleEncoderBinary,
+                       RelationNet)
 
 def invert_dict(d):
   return {v: k for k, v in d.items()}
@@ -41,14 +49,19 @@ def load_cpu(path):
   return torch.load(path, map_location=lambda storage, loc: storage)
 
 
-def load_program_generator(path, model_type='PG+EE'):
+def load_program_generator(path, model_type='PG+EE', simple_encoder = False):
   checkpoint = load_cpu(path)
   kwargs = checkpoint['program_generator_kwargs']
   state = checkpoint['program_generator_state']
   if model_type in ['FiLM', 'MAC']:
-    print('Loading FiLMGen from ' + path)
-    kwargs = get_updated_args(kwargs, FiLMGen)
-    model = FiLMGen(**kwargs)
+    if simple_encoder:
+      print('Loading Simple Encoder')
+      model = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
+    else:
+      kwargs = get_updated_args(kwargs, FiLMGen)
+      print('Loading FiLMGen from ' + path)
+      model = FiLMGen(**kwargs)
+
   elif model_type == 'PG+EE':
     print('Loading PG from ' + path)
     if kwargs.rnn_attention:
@@ -83,6 +96,9 @@ def load_execution_engine(path, verbose=True, model_type='PG+EE'):
     kwargs.setdefault('noisy_controls', False)
     kwargs.pop('sharing_params_patterns', None)
     model = MAC(**kwargs)
+  elif model_type == 'RelNet':
+    print('Loading Relation Net from ' + path)
+    model = RelationNet(**kwargs)
   else:
     raise ValueError()
   cur_state = model.state_dict()

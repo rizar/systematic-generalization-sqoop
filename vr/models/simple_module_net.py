@@ -34,6 +34,7 @@ class SimpleModuleNet(nn.Module):
                module_dim,
                module_kernel_size,
                module_input_proj,
+               forward_func,
                module_residual=True,
                module_batchnorm=False,
                classifier_proj_dim=512,
@@ -45,6 +46,7 @@ class SimpleModuleNet(nn.Module):
     super().__init__()
 
     self.module_dim = module_dim
+    self.func = forward_func
 
     self.stem = build_stem(feature_dim[0], module_dim,
                            num_layers=stem_num_layers,
@@ -85,19 +87,62 @@ class SimpleModuleNet(nn.Module):
       self.function_modules[fn_str] = mod
 
   def forward(self, image, question):
-    color_lhs = question[:, 3]
-    lhs = question[:, 4]
-    color_rhs = question[:, 6]
-    rhs = question[:, 7]
-    rel = question[:, 5]
-    h_cur = self.stem(image)
+    return self.classifier(self.func(image, question, h_cur, self.vocab, self.function_modules))
 
-    for input_ in [color_lhs, lhs, color_rhs, rhs, rel]:
-      h_next = []
-      for j in range(input_.shape[0]):
-        module_name = self.vocab['program_idx_to_token'][int(input_[j])]
-        mod = self.function_modules[module_name]
-        h_next.append(mod(h_cur[[j]]))
-      h_cur = torch.cat(h_next)
 
-    return self.classifier(h_cur)
+
+
+def forward_chain(image_tensor, vocab, function_modules, item_list):
+  h_cur = image_tensor
+  for input_ in item_list:
+    h_next = []
+    for j in range(input_.shape[0]):
+      module_name = vocab['program_idx_to_token'][int(input_[j])]
+      mod = function_modules[module_name]
+      h_next.append(mod(h_cur[[j]]))
+    h_cur = torch.cat(h_next)
+
+  return h_cur
+
+def forward_chain1(image, question, stem, vocab, function_modules, color=False):
+  color_lhs = question[:, 3]
+  lhs = question[:, 4]
+  color_rhs = question[:, 6]
+  rhs = question[:, 7]
+  rel = question[:, 5]
+  h_cur = stem(image)
+
+  item_list = [color_lhs, lhs, rel, color_rhs, rhs] if color else [lhs, rel, rhs]
+  return forward_chain(h_cur, vocab, function_modules, item_list)
+
+def forward_chain2(image, question, stem, vocab, function_modules, color=False):
+  color_lhs = question[:, 3]
+  lhs = question[:, 4]
+  color_rhs = question[:, 6]
+  rhs = question[:, 7]
+  rel = question[:, 5]
+  h_cur = stem(image)
+
+  item_list = [rel, color_lhs, lhs, color_rhs, rhs] if color else [rel, lhs, rhs]
+  return forward_chain(h_cur, vocab, function_modules, item_list)
+
+def forward_chain3(image, question, stem, vocab, function_modules, color=False):
+  color_lhs = question[:, 3]
+  lhs = question[:, 4]
+  color_rhs = question[:, 6]
+  rhs = question[:, 7]
+  rel = question[:, 5]
+  h_cur = stem(image)
+
+  item_list = [color_lhs, lhs, color_rhs, rhs, rel] if color else [lhs, rhs, rel]
+  return forward_chain(h_cur, vocab, function_modules, item_list)
+
+
+def forward_tree(image, question, stem, vocab, function_modules, color=False):
+  color_lhs = question[:, 3]
+  lhs = question[:, 4]
+  color_rhs = question[:, 6]
+  rhs = question[:, 7]
+  rel = question[:, 5]
+  h_cur = stem(image)
+

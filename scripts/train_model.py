@@ -105,6 +105,8 @@ parser.add_argument('--module_dim', default=128, type=int)
 parser.add_argument('--module_residual', default=1, type=int)
 parser.add_argument('--module_batchnorm', default=0, type=int)
 parser.add_argument('--module_intermediate_batchnorm', default=0, type=int)
+parser.add_argument('--use_color', default=0, type=int)
+parser.add_argument('--nmn_type', default='chain1', choices = ['chain1', 'chain2', 'chain3'])
 
 # FiLM only options
 parser.add_argument('--set_execution_engine_eval', default=0, type=int)
@@ -995,11 +997,9 @@ def get_execution_engine(args):
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
-    elif args.model_type.startswith('SimpleNMN'):
-        func_bank = {'chain1' : forward_chain1, 'chain2' : forward_chain2, 'chain3': forward_chain3}
-        nmn_type = args.model_type.split('+')[-1]
-        kwargs['forward_func'] = func_bank[nmn_type]
-        ee = SimpleModuleNet_creator(**kwargs)
+    elif args.model_type == 'SimpleNMN':
+        kwargs['forward_func'] = args.nmn_type
+        ee = SimpleModuleNet(**kwargs)
 
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers

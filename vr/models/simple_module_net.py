@@ -22,6 +22,8 @@ from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavie
 from vr.models.tfilmed_net import ConcatFiLMedResBlock
 
 from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
+from functools import partial
+
 
 class SimpleModuleNet(nn.Module):
   def __init__(self, vocab, feature_dim,
@@ -35,6 +37,7 @@ class SimpleModuleNet(nn.Module):
                module_kernel_size,
                module_input_proj,
                forward_func,
+               use_color,
                module_residual=True,
                module_batchnorm=False,
                classifier_proj_dim=512,
@@ -47,6 +50,7 @@ class SimpleModuleNet(nn.Module):
 
     self.module_dim = module_dim
     self.func = forward_func
+    self.use_color = use_color
 
     self.stem = build_stem(feature_dim[0], module_dim,
                            num_layers=stem_num_layers,
@@ -87,10 +91,11 @@ class SimpleModuleNet(nn.Module):
       self.function_modules[fn_str] = mod
 
   def forward(self, image, question):
-    return self.classifier(self.func(image, question, h_cur, self.vocab, self.function_modules))
+    return self.classifier(self.func(image, question, h_cur, self.vocab, self.function_modules, self.use_color))
 
 
 
+# helper functions
 
 def forward_chain(image_tensor, vocab, function_modules, item_list):
   h_cur = image_tensor
@@ -138,11 +143,6 @@ def forward_chain3(image, question, stem, vocab, function_modules, color=False):
   return forward_chain(h_cur, vocab, function_modules, item_list)
 
 
-def forward_tree(image, question, stem, vocab, function_modules, color=False):
-  color_lhs = question[:, 3]
-  lhs = question[:, 4]
-  color_rhs = question[:, 6]
-  rhs = question[:, 7]
-  rel = question[:, 5]
-  h_cur = stem(image)
+
+
 

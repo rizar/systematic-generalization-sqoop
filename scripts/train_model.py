@@ -842,6 +842,7 @@ def get_execution_engine(args):
       'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
       'module_input_proj': args.module_input_proj,
+      'use_color' : args.use_color,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
       'classifier_downsample': args.classifier_downsample,
@@ -994,8 +995,12 @@ def get_execution_engine(args):
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
-    elif args.model_type == 'SimpleNMN':
-        ee = SimpleModuleNet(**kwargs)
+    elif args.model_type.startswith('SimpleNMN'):
+        func_bank = {'chain1' : forward_chain1, 'chain2' : forward_chain2, 'chain3': forward_chain3}
+        nmn_type = args.model_type.split('+')[-1]
+        kwargs['forward_func'] = func_bank[nmn_type]
+        ee = SimpleModuleNet_creator(**kwargs)
+
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim

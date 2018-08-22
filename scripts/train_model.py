@@ -106,7 +106,7 @@ parser.add_argument('--module_residual', default=1, type=int)
 parser.add_argument('--module_batchnorm', default=0, type=int)
 parser.add_argument('--module_intermediate_batchnorm', default=0, type=int)
 parser.add_argument('--use_color', default=0, type=int)
-parser.add_argument('--nmn_type', default='chain1', choices = ['chain1', 'chain2', 'chain3'])
+parser.add_argument('--nmn_type', default='chain1', choices = ['chain1', 'chain2', 'chain3', 'tree'])
 
 # FiLM only options
 parser.add_argument('--set_execution_engine_eval', default=0, type=int)

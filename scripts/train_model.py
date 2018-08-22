@@ -66,7 +66,7 @@ parser.add_argument('--val_features_h5', default='val_features.h5')
 parser.add_argument('--valB_question_h5', default=None)
 parser.add_argument('--valB_features_h5', default=None)
 
-parser.add_argument('--feature_dim', default='1024,14,14')
+parser.add_argument('--feature_dim', default=[1024,14,14], type=parse_int_list)
 parser.add_argument('--vocab_json', default='vocab.json')
 
 parser.add_argument('--load_features', action="store_true")
@@ -137,7 +137,7 @@ parser.add_argument('--module_input_proj', default=1, type=int)  # Inp conv kern
 parser.add_argument('--module_kernel_size', default=3, type=int)
 parser.add_argument('--condition_method', default='bn-film', type=str,
   choices=['nothing', 'block-input-film', 'block-output-film', 'bn-film', 'concat', 'conv-film', 'relu-film'])
-parser.add_argument('--condition_pattern', default='', type=str)  # List of 0/1's (len = # FiLMs)
+parser.add_argument('--condition_pattern', default=[], type=parse_int_list)  # List of 0/1's (len = # FiLMs)
 parser.add_argument('--use_gamma', default=1, type=int)
 parser.add_argument('--use_beta', default=1, type=int)
 parser.add_argument('--use_coords', default=1, type=int)  # 0: none, 1: low usage, 2: high usage
@@ -177,10 +177,10 @@ parser.add_argument('--exponential_moving_average_weight', default=1., type=floa
 
 #TMAC options
 parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str)
-parser.add_argument('--tmac_sharing_params_patterns', default='0,1,1,1')
+parser.add_argument('--tmac_sharing_params_patterns', default=[0,1,1,1], type=parse_int_list)
 
 #NMNFilm2 options
-parser.add_argument('--nmnfilm2_sharing_params_patterns', default='0,0')
+parser.add_argument('--nmnfilm2_sharing_params_patterns', default=[0,0], type=parse_int_list)
 parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
@@ -204,7 +204,7 @@ parser.add_argument('--classifier_proj_dim', default=512, type=int)
 parser.add_argument('--classifier_downsample', default='maxpool2',
   choices=['maxpool2', 'maxpool3', 'maxpool4', 'maxpool5', 'maxpool7', 'maxpoolfull', 'none',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
-parser.add_argument('--classifier_fc_dims', default='1024')
+parser.add_argument('--classifier_fc_dims', default=[1024], type=parse_int_list)
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
 parser.add_argument('--classifier_dropout', default=0, type=one_or_list(parse_float_list))
 
@@ -834,7 +834,7 @@ def get_execution_engine(args):
   else:
     kwargs = {
       'vocab': vocab,
-      'feature_dim': parse_int_list(args.feature_dim),
+      'feature_dim': args.feature_dim,
       'stem_batchnorm': args.module_stem_batchnorm == 1,
       'stem_num_layers': args.module_stem_num_layers,
       'stem_subsample_layers': args.module_stem_subsample_layers,
@@ -848,7 +848,7 @@ def get_execution_engine(args):
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
       'classifier_downsample': args.classifier_downsample,
-      'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
+      'classifier_fc_layers': args.classifier_fc_dims,
       'classifier_batchnorm': args.classifier_batchnorm == 1,
       'classifier_dropout': args.classifier_dropout,
     }
@@ -869,7 +869,7 @@ def get_execution_engine(args):
       kwargs['debug_every'] = args.debug_every
       kwargs['print_verbose_every'] = args.print_verbose_every
       kwargs['condition_method'] = args.condition_method
-      kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
+      kwargs['condition_pattern'] = args.condition_pattern
       ee = FiLMedNet(**kwargs)
     elif args.model_type == 'Tfilm':
       kwargs['num_modules'] = args.max_program_module_arity * args.max_program_tree_depth + 1
@@ -892,7 +892,7 @@ def get_execution_engine(args):
       kwargs['debug_every'] = args.debug_every
       kwargs['print_verbose_every'] = args.print_verbose_every
       kwargs['condition_method'] = args.condition_method
-      kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
+      kwargs['condition_pattern'] = args.condition_pattern
       ee = TFiLMedNet(**kwargs)
     elif args.model_type == 'RTfilm':
       treeArities = TreeGenerator().gen(args.tree_type_for_RTfilm)
@@ -916,12 +916,12 @@ def get_execution_engine(args):
       kwargs['debug_every'] = args.debug_every
       kwargs['print_verbose_every'] = args.print_verbose_every
       kwargs['condition_method'] = args.condition_method
-      kwargs['condition_pattern'] = parse_int_list(args.condition_pattern)
+      kwargs['condition_pattern'] = args.condition_pattern
       ee = RTFiLMedNet(**kwargs)
     elif args.model_type == 'MAC':
       kwargs = {
                 'vocab': vocab,
-                'feature_dim': parse_int_list(args.feature_dim),
+                'feature_dim': args.feature_dim,
                 'stem_num_layers': args.module_stem_num_layers,
                 'stem_batchnorm': args.module_stem_batchnorm == 1,
                 'stem_kernel_size': args.module_stem_kernel_size,
@@ -945,7 +945,7 @@ def get_execution_engine(args):
                 'use_memory_gate': args.mac_use_memory_gate,
                 'nonlinearity': args.mac_nonlinearity,
 
-                'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
+                'classifier_fc_layers': args.classifier_fc_dims,
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,
                 'use_coords': args.use_coords,
@@ -956,7 +956,7 @@ def get_execution_engine(args):
     elif args.model_type == 'TMAC':
       kwargs = {
                 'vocab': vocab,
-                'feature_dim': parse_int_list(args.feature_dim),
+                'feature_dim': args.feature_dim,
                 'stem_num_layers': args.module_stem_num_layers,
                 'stem_batchnorm': args.module_stem_batchnorm == 1,
                 'stem_kernel_size': args.module_stem_kernel_size,
@@ -972,11 +972,11 @@ def get_execution_engine(args):
                 #'memory_dropout': args.mac_memory_dropout,
                 'read_dropout': args.mac_read_dropout,
                 'use_prior_control_in_control_unit': args.mac_use_prior_control_in_control_unit == 1,
-                'sharing_params_patterns': parse_int_list(args.tmac_sharing_params_patterns),
+                'sharing_params_patterns': args.tmac_sharing_params_patterns,
                 #'use_self_attention': args.mac_use_self_attention == 1,
                 #'use_memory_gate': args.mac_use_memory_gate == 1,
                 #'use_memory_lstm': args.mac_use_memory_lstm == 1,
-                'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
+                'classifier_fc_layers': args.classifier_fc_dims,
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
                 'classifier_dropout': args.classifier_dropout,
                 'use_coords': args.use_coords,
@@ -987,7 +987,7 @@ def get_execution_engine(args):
     elif args.model_type == 'Hetero':
       kwargs = {
         'vocab': vocab,
-        'feature_dim': parse_int_list(args.feature_dim),
+        'feature_dim': args.feature_dim,
         'stem_batchnorm': args.module_stem_batchnorm == 1,
         'stem_num_layers': args.module_stem_num_layers,
         'stem_kernel_size': args.module_stem_kernel_size,
@@ -1005,7 +1005,7 @@ def get_execution_engine(args):
       kwargs['stem_feature_dim'] = args.module_stem_feature_dim
       ee = RelationNet(**kwargs)
     else:
-      kwargs['sharing_patterns'] = parse_int_list(args.nmnfilm2_sharing_params_patterns)
+      kwargs['sharing_patterns'] = args.nmnfilm2_sharing_params_patterns
       kwargs['use_film'] = args.nmn_use_film
       kwargs['use_simple_block'] = args.nmn_use_simple_block
       ee = ModuleNet(**kwargs)
@@ -1025,7 +1025,7 @@ def get_baseline_model(args):
       'rnn_dim': args.rnn_hidden_dim,
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
-      'fc_dims': parse_int_list(args.classifier_fc_dims),
+      'fc_dims': args.classifier_fc_dims,
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
       'fc_dropout': args.classifier_dropout,
     }
@@ -1037,12 +1037,12 @@ def get_baseline_model(args):
       'rnn_dim': args.rnn_hidden_dim,
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
-      'cnn_feat_dim': parse_int_list(args.feature_dim),
+      'cnn_feat_dim': args.feature_dim,
       'cnn_num_res_blocks': args.cnn_num_res_blocks,
       'cnn_res_block_dim': args.cnn_res_block_dim,
       'cnn_proj_dim': args.cnn_proj_dim,
       'cnn_pooling': args.cnn_pooling,
-      'fc_dims': parse_int_list(args.classifier_fc_dims),
+      'fc_dims': args.classifier_fc_dims,
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
       'fc_dropout': args.classifier_dropout,
     }
@@ -1054,10 +1054,10 @@ def get_baseline_model(args):
       'rnn_dim': args.rnn_hidden_dim,
       'rnn_num_layers': args.rnn_num_layers,
       'rnn_dropout': args.rnn_dropout,
-      'cnn_feat_dim': parse_int_list(args.feature_dim),
+      'cnn_feat_dim': args.feature_dim,
       'stacked_attn_dim': args.stacked_attn_dim,
       'num_stacked_attn': args.num_stacked_attn,
-      'fc_dims': parse_int_list(args.classifier_fc_dims),
+      'fc_dims': args.classifier_fc_dims,
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
       'fc_dropout': args.classifier_dropout,
     }

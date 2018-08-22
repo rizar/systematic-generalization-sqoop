@@ -37,7 +37,6 @@ from vr.treeGenerator import TreeGenerator
 parser = argparse.ArgumentParser()
 logger = logging.getLogger(__name__)
 
-
 def parse_int_list(input_):
   if input_ == None:
     return []
@@ -47,6 +46,15 @@ def parse_float_list(input_):
   if input_ == None:
     return []
   return list(map(float, input_.split(',')))
+
+def one_or_list(parser):
+  def parse_one_or_list(input_):
+    output = parser(input_)
+    if len(output) == 1:
+      return output[0]
+    else:
+      return output
+  return parse_one_or_list
 
 # Input data
 parser.add_argument('--data_dir', default='data')
@@ -198,7 +206,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default='1024')
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default='0')
+parser.add_argument('--classifier_dropout', default=0, type=one_or_list(parse_float_list))
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -746,11 +754,6 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       batch_start_time = time.time()
 
 
-def parse_int_list(s):
-  if s == '': return ()
-  return tuple(int(n) for n in s.split(','))
-
-
 def get_state(m):
   if m is None:
     return None
@@ -847,7 +850,7 @@ def get_execution_engine(args):
       'classifier_downsample': args.classifier_downsample,
       'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
       'classifier_batchnorm': args.classifier_batchnorm == 1,
-      'classifier_dropout': parse_float_list(args.classifier_dropout),
+      'classifier_dropout': args.classifier_dropout,
     }
     if args.model_type == 'FiLM':
       kwargs['num_modules'] = args.num_modules
@@ -944,7 +947,7 @@ def get_execution_engine(args):
 
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
-                'classifier_dropout': parse_float_list(args.classifier_dropout),
+                'classifier_dropout': args.classifier_dropout,
                 'use_coords': args.use_coords,
                 'debug_every': args.debug_every,
                 'print_verbose_every': args.print_verbose_every,
@@ -975,7 +978,7 @@ def get_execution_engine(args):
                 #'use_memory_lstm': args.mac_use_memory_lstm == 1,
                 'classifier_fc_layers': parse_int_list(args.classifier_fc_dims),
                 'classifier_batchnorm': args.classifier_batchnorm == 1,
-                'classifier_dropout': parse_float_list(args.classifier_dropout),
+                'classifier_dropout': args.classifier_dropout,
                 'use_coords': args.use_coords,
                 'debug_every': args.debug_every,
                 'print_verbose_every': args.print_verbose_every,
@@ -1024,7 +1027,7 @@ def get_baseline_model(args):
       'rnn_dropout': args.rnn_dropout,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': parse_float_list(args.classifier_dropout),
+      'fc_dropout': args.classifier_dropout,
     }
     model = LstmModel(**kwargs)
   elif args.model_type == 'CNN+LSTM':
@@ -1041,7 +1044,7 @@ def get_baseline_model(args):
       'cnn_pooling': args.cnn_pooling,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': parse_float_list(args.classifier_dropout),
+      'fc_dropout': args.classifier_dropout,
     }
     model = CnnLstmModel(**kwargs)
   elif args.model_type == 'CNN+LSTM+SA':
@@ -1056,7 +1059,7 @@ def get_baseline_model(args):
       'num_stacked_attn': args.num_stacked_attn,
       'fc_dims': parse_int_list(args.classifier_fc_dims),
       'fc_use_batchnorm': args.classifier_batchnorm == 1,
-      'fc_dropout': parse_float_list(args.classifier_dropout),
+      'fc_dropout': args.classifier_dropout,
     }
     model = CnnLstmSaModel(**kwargs)
   if model.rnn.token_to_idx != vocab['question_token_to_idx']:
@@ -1143,6 +1146,8 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
 
   set_mode('train', [program_generator, execution_engine, baseline_model])
   acc = float(num_correct) / num_samples
+  print("num check samples", num_samples)
+
   return acc
 
 

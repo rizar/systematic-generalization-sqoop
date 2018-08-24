@@ -117,6 +117,31 @@ def forward_tree(image, question, stem, vocab, unary_function_modules, binary_fu
   h_out = torch.cat(h_out)
   return h_out
 
+def forward_film_tree(image, question, stem, vocab, unary_function_modules, binary_function_modules, color=False):
+  beta, gamma = 
+  h_cur = stem(image)
+  h_out = []
+
+  for j in range(question.shape[0]): 
+    color_lhs = color_module(vocab['question_idx_to_token'][int(question[j, 3])])
+    lhs = shape_module(vocab['question_idx_to_token'][int(question[j, 4])])
+    color_rhs = color_module(vocab['question_idx_to_token'][int(question[j, 6])])
+    rhs = shape_module(vocab['question_idx_to_token'][int(question[j, 7])])
+    rel = relation_module(vocab['question_idx_to_token'][int(question[j, 5])])
+
+    rel_lhs = unary_function_modules[lhs](h_cur[[j]])
+    rel_rhs = unary_function_modules[rhs](h_cur[[j]])
+
+    if color:
+      lhs_color_out = unary_function_modules[color_lhs](h_cur[[j]])
+      rhs_color_out = unary_function_modules[color_rhs](h_cur[[j]])
+      rel_lhs = binary_function_modules['And'](rel_lhs, lhs_color_out) 
+      rel_rhs = binary_function_modules['And'](rel_rhs, rhs_color_out) 
+
+    h_out.append(binary_function_modules[rel](rel_lhs, rel_rhs))
+
+  h_out = torch.cat(h_out)
+  return h_out
 
 FUNC_DICT = {'chain1' : forward_chain1, 'chain2' : forward_chain2, 'chain3' : forward_chain3, 'tree' : forward_tree}
 
@@ -142,6 +167,7 @@ class SimpleModuleNet(nn.Module):
                classifier_fc_layers=(1024,),
                classifier_batchnorm=False,
                classifier_dropout=0,
+               use_film=False,
                verbose=True):
     super().__init__()
 
@@ -179,31 +205,80 @@ class SimpleModuleNet(nn.Module):
     self.unary_function_modules = {}
     self.binary_function_modules = {}
     self.vocab = vocab
+    self.use_film = use_film
+    
+    if self.use_film:
+      unary_mod = FiLMedResBlock(module_dim, with_residual=module_residual,
+                    with_intermediate_batchnorm=False, with_batchnorm=False,
+                    with_cond=[True, True],
+                    num_extra_channels=2, # was 2 for original film,
+                    extra_channel_freq=1,
+                    with_input_proj=module_input_proj,
+                    num_cond_maps=0,
+                    kernel_size=module_kernel_size,
+                    batchnorm_affine=False,
+                    num_layers=1,
+                    condition_method='bn-film',
+                    debug_every=float('inf'))
+      binary_mod = ConcatFiLMedResBlock(2, module_dim, with_residual=module_residual,
+                    with_intermediate_batchnorm=False, with_batchnorm=False,
+                    with_cond=[True, True],
+                    num_extra_channels=2, #was 2 for original film,
+                    extra_channel_freq=1,
+                    with_input_proj=module_input_proj,
+                    num_cond_maps=0,
+                    kernel_size=module_kernel_size,
+                    batchnorm_affine=False,
+                    num_layers=1,
+                    condition_method='bn-film',
+                    debug_every=float('inf')) 
+
+      self.unary_function_modules[fn_str] = unary_mod
+      self.binary_function_modules[fn_str] = binary_mod
+
+      self.add_module('film_unary', unary_mod)
+      self.add_module('film_binary', binary_mod)
+    
  
- 
-    for fn_str in vocab['program_token_to_idx']:
-      if forward_func == 'tree' and fn_str in ['Relate[right_of]', 'Relate[left_of]', 'Relate[below]', 'Relate[above]', 'And'] : 
-        binary_mod = ConcatBlock(
-                     module_dim,
-                     kernel_size=module_kernel_size,
-                     with_residual=module_residual,
-                     with_batchnorm=module_batchnorm)
+    else:
+      for fn_str in vocab['program_token_to_idx']:
+        if forward_func == 'tree' and fn_str in ['Relate[right_of]', 'Relate[left_of]', 'Relate[below]', 'Relate[above]', 'And'] : 
+          binary_mod = ConcatBlock(
+                       module_dim,
+                       kernel_size=module_kernel_size,
+                       with_residual=module_residual,
+                       with_batchnorm=module_batchnorm)
 
-        self.add_module(fn_str, binary_mod)
-        self.binary_function_modules[fn_str] = binary_mod
+          self.add_module(fn_str, binary_mod)
+          self.binary_function_modules[fn_str] = binary_mod
 
-      elif not fn_str.startswith('Shape2') and not fn_str.startswith('Color2'):
-        mod = ResidualBlock(
-              module_dim,
-              kernel_size=module_kernel_size,
-              with_residual=module_residual,
-              with_batchnorm=module_batchnorm)
+        else:
+          mod = ResidualBlock(
+                module_dim,
+                kernel_size=module_kernel_size,
+                with_residual=module_residual,
+                with_batchnorm=module_batchnorm)
 
-        self.add_module(fn_str, mod)
-        self.unary_function_modules[fn_str] = mod
+          self.add_module(fn_str, mod)
+          self.unary_function_modules[fn_str] = mod
+
+    self.declare_film_coefficients()
+
+  def declare_film_coefficients(self):
+    num_coeff = len(self.vocab['program_token_to_idx'])
+    if self.use_film:
+      self.gammas = nn.Parameter(torch.Tensor(1, num_coeff, self.module_dim))
+      xavier_uniform(self.gammas)
+      self.betas = nn.Parameter(torch.Tensor(1, num_coeff, self.module_dim))
+      xavier_uniform(self.betas)
+
+    else:
+      self.gammas = None
+      self.betas = None
+
 
   def forward(self, image, question):
-    return self.classifier(self.func(image, question, self.stem, self.vocab, self.unary_function_modules, self.binary_function_modules, self.use_color))
+    return self.classifier(self.func(image, question, self.stem, self.vocab, self.unary_function_modules, self.binary_function_modules, self.use_color, self.gammas, self.betas))
 
 
 

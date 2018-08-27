@@ -250,14 +250,14 @@ class SimpleModuleNet(nn.Module):
 
       self.unary_function_modules['film'] = unary_mod
       self.binary_function_modules['film'] = binary_mod
-
       self.add_module('film_unary', unary_mod)
       self.add_module('film_binary', binary_mod)
     
  
     else:
       for fn_str in vocab['program_token_to_idx']:
-        if forward_func == 'tree' and fn_str in ['Relate[right_of]', 'Relate[left_of]', 'Relate[below]', 'Relate[above]', 'And'] : 
+        arity = self.vocab['program_token_arity'][fn_str]
+        if arity == 2: 
           binary_mod = ConcatBlock(
                        module_dim,
                        kernel_size=module_kernel_size,

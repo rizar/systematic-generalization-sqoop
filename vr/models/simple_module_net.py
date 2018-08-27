@@ -129,11 +129,11 @@ def forward_tree(image, question, stem, vocab, unary_function_modules, binary_fu
 
 
     if gammas is not None:
-      rel_lhs = unary_relation_modules['film'](h_cur[[j]], gammas[:, lhs_idx, :], betas[:, lhs_idx, :], coords)
-      rel_rhs = unary_relation_modules['film'](h_cur[[j]], gammas[:, rhs_idx, :], betas[:, rhs_idx, :], coords)
+      rel_lhs = unary_function_modules['film'](h_cur[[j]], gammas[:, lhs_idx, :], betas[:, lhs_idx, :], coords)
+      rel_rhs = unary_function_modules['film'](h_cur[[j]], gammas[:, rhs_idx, :], betas[:, rhs_idx, :], coords)
       if color:
-        lhs_color_out = unary_relation_modules['film'](h_cur[[j]], gammas[:, lhs_color_idx, :], betas[:, lhs_color_idx, :], coords)
-        rhs_color_out = unary_relation_modules['film'](h_cur[[j]], gammas[:, rhs_color_idx, :], betas[:, rhs_color_idx, :], coords)
+        lhs_color_out = unary_function_modules['film'](h_cur[[j]], gammas[:, lhs_color_idx, :], betas[:, lhs_color_idx, :], coords)
+        rhs_color_out = unary_function_modules['film'](h_cur[[j]], gammas[:, rhs_color_idx, :], betas[:, rhs_color_idx, :], coords)
 
         rel_lhs = binary_function_modules['film']([rel_lhs, lhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords) 
         rel_rhs = binary_function_modules['film']([rel_rhs, rhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords) 

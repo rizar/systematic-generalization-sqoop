@@ -21,3 +21,4 @@ from vr.models.tmaced_met import TMAC
 from vr.models.baselines import LstmModel, CnnLstmModel, CnnLstmSaModel
 from vr.models.simple_encoder import SimpleEncoderBinary
 from vr.models.relation_net import RelationNet
+from vr.models.convlstm import ConvLSTM

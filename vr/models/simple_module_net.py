@@ -47,19 +47,30 @@ def unary_relation_module(relation):
   return "Relate1[{}]".format(relation)
 
 
-def forward_chain(image_tensor, vocab, function_modules, item_list):
+def forward_chain(image_tensor, vocab, function_modules, item_list, film_params):
+  gammas, betas, coords = None, None, None
+  if film_params is not None:
+    gammas, betas, coords = film_params
+
   h_cur = image_tensor
   for input_ in item_list:
     h_next = []
     for j in range(input_.shape[0]):
-      module_name = vocab['program_idx_to_token'][int(input_[j])]
-      mod = function_modules[module_name]
-      h_next.append(mod(h_cur[[j]]))
+
+      if gammas is not None:
+        item_idx = int(input_[j])
+        mod = function_modules['film']
+        h_next.append(mod(h_cur[[j]], gammas[:, item_idx, :], betas[:, item_idx, :], coords))
+      else:
+        module_name = vocab['program_idx_to_token'][int(input_[j])]
+        mod = function_modules[module_name]
+        h_next.append(mod(h_cur[[j]]))
+      
     h_cur = torch.cat(h_next)
 
   return h_cur
 
-def forward_chain1(image, question, stem, vocab, function_modules, binary_function_modules, color=False):
+def forward_chain1(image, question, stem, vocab, function_modules, binary_function_modules, color=False, film_params = None):
   color_lhs = question[:, 3]
   lhs = question[:, 4]
   color_rhs = question[:, 6]
@@ -68,9 +79,9 @@ def forward_chain1(image, question, stem, vocab, function_modules, binary_functi
   h_cur = stem(image)
 
   item_list = [color_lhs, lhs, rel, color_rhs, rhs] if color else [lhs, rel, rhs]
-  return forward_chain(h_cur, vocab, function_modules, item_list)
+  return forward_chain(h_cur, vocab, function_modules, item_list, film_params)
 
-def forward_chain2(image, question, stem, vocab, function_modules, binary_function_modules, color=False):
+def forward_chain2(image, question, stem, vocab, function_modules, binary_function_modules, color=False, film_params =None):
   color_lhs = question[:, 3]
   lhs = question[:, 4]
   color_rhs = question[:, 6]
@@ -79,9 +90,9 @@ def forward_chain2(image, question, stem, vocab, function_modules, binary_functi
   h_cur = stem(image)
 
   item_list = [rel, color_lhs, lhs, color_rhs, rhs] if color else [rel, lhs, rhs]
-  return forward_chain(h_cur, vocab, function_modules, item_list)
+  return forward_chain(h_cur, vocab, function_modules, item_list, film_params)
 
-def forward_chain3(image, question, stem, vocab, function_modules, binary_function_modules, color=False):
+def forward_chain3(image, question, stem, vocab, function_modules, binary_function_modules, color=False, film_params = None):
   color_lhs = question[:, 3]
   lhs = question[:, 4]
   color_rhs = question[:, 6]
@@ -90,58 +101,62 @@ def forward_chain3(image, question, stem, vocab, function_modules, binary_functi
   h_cur = stem(image)
 
   item_list = [color_lhs, lhs, color_rhs, rhs, rel] if color else [lhs, rhs, rel]
-  return forward_chain(h_cur, vocab, function_modules, item_list)
+  return forward_chain(h_cur, vocab, function_modules, item_list, film_params)
 
-def forward_tree(image, question, stem, vocab, unary_function_modules, binary_function_modules, color=False):
+def forward_tree(image, question, stem, vocab, unary_function_modules, binary_function_modules, color=False, film_params = None):
   h_cur = stem(image)
   h_out = []
 
+  gammas, betas, coords = None, None, None
+  if film_params is not None:
+    gammas, betas, coords = film_params
+
   for j in range(question.shape[0]): 
-    color_lhs = color_module(vocab['question_idx_to_token'][int(question[j, 3])])
-    lhs = shape_module(vocab['question_idx_to_token'][int(question[j, 4])])
-    color_rhs = color_module(vocab['question_idx_to_token'][int(question[j, 6])])
-    rhs = shape_module(vocab['question_idx_to_token'][int(question[j, 7])])
-    rel = relation_module(vocab['question_idx_to_token'][int(question[j, 5])])
 
-    rel_lhs = unary_function_modules[lhs](h_cur[[j]])
-    rel_rhs = unary_function_modules[rhs](h_cur[[j]])
 
-    if color:
-      lhs_color_out = unary_function_modules[color_lhs](h_cur[[j]])
-      rhs_color_out = unary_function_modules[color_rhs](h_cur[[j]])
-      rel_lhs = binary_function_modules['And'](rel_lhs, lhs_color_out) 
-      rel_rhs = binary_function_modules['And'](rel_rhs, rhs_color_out) 
+    lhs_color_idx = int(question[j, 3])
+    lhs_idx = int(question[j, 4])
+    rel_idx = int(question[j, 5])
+    rhs_color_idx = int(question[j, 6])
+    rhs_idx = int(question[j, 7])
+    and_idx = 1 + len(vocab['question_idx_to_token'])
 
-    h_out.append(binary_function_modules[rel](rel_lhs, rel_rhs))
+    color_lhs = color_module(vocab['question_idx_to_token'][lhs_color_idx])
+    lhs = shape_module(vocab['question_idx_to_token'][lhs_idx])
+    rel = relation_module(vocab['question_idx_to_token'][rel_idx])
+    rhs = shape_module(vocab['question_idx_to_token'][rhs_idx])
+    color_rhs = color_module(vocab['question_idx_to_token'][rhs_color_idx])
+
+
+    if gammas is not None:
+      rel_lhs = unary_relation_modules['film'](h_cur[[j]], gammas[:, lhs_idx, :], betas[:, lhs_idx, :], coords)
+      rel_rhs = unary_relation_modules['film'](h_cur[[j]], gammas[:, rhs_idx, :], betas[:, rhs_idx, :], coords)
+      if color:
+        lhs_color_out = unary_relation_modules['film'](h_cur[[j]], gammas[:, lhs_color_idx, :], betas[:, lhs_color_idx, :], coords)
+        rhs_color_out = unary_relation_modules['film'](h_cur[[j]], gammas[:, rhs_color_idx, :], betas[:, rhs_color_idx, :], coords)
+
+        rel_lhs = binary_function_modules['film']([rel_lhs, lhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords) 
+        rel_rhs = binary_function_modules['film']([rel_rhs, rhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords) 
+
+      h_out.append(binary_function_modules['film']([rel_lhs, rel_rhs], gammas[:, rel_idx, :], betas[:, rel_idx, :], coords ))
+
+
+    else:
+      rel_lhs = unary_function_modules[lhs](h_cur[[j]])
+      rel_rhs = unary_function_modules[rhs](h_cur[[j]])
+
+      if color:
+        lhs_color_out = unary_function_modules[color_lhs](h_cur[[j]])
+        rhs_color_out = unary_function_modules[color_rhs](h_cur[[j]])
+        rel_lhs = binary_function_modules['And'](rel_lhs, lhs_color_out) 
+        rel_rhs = binary_function_modules['And'](rel_rhs, rhs_color_out) 
+
+
+      h_out.append(binary_function_modules[rel](rel_lhs, rel_rhs))
 
   h_out = torch.cat(h_out)
   return h_out
 
-def forward_film_tree(image, question, stem, vocab, unary_function_modules, binary_function_modules, color=False):
-  beta, gamma = 
-  h_cur = stem(image)
-  h_out = []
-
-  for j in range(question.shape[0]): 
-    color_lhs = color_module(vocab['question_idx_to_token'][int(question[j, 3])])
-    lhs = shape_module(vocab['question_idx_to_token'][int(question[j, 4])])
-    color_rhs = color_module(vocab['question_idx_to_token'][int(question[j, 6])])
-    rhs = shape_module(vocab['question_idx_to_token'][int(question[j, 7])])
-    rel = relation_module(vocab['question_idx_to_token'][int(question[j, 5])])
-
-    rel_lhs = unary_function_modules[lhs](h_cur[[j]])
-    rel_rhs = unary_function_modules[rhs](h_cur[[j]])
-
-    if color:
-      lhs_color_out = unary_function_modules[color_lhs](h_cur[[j]])
-      rhs_color_out = unary_function_modules[color_rhs](h_cur[[j]])
-      rel_lhs = binary_function_modules['And'](rel_lhs, lhs_color_out) 
-      rel_rhs = binary_function_modules['And'](rel_rhs, rhs_color_out) 
-
-    h_out.append(binary_function_modules[rel](rel_lhs, rel_rhs))
-
-  h_out = torch.cat(h_out)
-  return h_out
 
 FUNC_DICT = {'chain1' : forward_chain1, 'chain2' : forward_chain2, 'chain3' : forward_chain3, 'tree' : forward_tree}
 
@@ -185,7 +200,7 @@ class SimpleModuleNet(nn.Module):
     module_H = tmp.size(2)
     module_W = tmp.size(3)
 
-    self.coords = coord_map((module_H, module_W))
+    self.coords = coord_map((module_H, module_W)).unsqueeze(0)
 
     if verbose:
       print('Here is my stem:')
@@ -233,8 +248,8 @@ class SimpleModuleNet(nn.Module):
                     condition_method='bn-film',
                     debug_every=float('inf')) 
 
-      self.unary_function_modules[fn_str] = unary_mod
-      self.binary_function_modules[fn_str] = binary_mod
+      self.unary_function_modules['film'] = unary_mod
+      self.binary_function_modules['film'] = binary_mod
 
       self.add_module('film_unary', unary_mod)
       self.add_module('film_binary', binary_mod)
@@ -265,7 +280,7 @@ class SimpleModuleNet(nn.Module):
     self.declare_film_coefficients()
 
   def declare_film_coefficients(self):
-    num_coeff = len(self.vocab['program_token_to_idx'])
+    num_coeff = 1+len(self.vocab['question_idx_to_token'])
     if self.use_film:
       self.gammas = nn.Parameter(torch.Tensor(1, num_coeff, self.module_dim))
       xavier_uniform(self.gammas)
@@ -278,7 +293,7 @@ class SimpleModuleNet(nn.Module):
 
 
   def forward(self, image, question):
-    return self.classifier(self.func(image, question, self.stem, self.vocab, self.unary_function_modules, self.binary_function_modules, self.use_color, self.gammas, self.betas))
+    return self.classifier(self.func(image, question, self.stem, self.vocab, self.unary_function_modules, self.binary_function_modules, self.use_color, [self.gammas, self.betas, self.coords]))
 
 
 

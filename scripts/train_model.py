@@ -998,6 +998,7 @@ def get_execution_engine(args):
       }
       ee = HeteroModuleNet(**kwargs)
     elif args.model_type == 'SimpleNMN':
+        kwargs['use_film'] = args.nmn_use_film
         kwargs['forward_func'] = args.nmn_type
         ee = SimpleModuleNet(**kwargs)
 

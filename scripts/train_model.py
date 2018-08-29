@@ -707,15 +707,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         pg_optimizer.zero_grad()
         ee_optimizer.zero_grad()
         loss.backward()
+        pg_optimizer.step()
+        ee_optimizer.step()
       else:
         raise ValueError()
-
-        if args.train_program_generator == 1:
-          if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
-          pg_optimizer.step()
-        if args.train_execution_engine == 1:
-          ee_optimizer.step()
 
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]

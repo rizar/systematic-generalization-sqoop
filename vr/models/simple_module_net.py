@@ -170,6 +170,7 @@ class SimpleModuleNet(nn.Module):
                stem_kernel_size,
                stem_stride,
                stem_padding,
+               stem_dim,
                module_dim,
                module_kernel_size,
                module_input_proj,
@@ -190,7 +191,7 @@ class SimpleModuleNet(nn.Module):
     self.func = FUNC_DICT[forward_func]
     self.use_color = use_color
 
-    self.stem = build_stem(feature_dim[0], module_dim,
+    self.stem = build_stem(feature_dim[0], stem_dim, module_dim,
                            num_layers=stem_num_layers,
                            subsample_layers=stem_subsample_layers,
                            kernel_size=stem_kernel_size,

@@ -258,7 +258,7 @@ class SimpleModuleNet(nn.Module):
     else:
       for fn_str in vocab['program_token_to_idx']:
         arity = self.vocab['program_token_arity'][fn_str]
-        if arity == 2: 
+        if arity == 2 and forward_func == 'tree': 
           binary_mod = ConcatBlock(
                        module_dim,
                        kernel_size=module_kernel_size,

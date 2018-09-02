@@ -63,18 +63,21 @@ class ResidualBlock(nn.Module):
     return out
 
 
+
 class ConcatBlock(nn.Module):
-  def __init__(self, dim, kernel_size, with_residual=True, with_batchnorm=True):
+  def __init__(self, dim, kernel_size, with_residual=True, with_batchnorm=True, use_simple=False):
     super(ConcatBlock, self).__init__()
     self.proj = nn.Conv2d(2 * dim, dim, kernel_size=1, padding=0)
-    self.res_block = ResidualBlock(
-      dim, kernel_size=kernel_size, with_residual=with_residual,
-      with_batchnorm=with_batchnorm)
+    if use_simple:
+        self.vis_block = SimpleVisualBlock(dim, kernel_size=kernel_size) 
+    else:
+        self.vis_block = ResidualBlock(dim, kernel_size=kernel_size, 
+                with_residual=with_residual,with_batchnorm=with_batchnorm)
 
   def forward(self, x, y):
     out = torch.cat([x, y], 1) # Concatentate along depth
     out = F.relu(self.proj(out))
-    out = self.res_block(out)
+    out = self.vis_block(out)
     return out
 
 

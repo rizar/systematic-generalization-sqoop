@@ -258,22 +258,24 @@ class SimpleModuleNet(nn.Module):
     else:
       for fn_str in vocab['program_token_to_idx']:
         arity = self.vocab['program_token_arity'][fn_str]
-        if arity == 2 and forward_func == 'tree': 
+        if arity == 2 and forward_func == 'tree':   
           binary_mod = ConcatBlock(
                        module_dim,
                        kernel_size=module_kernel_size,
                        with_residual=module_residual,
-                       with_batchnorm=module_batchnorm)
+                       with_batchnorm=module_batchnorm,
+                       use_simple=True)
 
           self.add_module(fn_str, binary_mod)
           self.binary_function_modules[fn_str] = binary_mod
 
         else:
-          mod = ResidualBlock(
-                module_dim,
-                kernel_size=module_kernel_size,
-                with_residual=module_residual,
-                with_batchnorm=module_batchnorm)
+          mod = SimpleVisualBlock(module_dim, kernel_size=module_kernel_size)  
+          #mod = ResidualBlock(
+          #      module_dim,
+          #      kernel_size=module_kernel_size,
+          #      with_residual=module_residual,
+          #      with_batchnorm=module_batchnorm)
 
           self.add_module(fn_str, mod)
           self.unary_function_modules[fn_str] = mod

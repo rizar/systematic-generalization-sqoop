@@ -110,9 +110,12 @@ parser.add_argument('--module_stem_num_layers', default=2, type=int)
 parser.add_argument('--module_stem_subsample_layers', default=[], type=parse_int_list)
 parser.add_argument('--module_stem_batchnorm', default=0, type=int)
 parser.add_argument('--module_dim', default=128, type=int)
+parser.add_argument('--stem_dim', default=64, type=int)
 parser.add_argument('--module_residual', default=1, type=int)
 parser.add_argument('--module_batchnorm', default=0, type=int)
 parser.add_argument('--module_intermediate_batchnorm', default=0, type=int)
+parser.add_argument('--use_color', default=0, type=int)
+parser.add_argument('--nmn_type', default='chain1', choices = ['chain1', 'chain2', 'chain3', 'tree'])
 
 # FiLM only options
 parser.add_argument('--set_execution_engine_eval', default=0, type=int)
@@ -807,6 +810,7 @@ def get_program_generator(args):
         kwargs['embedding_uniform_boundary'] = args.mac_embedding_uniform_boundary
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
+      kwargs['stem_dim'] = args.stem_dim
       kwargs['debug_every'] = args.debug_every
       if args.simple_encoder:
         pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
@@ -842,9 +846,11 @@ def get_execution_engine(args):
       'stem_stride': args.module_stem_stride,
       'stem_padding': args.module_stem_padding,
       'module_dim': args.module_dim,
+      'stem_dim': args.stem_dim,
       'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
       'module_input_proj': args.module_input_proj,
+      'use_color' : args.use_color,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
       'classifier_downsample': args.classifier_downsample,
@@ -930,6 +936,7 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'num_modules': args.num_modules,
                 'module_dim': args.module_dim,
+                'stem_dim': args.stem_dim,
 
                 #'module_dropout': args.module_dropout,
                 'question_embedding_dropout': args.mac_question_embedding_dropout,
@@ -965,6 +972,7 @@ def get_execution_engine(args):
                 'stem_padding': args.module_stem_padding,
                 'children_list': TreeGenerator().genHeap(args.tree_type_for_TMAC),
                 'module_dim': args.module_dim,
+                'stem_dim': args.stem_dim,
 
                 #'module_dropout': args.module_dropout,
                 'question_embedding_dropout': args.mac_question_embedding_dropout,
@@ -994,11 +1002,15 @@ def get_execution_engine(args):
         'stem_stride': args.module_stem_stride,
         'stem_padding': args.module_stem_padding,
         'module_dim': args.module_dim,
+        'stem_dim': args.stem_dim,
         'module_batchnorm': args.module_batchnorm == 1,
       }
       ee = HeteroModuleNet(**kwargs)
     elif args.model_type == 'SimpleNMN':
+        kwargs['use_film'] = args.nmn_use_film
+        kwargs['forward_func'] = args.nmn_type
         ee = SimpleModuleNet(**kwargs)
+
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim

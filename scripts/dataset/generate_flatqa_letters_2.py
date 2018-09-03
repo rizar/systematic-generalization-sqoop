@@ -539,7 +539,7 @@ if __name__ == '__main__':
   args = parser.parse_args()
 
   args.level = 'relations'
-  data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d-program-%s" %(args.data_dir, args.rhs_variety, args.num_repeats, args.program)
+  data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
   if not os.path.exists(data_full_dir):
     os.makedirs(data_full_dir)
   

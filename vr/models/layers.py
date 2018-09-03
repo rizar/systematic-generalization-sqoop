@@ -63,18 +63,21 @@ class ResidualBlock(nn.Module):
     return out
 
 
+
 class ConcatBlock(nn.Module):
-  def __init__(self, dim, kernel_size, with_residual=True, with_batchnorm=True):
+  def __init__(self, dim, kernel_size, with_residual=True, with_batchnorm=True, use_simple=False):
     super(ConcatBlock, self).__init__()
     self.proj = nn.Conv2d(2 * dim, dim, kernel_size=1, padding=0)
-    self.res_block = ResidualBlock(
-      dim, kernel_size=kernel_size, with_residual=with_residual,
-      with_batchnorm=with_batchnorm)
+    if use_simple:
+        self.vis_block = SimpleVisualBlock(dim, kernel_size=kernel_size) 
+    else:
+        self.vis_block = ResidualBlock(dim, kernel_size=kernel_size, 
+                with_residual=with_residual,with_batchnorm=with_batchnorm)
 
   def forward(self, x, y):
     out = torch.cat([x, y], 1) # Concatentate along depth
     out = F.relu(self.proj(out))
-    out = self.res_block(out)
+    out = self.vis_block(out)
     return out
 
 
@@ -89,7 +92,7 @@ class Flatten(nn.Module):
     return x.view(x.size(0), -1)
 
 
-def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
+def build_stem(feature_dim, stem_dim, module_dim, num_layers=2, with_batchnorm=True,
                kernel_size=[3], stride=[1], padding=None, subsample_layers=None, acceptEvenKernel=False):
   layers = []
   prev_dim = feature_dim
@@ -107,18 +110,19 @@ def build_stem(feature_dim, module_dim, num_layers=2, with_batchnorm=True,
     subsample_layers = []
 
   for i, cur_kernel_size, cur_stride, cur_padding in zip(range(num_layers), kernel_size, stride, padding):
+    curr_out = module_dim if (i == (num_layers-1) ) else stem_dim 
     if cur_padding is None:  # Calculate default padding when None provided
       if cur_kernel_size % 2 == 0 and not acceptEvenKernel:
         raise(NotImplementedError)
       cur_padding = cur_kernel_size // 2
-    layers.append(nn.Conv2d(prev_dim, module_dim,
+    layers.append(nn.Conv2d(prev_dim, curr_out,
                             kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding))
     if with_batchnorm:
-      layers.append(nn.BatchNorm2d(module_dim))
+      layers.append(nn.BatchNorm2d(curr_out))
     layers.append(nn.ReLU(inplace=True))
     if i in subsample_layers:
       layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-    prev_dim = module_dim
+    prev_dim = curr_out
   return nn.Sequential(*layers)
 
 

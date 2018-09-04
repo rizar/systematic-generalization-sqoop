@@ -30,8 +30,8 @@ class ConvFunc():
     cnn_bias_dim = self.dim
     proj_cnn_weight_dim = 2*self.dim*self.dim
     proj_cnn_bias_dim = self.dim
-    if question_rep.size(1) != proj_cnn_weight_dim + 
-             proj_cnn_bias_dim + cnn_weight_dim + cnn_bias_dim: raise ValueError
+    if question_rep.size(1) != proj_cnn_weight_dim + proj_cnn_bias_dim + cnn_weight_dim + cnn_bias_dim: 
+      raise ValueError
 
     # pick out CNN and projection CNN weights/biases
     cnn_weight = question_rep[:, : cnn_weight_dim]
@@ -90,7 +90,7 @@ class SHNMN(nn.Module):
       xavier_uniform(self.tau_0)
       xavier_uniform(self.tau_1)
 
-    embedding_dim = 2*module_dim+(2*module_dim*module_dim)+
+    embedding_dim = 2*module_dim+(2*module_dim*module_dim)+\
                    (module_dim*module_dim*module_kernel_size*module_kernel_size)
 
     self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim) 
@@ -119,7 +119,7 @@ class SHNMN(nn.Module):
     question = self.question_embeddings(question)
     h_prev = self.stem(image).unsqueeze(1) # B x1 x C x H x W
     for i in range(self.num_modules):
-      alpha_curr = self.alphas[i]
+      alpha_curr = self.alpha[i]
       tau_0_curr = self.tau_0[i, :(i+1)]
       tau_1_curr = self.tau_1[i, :(i+1)]
 

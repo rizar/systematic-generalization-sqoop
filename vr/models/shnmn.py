@@ -18,14 +18,18 @@ from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
 class SHNMN(nn.Module):
-    def __init__(self,feature_dim, stem_dim, module_dim, stem_num_layers, stem_subsample_layers, stem_kernel_size, stem_padding, stem_batchnorm, num_answers, classifier_fc_layers, classifier_proj_dim, classifier_downsample, classifier_batchnorm, classifier_dropout, num_modules):
+    def __init__(self,feature_dim, stem_dim, module_dim, stem_num_layers, 
+            stem_subsample_layers, stem_kernel_size, stem_padding, 
+            stem_batchnorm, num_answers, classifier_fc_layers, 
+            classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
+            classifier_dropout, num_modules):
         super().__init__()
         self.num_modules = num_modules
         # alphas and taus from Overleaf Doc.
         self.alpha = nn.Parameter(torch.Tensor(num_modules, num_question_tokens))
         xavier_uniform(self.alpha)
-        self.tau_0   = nn.Parameter(torch.Tensor(num_modules, num_modules))
-        self.tau_1   = nn.Parameter(torch.Tensor(num_modules, num_modules))
+        self.tau_0   = nn.Parameter(torch.Tensor(num_modules, num_modules)) # weights for left  child
+        self.tau_1   = nn.Parameter(torch.Tensor(num_modules, num_modules)) # weights for right child
         xavier_uniform(self.tau_0)
         xavier_uniform(self.tau_1)
         # stem for processing the image into a 3D tensor
@@ -49,13 +53,13 @@ class SHNMN(nn.Module):
         self.func = None # Biggest TODO
     
     def foward(self, image, question):
-        h_prev = [self.stem(image)]
+        h_prev = self.stem(image).unsqueeze(1) # B x1 x H x W x C
         for i in range(self.num_modules):
-            question_rep = None
-            lhs_rep = None
-            rhs_rep = None
+            question_rep = torch.sum(self.alphas[i].view(1,-1,1)*question, dim=1) #(B,D)
+            lhs_rep = torch.sum(self.tau_0[i, :(i+1)].view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x H x W x C  
+            rhs_rep = torch.sum(self.tau_0[i, :(i+1)].view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x H x W x C
             h_i = self.func(question_rep, lhs_rep, rhs_rep)
 
-            h_prev.append(h_i)
+            h_prev = torch.stack([h_prev, h_i.unsqueeze(1)], dim = 1)
 
         return self.classifier(h_prev[-1]) 

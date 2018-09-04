@@ -93,8 +93,8 @@ class SHNMN(nn.Module):
       xavier_uniform(self.tau_0)
       xavier_uniform(self.tau_1)
 
-    self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), 
-                               2*module_dim + (2*module_dim*module_dim) + (module_dim*module_dim*module_kernel_size*module_kernel_size))
+    embedding_dim = 2*module_dim+(2*module_dim*module_dim)+(module_dim*module_dim*module_kernel_size*module_kernel_size)
+    self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim) 
 
     # stem for processing the image into a 3D tensor
     self.stem = build_stem(feature_dim[0], stem_dim, module_dim,

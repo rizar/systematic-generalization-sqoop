@@ -18,13 +18,6 @@ from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
 NUM_QUESTION_TOKENS=8
-def _softmax(vec):
-  '''
-  Take a vector (say dimension D) and softmax it to produce soft weights
-  '''
-  max_weight = torch.max(vec)
-  unnormalized_weights =  torch.exp(vec-max_weight) 
-  return unnormalized_weights / torch.sum(unnormalized_weights)
 
 
 class ConvFunc():
@@ -73,6 +66,7 @@ class SHNMN(nn.Module):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
+    self.hard_code_weights = hard_code_weights
 
     if hard_code_weights:
       self.alpha = torch.zeros(num_modules, NUM_QUESTION_TOKENS)
@@ -125,11 +119,20 @@ class SHNMN(nn.Module):
     question = self.question_embeddings(question)
     h_prev = self.stem(image).unsqueeze(1) # B x1 x C x H x W
     for i in range(self.num_modules):
-      question_rep = torch.sum( _softmax(self.alpha[i]).view(1,-1,1)*question, dim=1) #(B,D)
+      alpha_curr = self.alphas[i]
+      tau_0_curr = self.tau_0[i, :(i+1)]
+      tau_1_curr = self.tau_1[i, :(i+1)]
+
+      if not self.hard_code_weights:
+        alpha_curr = F.softmax(alpha_curr)
+        tau_0_curr = F.softmax(tau_0_curr)
+        tau_1_curr = F.softmax(tau_1_curr) 
+
+      question_rep = torch.sum( alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
       # B x C x H x W  
-      lhs_rep = torch.sum(_softmax(self.tau_0[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
+      lhs_rep = torch.sum(tau_0_curr.view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
       # B x C x H x W
-      rhs_rep = torch.sum(_softmax(self.tau_1[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
+      rhs_rep = torch.sum(tau_1_curr.view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
       h_i = self.func(question_rep, lhs_rep, rhs_rep) # B x C x H x W
 
       h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim = 1)

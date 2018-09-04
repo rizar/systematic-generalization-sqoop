@@ -644,7 +644,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
-      elif args.model_type in ['SimpleNMN']:
+      elif args.model_type in ['SimpleNMN', 'SHNMN']:
         # Train execution engine with ground-truth programs
         ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, questions_var)
@@ -1017,6 +1017,7 @@ def get_execution_engine(args):
         'feature_dim' : args.feature_dim, 
         'stem_dim' : args.stem_dim,
         'module_dim': args.module_dim,
+        'module_kernel_size' : args.module_kernel_size,
         'stem_subsample_layers': args.module_stem_subsample_layers,
         'stem_num_layers': args.module_stem_num_layers,
         'stem_kernel_size': args.module_stem_kernel_size,

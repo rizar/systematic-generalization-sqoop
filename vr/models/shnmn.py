@@ -37,7 +37,9 @@ class ConvFunc():
     cnn_bias_dim = self.dim
     proj_cnn_weight_dim = 2*self.dim*self.dim
     proj_cnn_bias_dim = self.dim
-    if question_rep.size(1) != proj_cnn_weight_dim + proj_cnn_bias_dim + cnn_weight_dim + cnn_bias_dim: raise ValueError
+    if question_rep.size(1) != proj_cnn_weight_dim + 
+             proj_cnn_bias_dim + cnn_weight_dim + cnn_bias_dim: raise ValueError
+
     # pick out CNN and projection CNN weights/biases
     cnn_weight = question_rep[:, : cnn_weight_dim]
     cnn_bias = question_rep[:, cnn_weight_dim : cnn_weight_dim + cnn_bias_dim]
@@ -54,7 +56,8 @@ class ConvFunc():
       proj_weight_curr = proj_weight[i].view(self.dim, 2*self.dim, 1, 1)
       proj_bias_curr = proj_bias[i]
 
-      cnn_inp = F.conv2d(torch.cat( [lhs_rep[[i]], rhs_rep[[i]]], 1), proj_weight_curr, bias = proj_bias_curr, padding = 0) 
+      cnn_inp = F.conv2d(torch.cat( [lhs_rep[[i]], rhs_rep[[i]]], 1), proj_weight_curr, 
+                                  bias = proj_bias_curr, padding = 0) 
       cnn_out_total.append(F.conv2d(cnn_inp , cnn_weight_curr, bias = cnn_bias_curr, 
                                                         padding = self.kernel_size // 2))
 
@@ -88,12 +91,14 @@ class SHNMN(nn.Module):
     else:
       self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
       xavier_uniform(self.alpha)
-      self.tau_0   = nn.Parameter(torch.Tensor(num_modules, num_modules)) # weights for left  child
-      self.tau_1   = nn.Parameter(torch.Tensor(num_modules, num_modules)) # weights for right child
+      self.tau_0   = nn.Parameter(torch.Tensor(num_modules, num_modules)) #weights for left  child
+      self.tau_1   = nn.Parameter(torch.Tensor(num_modules, num_modules)) #weights for right child
       xavier_uniform(self.tau_0)
       xavier_uniform(self.tau_1)
 
-    embedding_dim = 2*module_dim+(2*module_dim*module_dim)+(module_dim*module_dim*module_kernel_size*module_kernel_size)
+    embedding_dim = 2*module_dim+(2*module_dim*module_dim)+
+                   (module_dim*module_dim*module_kernel_size*module_kernel_size)
+
     self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim) 
 
     # stem for processing the image into a 3D tensor
@@ -121,8 +126,10 @@ class SHNMN(nn.Module):
     h_prev = self.stem(image).unsqueeze(1) # B x1 x C x H x W
     for i in range(self.num_modules):
       question_rep = torch.sum( _softmax(self.alpha[i]).view(1,-1,1)*question, dim=1) #(B,D)
-      lhs_rep = torch.sum(_softmax(self.tau_0[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x C x H x W  
-      rhs_rep = torch.sum(_softmax(self.tau_1[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x C x H x W
+      # B x C x H x W  
+      lhs_rep = torch.sum(_softmax(self.tau_0[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
+      # B x C x H x W
+      rhs_rep = torch.sum(_softmax(self.tau_1[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
       h_i = self.func(question_rep, lhs_rep, rhs_rep) # B x C x H x W
 
       h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim = 1)

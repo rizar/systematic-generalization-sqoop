@@ -57,11 +57,11 @@ class ConvFunc(nn.Module):
         return torch.cat(cnn_out_total)
 
 class SHNMN(nn.Module):
-    def __init__(self,feature_dim, stem_dim, module_dim, stem_num_layers, 
+    def __init__(self, vocab, feature_dim, stem_dim, module_dim, stem_num_layers, 
             stem_subsample_layers, stem_kernel_size, stem_padding, 
             stem_batchnorm, num_answers, classifier_fc_layers, 
             classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-            classifier_dropout, num_modules):
+            classifier_dropout, num_modules, **kwargs):
         super().__init__()
         self.num_modules = num_modules
         # alphas and taus from Overleaf Doc.
@@ -82,11 +82,12 @@ class SHNMN(nn.Module):
         tmp = self.stem(Variable(torch.zeros([1, feature_dim[0], feature_dim[1], feature_dim[2]])))
         module_H = tmp.size(2)
         module_W = tmp.size(3)
+        num_answers = len(vocab['answer_idx_to_token'])
         self.classifier = build_classifier(module_dim, module_H, module_W, num_answers,
                           classifier_fc_layers,
                           classifier_proj_dim,
                           classifier_downsample,
-                          with_batchnorm=classifier_batchnorm
+                          with_batchnorm=classifier_batchnorm,
                           dropout=classifier_dropout) 
 
         self.func = ConvFunc(module_dim, module_kernel_size)

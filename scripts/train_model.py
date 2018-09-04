@@ -1012,7 +1012,8 @@ def get_execution_engine(args):
         ee = SimpleModuleNet(**kwargs)
 
     elif args.model_type == 'SHNMN':
-        ee = SHNMN(**kwargs)
+      kwargs['num_modules'] = 3  
+      ee = SHNMN(**kwargs)
 
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers

@@ -17,6 +17,15 @@ from vr.models.tfilmed_net import ConcatFiLMedResBlock
 from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
+
+def _softmax(vec):
+    '''
+    Take a vector (say dimension D) and softmax it to produce soft weights
+    '''
+    max_weight = torch.max(vec)
+    unnormalized_weights =  torch.exp(vec-max_weight) 
+    return unnormalized_weights / torch.sum(unnormalized_weights)
+
 class SHNMN(nn.Module):
     def __init__(self,feature_dim, stem_dim, module_dim, stem_num_layers, 
             stem_subsample_layers, stem_kernel_size, stem_padding, 
@@ -55,11 +64,12 @@ class SHNMN(nn.Module):
     def foward(self, image, question):
         h_prev = self.stem(image).unsqueeze(1) # B x1 x H x W x C
         for i in range(self.num_modules):
-            question_rep = torch.sum(self.alphas[i].view(1,-1,1)*question, dim=1) #(B,D)
-            lhs_rep = torch.sum(self.tau_0[i, :(i+1)].view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x H x W x C  
-            rhs_rep = torch.sum(self.tau_0[i, :(i+1)].view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x H x W x C
+            question_rep = torch.sum( _softmax(self.alphas[i]).view(1,-1,1)*question, dim=1) #(B,D)
+            lhs_rep = torch.sum(_softmax(self.tau_0[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x H x W x C  
+            rhs_rep = torch.sum(_softmax(self.tau_0[i, :(i+1)]).view(1, (i+1), 1, 1, 1)*h_prev, dim=1) # B x H x W x C
+            # use a hypernet that takes the question and returns a 3 x 3 x 16 x 16 convolution filter bank? 
             h_i = self.func(question_rep, lhs_rep, rhs_rep)
 
             h_prev = torch.stack([h_prev, h_i.unsqueeze(1)], dim = 1)
 
-        return self.classifier(h_prev[-1]) 
+        return self.classifier(h_prev[:, -1, :, :, :]) 

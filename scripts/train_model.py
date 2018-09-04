@@ -88,7 +88,7 @@ parser.add_argument('--model_type', default='PG',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
            'Hetero', 'MAC', 'TMAC',
-           'SimpleNMN', 'RelNet'])
+           'SimpleNMN', 'RelNet', 'SHNMN'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -413,7 +413,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'RelNet']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'SHNMN', 'RelNet']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -1011,6 +1011,9 @@ def get_execution_engine(args):
         kwargs['forward_func'] = args.nmn_type
         ee = SimpleModuleNet(**kwargs)
 
+    elif args.model_type == 'SHNMN':
+        ee = SHNMN(**kwargs)
+
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
@@ -1143,7 +1146,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       scores = execution_engine(feats_var, question_rep)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
-    elif args.model_type in ['SimpleNMN']:
+    elif args.model_type in ['SimpleNMN', 'SHNMN']:
       scores = execution_engine(feats_var, questions_var)
     else:
       raise NotImplementedError('model ', args.model_type, ' check_accuracy not implemented')

@@ -8,6 +8,7 @@
 
 from vr.models.module_net import ModuleNet
 from vr.models.simple_module_net import SimpleModuleNet, forward_chain1, forward_chain2, forward_chain3
+from vr.shnmn import SHNMN
 from vr.models.hetero_net import HeteroModuleNet
 from vr.models.filmed_net import FiLMedNet
 from vr.models.seq2seq import Seq2Seq

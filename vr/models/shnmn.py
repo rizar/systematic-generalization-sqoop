@@ -17,11 +17,7 @@ from vr.models.tfilmed_net import ConcatFiLMedResBlock
 from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
-IN=16
-OUT=16
-H=3
-W=3
-
+NUM_QUESTION_TOKENS=8
 def _softmax(vec):
   '''
   Take a vector (say dimension D) and softmax it to produce soft weights
@@ -59,13 +55,13 @@ class ConvFunc(nn.Module):
 class SHNMN(nn.Module):
   def __init__(self, vocab, feature_dim, stem_dim, module_dim, stem_num_layers, 
       stem_subsample_layers, stem_kernel_size, stem_padding, 
-      stem_batchnorm, num_answers, classifier_fc_layers, 
+      stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      classifier_dropout, num_modules, **kwargs):
+      num_modules, **kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
-    self.alpha = nn.Parameter(torch.Tensor(num_modules, num_question_tokens))
+    self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
     xavier_uniform(self.alpha)
     self.tau_0   = nn.Parameter(torch.Tensor(num_modules, num_modules)) # weights for left  child
     self.tau_1   = nn.Parameter(torch.Tensor(num_modules, num_modules)) # weights for right child

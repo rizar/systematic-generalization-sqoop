@@ -1012,7 +1012,23 @@ def get_execution_engine(args):
         ee = SimpleModuleNet(**kwargs)
 
     elif args.model_type == 'SHNMN':
-      kwargs['num_modules'] = 3  
+      kwargs = {
+        'vocab' : vocab,
+        'feature_dim' : args.feature_dim, 
+        'stem_dim' : args.stem_dim,
+        'module_dim': args.module_dim,
+        'stem_subsample_layers': args.module_stem_subsample_layers,
+        'stem_num_layers': args.module_stem_num_layers,
+        'stem_kernel_size': args.module_stem_kernel_size,
+        'stem_padding': args.module_stem_padding,
+        'stem_batchnorm': args.module_stem_batchnorm == 1,
+        'classifier_fc_layers': args.classifier_fc_dims,
+        'classifier_proj_dim': args.classifier_proj_dim,
+        'classifier_downsample': args.classifier_downsample,
+        'classifier_batchnorm': args.classifier_batchnorm == 1,
+        'classifier_dropout' : args.classifier_dropout,
+        'num_modules' : 3
+      }
       ee = SHNMN(**kwargs)
 
     elif args.model_type == 'RelNet':

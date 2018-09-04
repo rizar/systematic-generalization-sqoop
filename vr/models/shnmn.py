@@ -61,7 +61,7 @@ class SHNMN(nn.Module):
 
         self.func = None # Biggest TODO
     
-    def foward(self, image, question):
+    def forward(self, image, question):
         h_prev = self.stem(image).unsqueeze(1) # B x1 x H x W x C
         for i in range(self.num_modules):
             question_rep = torch.sum( _softmax(self.alphas[i]).view(1,-1,1)*question, dim=1) #(B,D)

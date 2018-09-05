@@ -188,7 +188,8 @@ parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
 #SHNMN options
-parser.add_argument('--hard_code_weights', action="store_true")
+parser.add_argument('--hard_code_alpha', action="store_true")
+parser.add_argument('--hard_code_tau', action="store_true")
 
 #RelationNet options
 parser.add_argument('--module_stem_feature_dim', default=24, type=int)
@@ -1031,7 +1032,8 @@ def get_execution_engine(args):
         'classifier_downsample': args.classifier_downsample,
         'classifier_batchnorm': args.classifier_batchnorm == 1,
         'classifier_dropout' : args.classifier_dropout,
-        'hard_code_weights' : args.hard_code_weights,
+        'hard_code_alpha' : args.hard_code_alpha,
+        'hard_code_tau' : args.hard_code_tau,
         'num_modules' : 3
       }
       ee = SHNMN(**kwargs)

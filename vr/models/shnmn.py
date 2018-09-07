@@ -62,7 +62,7 @@ class SHNMN(nn.Module):
       stem_subsample_layers, stem_kernel_size, stem_padding, 
       stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, **kwargs):
+      num_modules, hard_code_alpha=False, hard_code_tau=False, use_tree_init=False, **kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
@@ -80,8 +80,8 @@ class SHNMN(nn.Module):
       xavier_uniform(self.alpha)
 
     if hard_code_tau:
-      self.tau_0 = torch.zeros(num_modules, num_modules)
-      self.tau_1 = torch.zeros(num_modules, num_modules)
+      self.tau_0 = torch.zeros(num_modules, num_modules+1)
+      self.tau_1 = torch.zeros(num_modules, num_modules+1)
       self.tau_0[0][0] = self.tau_0[1][0] = self.tau_0[2][1] = 1
       self.tau_1[2][2] = 1
        
@@ -89,10 +89,17 @@ class SHNMN(nn.Module):
       self.tau_1 = Variable(self.tau_1).cuda()
 
     else:
-      self.tau_0   = nn.Parameter(torch.Tensor(num_modules, num_modules)) #weights for left  child
-      self.tau_1   = nn.Parameter(torch.Tensor(num_modules, num_modules)) #weights for right child
-      xavier_uniform(self.tau_0)
-      xavier_uniform(self.tau_1)
+      tau_0 = torch.zeros(num_modules, num_modules+1)
+      tau_1 = torch.zeros(num_modules, num_modules+1)
+      tau_0[0][0] = tau_0[1][0] = tau_0[2][1] = 1e7
+      tau_1[2][2] = 1e7
+      self.tau_0   = nn.Parameter(tau_0) #weights for left  child
+      self.tau_1   = nn.Parameter(tau_1) #weights for right child
+      if use_tree_init:
+        print("initializing with correct tree.")
+      else:
+        xavier_uniform(self.tau_0)
+        xavier_uniform(self.tau_1)
 
     embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)    
     embedding_dim_2 = module_dim + (2*module_dim*module_dim)
@@ -129,11 +136,14 @@ class SHNMN(nn.Module):
   
   def forward(self, image, question):
     question = torch.cat([self.question_embeddings_1(question), self.question_embeddings_2(question)],dim=-1) 
-    h_prev = self.stem(image).unsqueeze(1) # B x1 x C x H x W
+    stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
+    sentinel    = torch.zeros_like(stemmed_img) # B x 1 x C x H x W
+
+    h_prev = torch.cat([sentinel, stemmed_img], dim = 1) # B x 2 x C x H x W
     for i in range(self.num_modules):
       alpha_curr = self.alpha[i]
-      tau_0_curr = self.tau_0[i, :(i+1)]
-      tau_1_curr = self.tau_1[i, :(i+1)]
+      tau_0_curr = self.tau_0[i, :(i+2)]
+      tau_1_curr = self.tau_1[i, :(i+2)]
 
       if not self.hard_code_tau:
         tau_0_curr = F.softmax(tau_0_curr)
@@ -144,9 +154,9 @@ class SHNMN(nn.Module):
 
       question_rep = torch.sum( alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
       # B x C x H x W  
-      lhs_rep = torch.sum(tau_0_curr.view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
+      lhs_rep = torch.sum(tau_0_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
       # B x C x H x W
-      rhs_rep = torch.sum(tau_1_curr.view(1, (i+1), 1, 1, 1)*h_prev, dim=1) 
+      rhs_rep = torch.sum(tau_1_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
       h_i = self.func(question_rep, lhs_rep, rhs_rep) # B x C x H x W
 
       h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim = 1)

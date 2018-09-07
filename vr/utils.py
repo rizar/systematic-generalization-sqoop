@@ -11,6 +11,7 @@ import json
 import torch
 
 from vr.models import (ModuleNet,
+                       SHNMN,
                        Seq2Seq,
                        Seq2SeqAtt,
                        LstmModel,
@@ -99,6 +100,9 @@ def load_execution_engine(path, verbose=True, model_type='PG+EE'):
   elif model_type == 'RelNet':
     print('Loading Relation Net from ' + path)
     model = RelationNet(**kwargs)
+  elif model_type == 'SHNMN':
+    print('Loading Soft Homogenous NMN from ' + path)
+    model = SHNMN(**kwargs)
   else:
     raise ValueError()
   cur_state = model.state_dict()

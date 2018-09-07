@@ -189,6 +189,7 @@ parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
 #SHNMN options
 parser.add_argument('--hard_code_alpha', action="store_true")
+parser.add_argument('--use_tree_init', action="store_true")
 parser.add_argument('--hard_code_tau', action="store_true")
 
 #RelationNet options
@@ -1034,6 +1035,7 @@ def get_execution_engine(args):
         'classifier_dropout' : args.classifier_dropout,
         'hard_code_alpha' : args.hard_code_alpha,
         'hard_code_tau' : args.hard_code_tau,
+        'use_tree_init' : args.use_tree_init,
         'num_modules' : 3
       }
       ee = SHNMN(**kwargs)

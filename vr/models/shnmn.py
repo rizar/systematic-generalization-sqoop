@@ -19,31 +19,6 @@ from functools import partial
 
 NUM_QUESTION_TOKENS=8
 
-def perform_op(img, question, alpha, tau_0, tau_1, num_modules, hard_code_tau, hard_code_alpha):
-  sentinel = torch.zeros_like(img) # B x 1 x C x H x W
-
-  h_prev = torch.cat([sentinel, img], dim = 1) # B x 2 x C x H x W
-  for i in range(num_modules):
-    alpha_curr = alpha[i]
-    tau_0_curr = tau_0[i, :(i+2)]
-    tau_1_curr = tau_1[i, :(i+2)]
-
-    if not hard_code_tau:
-      tau_0_curr = F.softmax(tau_0_curr)
-      tau_1_curr = F.softmax(tau_1_curr) 
-    if not hard_code_alpha:
-      alpha_curr = F.softmax(alpha_curr)
-
-    question_rep = torch.sum( alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
-    # B x C x H x W  
-    lhs_rep = torch.sum(tau_0_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
-    # B x C x H x W
-    rhs_rep = torch.sum(tau_1_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
-    h_i = self.func(question_rep, lhs_rep, rhs_rep) # B x C x H x W
-
-    h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim = 1)
-
-  return h_prev[:, -1, :, :, :]
 
 class ConvFunc():
   def __init__(self, dim, kernel_size):
@@ -107,8 +82,8 @@ class SHNMN(nn.Module):
     if hard_code_tau:
       self.tau_0 = torch.zeros(num_modules, num_modules+1)
       self.tau_1 = torch.zeros(num_modules, num_modules+1)
-      self.tau_0[0][0] = self.tau_0[1][0] = self.tau_0[2][1] = 1
-      self.tau_1[2][2] = 1
+      self.tau_0[0][1] = self.tau_0[1][1] = self.tau_0[2][2] = 1
+      self.tau_1[2][3] = 1
        
       self.tau_0 = Variable(self.tau_0).cuda()
       self.tau_1 = Variable(self.tau_1).cuda()
@@ -116,8 +91,9 @@ class SHNMN(nn.Module):
     else:
       tau_0 = torch.zeros(num_modules, num_modules+1)
       tau_1 = torch.zeros(num_modules, num_modules+1)
-      tau_0[0][0] = tau_0[1][0] = tau_0[2][1] = 1e7
-      tau_1[2][2] = 1e7
+      tau_0[0][1] = tau_0[1][1] = tau_0[2][2] = 1e7
+      tau_1[0][0] = tau_1[1][0] = 1e7
+      tau_1[2][3] = 1e7
       self.tau_0   = nn.Parameter(tau_0) #weights for left  child
       self.tau_1   = nn.Parameter(tau_1) #weights for right child
       if use_tree_init:
@@ -159,12 +135,31 @@ class SHNMN(nn.Module):
 
     self.func = ConvFunc(module_dim, module_kernel_size)
   
-
-  
-
-  def forward_soft(self, image, question):
+  def forward(self, image, question):
     question = torch.cat([self.question_embeddings_1(question), self.question_embeddings_2(question)],dim=-1) 
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
-    h_out =  perform_op(stemmed_img, question, self.alpha, self.tau_0, self.tau_1, self.num_modules) 
+    sentinel    = torch.zeros_like(stemmed_img) # B x 1 x C x H x W
 
-    return self.classifier(h_out) 
+    h_prev = torch.cat([sentinel, stemmed_img], dim = 1) # B x 2 x C x H x W
+    for i in range(self.num_modules):
+      alpha_curr = self.alpha[i]
+      tau_0_curr = self.tau_0[i, :(i+2)]
+      tau_1_curr = self.tau_1[i, :(i+2)]
+
+      if not self.hard_code_tau:
+        tau_0_curr = F.softmax(tau_0_curr)
+        tau_1_curr = F.softmax(tau_1_curr) 
+      if not self.hard_code_alpha:
+        alpha_curr = F.softmax(alpha_curr)
+
+
+      question_rep = torch.sum( alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
+      # B x C x H x W  
+      lhs_rep = torch.sum(tau_0_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
+      # B x C x H x W
+      rhs_rep = torch.sum(tau_1_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
+      h_i = self.func(question_rep, lhs_rep, rhs_rep) # B x C x H x W
+
+      h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim = 1)
+
+    return self.classifier(h_prev[:, -1, :, :, :]) 

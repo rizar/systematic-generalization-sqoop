@@ -108,7 +108,9 @@ class SHNMN(nn.Module):
       stem_subsample_layers, stem_kernel_size, stem_padding, 
       stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', model_type ='soft', **kwargs):
+      num_modules, hard_code_alpha=False, hard_code_tau=False, 
+      init='random', model_type ='soft', model_bernoulli=0.5,**kwargs):
+
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
@@ -176,7 +178,7 @@ class SHNMN(nn.Module):
 
     self.func = ConvFunc(module_dim, module_kernel_size)
     self.model_type = model_type
-    self.model_bernoulli = nn.Parameter(torch.Tensor([0.5]))
+    self.model_bernoulli = nn.Parameter(torch.Tensor([model_bernoulli]))
 
   
   def forward_hard(self, image, question):

@@ -178,6 +178,7 @@ class SHNMN(nn.Module):
 
     self.func = ConvFunc(module_dim, module_kernel_size)
     self.model_type = model_type
+    self.model_bernoulli = nn.Parameter(torch.Tensor([0.5]))
 
   
   def forward_hard(self, image, question):
@@ -189,9 +190,9 @@ class SHNMN(nn.Module):
     tree_tau_0, tree_tau_1 = _tree_tau()
     h_final_tree  = _shnmn_func(question, stemmed_img, self.num_modules, self.alpha, Variable(tree_tau_0).cuda(), Variable(tree_tau_1).cuda(), self.func)
 
-    # TODO how to combine h_final_tree and h_final_chain?? 
-    # opt-1: concat them and run a projection CNN to reduce dimension to C and then pass thru classifier
-    # opt-2: learn a single p(model | \theta) and use h_final = p(model | \theta)*h_final_chain + (1 - p(model | \theta))*h_final_tree
+    h_final = self.model_bernoulli[0]*h_final_tree + (1.0 - self.model_bernoulli[0])*h_final_chain
+    return self.classifier(h_final)
+
 
   def forward_soft(self, image, question):
     question = torch.cat([self.question_embeddings_1(question), self.question_embeddings_2(question)],dim=-1) 

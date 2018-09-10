@@ -62,7 +62,7 @@ class SHNMN(nn.Module):
       stem_subsample_layers, stem_kernel_size, stem_padding, 
       stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, use_tree_init=False, **kwargs):
+      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', **kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
@@ -91,14 +91,25 @@ class SHNMN(nn.Module):
     else:
       tau_0 = torch.zeros(num_modules, num_modules+1)
       tau_1 = torch.zeros(num_modules, num_modules+1)
-      tau_0[0][1] = tau_0[1][1] = tau_0[2][2] = 1e7
-      tau_1[0][0] = tau_1[1][0] = 1e7
-      tau_1[2][3] = 1e7
-      self.tau_0   = nn.Parameter(tau_0) #weights for left  child
-      self.tau_1   = nn.Parameter(tau_1) #weights for right child
-      if use_tree_init:
-        print("initializing with correct tree.")
+      if init == 'tree':
+        tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
+        tau_0[1][1] = tau_1[1][0] = 1e7 #2st block - lhs inp img, rhs inp sentinel
+        tau_0[2][2] = tau_1[2][3] = 1e7 #3rd block - lhs inp 1st block, rhs inp 2nd block 
+
+        self.tau_0   = nn.Parameter(tau_0) #weights for left  child
+        self.tau_1   = nn.Parameter(tau_1) #weights for right child
+        print("initializing with tree.")
+      elif init == 'chain':
+        tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
+        tau_0[1][2] = tau_1[1][0] = 1e7 #2nd block - lhs inp 1st block, rhs inp sentinel
+        tau_0[2][3] = tau_1[2][0] = 1e7 #3rd block - lhs inp 2nd block, rhs inp sentinel 
+
+        self.tau_0   = nn.Parameter(tau_0) #weights for left  child
+        self.tau_1   = nn.Parameter(tau_1) #weights for right child
+        print("initializing with chain")
       else:
+        self.tau_0   = nn.Parameter(tau_0) #weights for left  child
+        self.tau_1   = nn.Parameter(tau_1) #weights for right child
         xavier_uniform(self.tau_0)
         xavier_uniform(self.tau_1)
 

@@ -191,7 +191,7 @@ parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 parser.add_argument('--hard_code_alpha', action="store_true")
 parser.add_argument('--init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
-parser.add_argument('--model_type', default='soft', type=str,
+parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
 parser.add_argument('--hard_code_tau', action="store_true")
 
@@ -1039,7 +1039,7 @@ def get_execution_engine(args):
         'hard_code_alpha' : args.hard_code_alpha,
         'hard_code_tau' : args.hard_code_tau,
         'init' : args.init,
-        'model_type' : args.model_type,
+        'model_type' : args.shnmn_type,
         'num_modules' : 3
       }
       ee = SHNMN(**kwargs)

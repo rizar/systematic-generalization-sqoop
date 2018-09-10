@@ -48,12 +48,10 @@ def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
   h_prev = torch.cat([sentinel, img], dim = 1) # B x 2 x C x H x W
 
   for i in range(num_modules):
-    alpha_curr = alpha[i]
+    alpha_curr = F.softmax(alpha[i])
     tau_0_curr = F.softmax(tau_0[i, :(i+2)])
     tau_1_curr = F.softmax(tau_1[i, :(i+2)])
 
-    if not hard_code_alpha:
-      alpha_curr = F.softmax(alpha_curr)
 
 
     question_rep = torch.sum( alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
@@ -119,9 +117,9 @@ class SHNMN(nn.Module):
 
     if hard_code_alpha:
       self.alpha = torch.zeros(num_modules, NUM_QUESTION_TOKENS)
-      self.alpha[0][4] = 1 # LHS
-      self.alpha[1][7] = 1 # RHS
-      self.alpha[2][5] = 1 # relation
+      self.alpha[0][4] = 1e7 # LHS
+      self.alpha[1][7] = 1e7 # RHS
+      self.alpha[2][5] = 1e7 # relation
       self.alpha = Variable(self.alpha).cuda()
     else:
       self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))

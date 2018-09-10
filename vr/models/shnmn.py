@@ -110,7 +110,7 @@ class SHNMN(nn.Module):
       stem_subsample_layers, stem_kernel_size, stem_padding, 
       stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', **kwargs):
+      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', model_type ='soft', **kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
@@ -177,6 +177,7 @@ class SHNMN(nn.Module):
               with_batchnorm=classifier_batchnorm) 
 
     self.func = ConvFunc(module_dim, module_kernel_size)
+    self.model_type = model_type
 
   
   def forward_hard(self, image, question):
@@ -200,4 +201,6 @@ class SHNMN(nn.Module):
 
     return self.classifier(h_final)
 
-
+  def forward(self, image, question):
+    if self.model_type == 'hard': return self.forward_hard(image, question)
+    else: return self.forward_soft(image, question)

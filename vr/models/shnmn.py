@@ -79,39 +79,33 @@ class SHNMN(nn.Module):
       self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
       xavier_uniform(self.alpha)
 
-    if hard_code_tau:
-      self.tau_0 = torch.zeros(num_modules, num_modules+1)
-      self.tau_1 = torch.zeros(num_modules, num_modules+1)
-      self.tau_0[0][1] = self.tau_0[1][1] = self.tau_0[2][2] = 1
-      self.tau_1[2][3] = 1
-       
-      self.tau_0 = Variable(self.tau_0).cuda()
-      self.tau_1 = Variable(self.tau_1).cuda()
 
+
+    tau_0 = torch.zeros(num_modules, num_modules+1)
+    tau_1 = torch.zeros(num_modules, num_modules+1)
+    if init == 'tree':
+      tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
+      tau_0[1][1] = tau_1[1][0] = 1e7 #2st block - lhs inp img, rhs inp sentinel
+      tau_0[2][2] = tau_1[2][3] = 1e7 #3rd block - lhs inp 1st block, rhs inp 2nd block 
+
+      print("initializing with tree.")
+    elif init == 'chain':
+      tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
+      tau_0[1][2] = tau_1[1][0] = 1e7 #2nd block - lhs inp 1st block, rhs inp sentinel
+      tau_0[2][3] = tau_1[2][0] = 1e7 #3rd block - lhs inp 2nd block, rhs inp sentinel 
+
+      print("initializing with chain")
     else:
-      tau_0 = torch.zeros(num_modules, num_modules+1)
-      tau_1 = torch.zeros(num_modules, num_modules+1)
-      if init == 'tree':
-        tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
-        tau_0[1][1] = tau_1[1][0] = 1e7 #2st block - lhs inp img, rhs inp sentinel
-        tau_0[2][2] = tau_1[2][3] = 1e7 #3rd block - lhs inp 1st block, rhs inp 2nd block 
+      xavier_uniform(tau_0)
+      xavier_uniform(tau_1)
 
-        self.tau_0   = nn.Parameter(tau_0) #weights for left  child
-        self.tau_1   = nn.Parameter(tau_1) #weights for right child
-        print("initializing with tree.")
-      elif init == 'chain':
-        tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
-        tau_0[1][2] = tau_1[1][0] = 1e7 #2nd block - lhs inp 1st block, rhs inp sentinel
-        tau_0[2][3] = tau_1[2][0] = 1e7 #3rd block - lhs inp 2nd block, rhs inp sentinel 
-
-        self.tau_0   = nn.Parameter(tau_0) #weights for left  child
-        self.tau_1   = nn.Parameter(tau_1) #weights for right child
-        print("initializing with chain")
-      else:
-        self.tau_0   = nn.Parameter(tau_0) #weights for left  child
-        self.tau_1   = nn.Parameter(tau_1) #weights for right child
-        xavier_uniform(self.tau_0)
-        xavier_uniform(self.tau_1)
+    if hard_code_tau:
+      assert(init in ['chain', 'tree'])
+      self.tau_0 = Variable(tau_0).cuda()
+      self.tau_1 = Variable(tau_1).cuda()
+    else:
+      self.tau_0   = nn.Parameter(tau_0) 
+      self.tau_1   = nn.Parameter(tau_1) 
 
     embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)    
     embedding_dim_2 = module_dim + (2*module_dim*module_dim)
@@ -154,12 +148,9 @@ class SHNMN(nn.Module):
     h_prev = torch.cat([sentinel, stemmed_img], dim = 1) # B x 2 x C x H x W
     for i in range(self.num_modules):
       alpha_curr = self.alpha[i]
-      tau_0_curr = self.tau_0[i, :(i+2)]
-      tau_1_curr = self.tau_1[i, :(i+2)]
+      tau_0_curr = F.softmax(self.tau_0[i, :(i+2)])
+      tau_1_curr = F.softmax(self.tau_1[i, :(i+2)])
 
-      if not self.hard_code_tau:
-        tau_0_curr = F.softmax(tau_0_curr)
-        tau_1_curr = F.softmax(tau_1_curr) 
       if not self.hard_code_alpha:
         alpha_curr = F.softmax(alpha_curr)
 

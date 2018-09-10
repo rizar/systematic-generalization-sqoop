@@ -184,9 +184,13 @@ class SHNMN(nn.Module):
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
     chain_tau_0, chain_tau_1 = _chain_tau()
-    h_final_chain = _shnmn_func(question, stemmed_img, self.num_modules, self.alpha, Variable(chain_tau_0).cuda(), Variable(chain_tau_1).cuda(), self.func)
+    h_final_chain = _shnmn_func(question, stemmed_img, 
+                    self.num_modules, self.alpha, 
+                    Variable(chain_tau_0).cuda(), Variable(chain_tau_1).cuda(), self.func)
     tree_tau_0, tree_tau_1 = _tree_tau()
-    h_final_tree  = _shnmn_func(question, stemmed_img, self.num_modules, self.alpha, Variable(tree_tau_0).cuda(), Variable(tree_tau_1).cuda(), self.func)
+    h_final_tree  = _shnmn_func(question, stemmed_img, 
+                    self.num_modules, self.alpha, 
+                    Variable(tree_tau_0).cuda(), Variable(tree_tau_1).cuda(), self.func)
 
     h_final = self.model_bernoulli[0]*h_final_tree + (1.0 - self.model_bernoulli[0])*h_final_chain
     return self.classifier(h_final)

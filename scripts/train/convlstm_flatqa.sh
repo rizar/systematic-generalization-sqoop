@@ -3,7 +3,7 @@
 python $NMN/scripts/train_model.py \
   --model_type ConvLSTM \
   --feature_dim 3,64,64 \
-  --num_iterations 50000 \
+  --num_iterations 100000 \
   --num_val_samples 1000 \
   --checkpoint_every 100 \
   --record_loss_every 10 \
@@ -19,6 +19,8 @@ python $NMN/scripts/train_model.py \
   --rnn_hidden_dim 300 \
   --classifier_fc_dims 1024 \
   --classifier_downsample none \
+  --loader_num_workers 0 \
+  --load_features \
   $@
   #--weight_decay 1e-5 \
   #--classifier_batchnorm 1 \

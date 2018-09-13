@@ -29,17 +29,17 @@ def _random_tau(num_modules):
 def _chain_tau():
   tau_0 = torch.zeros(3, 4)
   tau_1 = torch.zeros(3, 4)
-  tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
-  tau_0[1][2] = tau_1[1][0] = 1e7 #2nd block - lhs inp 1st block, rhs inp sentinel
-  tau_0[2][3] = tau_1[2][0] = 1e7 #3rd block - lhs inp 2nd block, rhs inp sentinel 
+  tau_0[0][1] = tau_1[0][0] = 10 #1st block - lhs inp img, rhs inp sentinel
+  tau_0[1][2] = tau_1[1][0] = 10 #2nd block - lhs inp 1st block, rhs inp sentinel
+  tau_0[2][3] = tau_1[2][0] = 10 #3rd block - lhs inp 2nd block, rhs inp sentinel 
   return tau_0, tau_1
 
 def _tree_tau():
   tau_0 = torch.zeros(3, 4)
   tau_1 = torch.zeros(3, 4)
-  tau_0[0][1] = tau_1[0][0] = 1e7 #1st block - lhs inp img, rhs inp sentinel
-  tau_0[1][1] = tau_1[1][0] = 1e7 #2st block - lhs inp img, rhs inp sentinel
-  tau_0[2][2] = tau_1[2][3] = 1e7 #3rd block - lhs inp 1st block, rhs inp 2nd block 
+  tau_0[0][1] = tau_1[0][0] = 10 #1st block - lhs inp img, rhs inp sentinel
+  tau_0[1][1] = tau_1[1][0] = 10 #2st block - lhs inp img, rhs inp sentinel
+  tau_0[2][2] = tau_1[2][3] = 10 #3rd block - lhs inp 1st block, rhs inp 2nd block 
   return tau_0, tau_1
 
 
@@ -108,9 +108,7 @@ class SHNMN(nn.Module):
       stem_subsample_layers, stem_kernel_size, stem_padding, 
       stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, 
-      init='random', model_type ='soft', model_bernoulli=0.5,**kwargs):
-
+      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', model_type ='soft', model_bernoulli=0.5,**kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
@@ -194,8 +192,10 @@ class SHNMN(nn.Module):
                     self.num_modules, self.alpha, 
                     Variable(tree_tau_0).cuda(), Variable(tree_tau_1).cuda(), self.func)
 
-    h_final = self.model_bernoulli[0]*h_final_tree + (1.0 - self.model_bernoulli[0])*h_final_chain
-    return self.classifier(h_final)
+    prob = F.sigmoid(self.model_bernoulli[0])
+    logits_tree  = self.classifier(h_final_tree)
+    logits_chain = self.classifier(h_final_chain)
+    return prob*logits_tree + (1.0 - prob)*logits_chain
 
 
   def forward_soft(self, image, question):
@@ -203,7 +203,6 @@ class SHNMN(nn.Module):
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
     h_final = _shnmn_func(question, stemmed_img, self.num_modules, self.alpha, self.tau_0, self.tau_1, self.func)
-
     return self.classifier(h_final)
 
   def forward(self, image, question):

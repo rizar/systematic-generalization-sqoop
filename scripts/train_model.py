@@ -456,7 +456,17 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if execution_engine:
-    ee_optimizer = optim_method(execution_engine.parameters(),
+    # separate learning rate for p(model) for the stochastic tree NMN
+    base_parameters = [] 
+    sigmoid_parameters = []
+    for name, param in execution_engine.named_parameters():
+      if not param.requires_grad: continue
+      if name.startswith('model_bernoulli'):
+        sigmoid_parameters.append(param)
+      else:
+        base_parameters.append(param)
+
+    ee_optimizer = optim_method([ {'params' : sigmoid_parameters, 'lr' : 1e-3} , {'params' : base_parameters} ],
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if baseline_model:

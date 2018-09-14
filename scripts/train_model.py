@@ -194,7 +194,7 @@ parser.add_argument('--init', default='random', type=str,
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
 parser.add_argument('--hard_code_tau', action="store_true")
-parser.add_argument('--model_bernoulli', default=0.5, type=float)
+parser.add_argument('--model_bernoulli', default=0.0, type=float)
 
 #RelationNet options
 parser.add_argument('--module_stem_feature_dim', default=24, type=int)

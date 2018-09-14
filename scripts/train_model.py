@@ -88,7 +88,7 @@ parser.add_argument('--model_type', default='PG',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
            'Hetero', 'MAC', 'TMAC',
-           'SimpleNMN', 'RelNet'])
+           'SimpleNMN', 'RelNet', 'SHNMN'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -186,6 +186,15 @@ parser.add_argument('--tmac_sharing_params_patterns', default=[0,1,1,1], type=pa
 parser.add_argument('--nmnfilm2_sharing_params_patterns', default=[0,0], type=parse_int_list)
 parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
+
+#SHNMN options
+parser.add_argument('--hard_code_alpha', action="store_true")
+parser.add_argument('--init', default='random', type=str,
+        choices=['random', 'tree', 'chain'])
+parser.add_argument('--shnmn_type', default='soft', type=str,
+        choices=['hard', 'soft'])
+parser.add_argument('--hard_code_tau', action="store_true")
+parser.add_argument('--model_bernoulli', default=0.0, type=float)
 
 #RelationNet options
 parser.add_argument('--module_stem_feature_dim', default=24, type=int)
@@ -413,7 +422,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'RelNet']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'SHNMN', 'RelNet']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -447,7 +456,17 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if execution_engine:
-    ee_optimizer = optim_method(execution_engine.parameters(),
+    # separate learning rate for p(model) for the stochastic tree NMN
+    base_parameters = [] 
+    sigmoid_parameters = []
+    for name, param in execution_engine.named_parameters():
+      if not param.requires_grad: continue
+      if name.startswith('model_bernoulli'):
+        sigmoid_parameters.append(param)
+      else:
+        base_parameters.append(param)
+
+    ee_optimizer = optim_method([ {'params' : sigmoid_parameters, 'lr' : 1e-3} , {'params' : base_parameters} ],
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if baseline_model:
@@ -644,7 +663,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.grad_clip > 0:
             torch.nn.utils.clip_grad_norm(execution_engine.parameters(), args.grad_clip)
           ee_optimizer.step()
-      elif args.model_type in ['SimpleNMN']:
+      elif args.model_type in ['SimpleNMN', 'SHNMN']:
         # Train execution engine with ground-truth programs
         ee_optimizer.zero_grad()
         scores = execution_engine(feats_var, questions_var)
@@ -1011,6 +1030,32 @@ def get_execution_engine(args):
         kwargs['forward_func'] = args.nmn_type
         ee = SimpleModuleNet(**kwargs)
 
+    elif args.model_type == 'SHNMN':
+      kwargs = {
+        'vocab' : vocab,
+        'feature_dim' : args.feature_dim, 
+        'stem_dim' : args.stem_dim,
+        'module_dim': args.module_dim,
+        'module_kernel_size' : args.module_kernel_size,
+        'stem_subsample_layers': args.module_stem_subsample_layers,
+        'stem_num_layers': args.module_stem_num_layers,
+        'stem_kernel_size': args.module_stem_kernel_size,
+        'stem_padding': args.module_stem_padding,
+        'stem_batchnorm': args.module_stem_batchnorm == 1,
+        'classifier_fc_layers': args.classifier_fc_dims,
+        'classifier_proj_dim': args.classifier_proj_dim,
+        'classifier_downsample': args.classifier_downsample,
+        'classifier_batchnorm': args.classifier_batchnorm == 1,
+        'classifier_dropout' : args.classifier_dropout,
+        'hard_code_alpha' : args.hard_code_alpha,
+        'hard_code_tau' : args.hard_code_tau,
+        'init' : args.init,
+        'model_type' : args.shnmn_type,
+        'model_bernoulli' : args.model_bernoulli,
+        'num_modules' : 3
+      }
+      ee = SHNMN(**kwargs)
+
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
@@ -1143,7 +1188,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
       scores = execution_engine(feats_var, question_rep)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
       scores = baseline_model(questions_var, feats_var)
-    elif args.model_type in ['SimpleNMN']:
+    elif args.model_type in ['SimpleNMN', 'SHNMN']:
       scores = execution_engine(feats_var, questions_var)
     else:
       raise NotImplementedError('model ', args.model_type, ' check_accuracy not implemented')

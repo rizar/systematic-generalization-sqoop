@@ -239,6 +239,12 @@ parser.add_argument('--checkpoint_every', default=10000, type=int)
 parser.add_argument('--time', default=0, type=int)
 
 
+def pretty_print(dat, dat_grad):
+  for i, (dat_i, dat_i_grad) in enumerate(zip(dat, dat_grad)):
+    print('data_%d: %s' % (i , " ".join(['{:.3f}'.format(float(x)) for x in dat_i ])) )
+    print('grad_%d: %s' % (i , " ".join(['{:.3f}'.format(float(x)) for x in dat_i_grad]) ) )
+
+
 def main(args):
   nmn_iwp_code = list(vr.__path__)[0]
   try:
@@ -407,7 +413,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   stats = {
     'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
-    'train_accs': [], 'val_accs': [], 'val_accs_ts': [],
+    'train_accs': [], 'val_accs': [], 'val_accs_ts': [], 'alphas' : [], 'grads' : [],
     'best_val_acc': -1, 'model_t': 0, 'model_epoch': 0
   }
   if valB_loader:
@@ -458,15 +464,16 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
   if execution_engine:
     # separate learning rate for p(model) for the stochastic tree NMN
     base_parameters = [] 
-    sigmoid_parameters = []
+    sensitive_parameters = []
     for name, param in execution_engine.named_parameters():
       if not param.requires_grad: continue
-      if name.startswith('model_bernoulli'):
-        sigmoid_parameters.append(param)
+      print(name)
+      if name.startswith('model_bernoulli') or name.startswith('alpha'):
+        sensitive_parameters.append(param)
       else:
         base_parameters.append(param)
-
-    ee_optimizer = optim_method([ {'params' : sigmoid_parameters, 'lr' : 1e-3} , {'params' : base_parameters} ],
+    print("SENSITIVE PARAMS ARE: ", sensitive_parameters)
+    ee_optimizer = optim_method([ {'params' : sensitive_parameters, 'lr' : 3e-3} , {'params' : base_parameters} ],
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if baseline_model:
@@ -669,6 +676,17 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         scores = execution_engine(feats_var, questions_var)
         loss = loss_fn(scores, answers_var)
         loss.backward()
+        # record alphas and gradients here : DEBUGGING
+        if args.model_type == 'SHNMN' and not args.hard_code_alpha:
+          alphas = [ execution_engine.alpha[i] if execution_engine.hard_code_alpha 
+                        else F.softmax(execution_engine.alpha[i]) for i in range(3)] 
+          alphas = [t.data.cpu().numpy() for t in alphas]
+          alphas_grad = execution_engine.alpha.grad.data.cpu().numpy()
+          if t % 500 == 0:
+            pretty_print(alphas, alphas_grad)
+            #stats['alphas'].append(alphas)
+            #stats['grads'].append(alphas_grad)    
+
         ee_optimizer.step()
       elif args.model_type == 'RelNet':
         programs_pred = program_generator(questions_var)
@@ -715,6 +733,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         print('train accuracy is', train_acc)
         print('Checking validation accuracy ...')
         start = time.time()
+
+
         val_acc = check_accuracy(args, program_generator, execution_engine,
                                  baseline_model, val_loader)
         val_pass_time = (time.time() - start)

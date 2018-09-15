@@ -63,8 +63,7 @@ def main(args):
   #  'feature_h5': args.input_features_h5,
   #  'batch_size': 32,
   #  }
-
-  all_checkpoints = ["%s/246050.pt" %args.model_path]  #glob.glob('%s/*.pt' %args.model_path)
+  all_checkpoints = ["%s/246121.pt" %args.model_path]  #glob.glob('%s/*.pt' %args.model_path)
   print(all_checkpoints)
 
   for i, checkpoint in enumerate(all_checkpoints):
@@ -72,7 +71,7 @@ def main(args):
     model, _ = utils.load_execution_engine(checkpoint, False, 'SHNMN') 
     #loader_kwargs['vocab'] = utils.load_cpu(checkpoint)['vocab']
     #with ClevrDataLoader(**loader_kwargs) as loader:
-    #  run_batch(args, model, dtype, loader)
+    #run_batch(args, model, dtype, loader)
     for name, param in model.named_parameters():
       if param.requires_grad:
         print(name)

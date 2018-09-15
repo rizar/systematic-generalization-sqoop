@@ -97,8 +97,8 @@ class ConvFunc():
 
       cnn_inp = F.conv2d(torch.cat( [lhs_rep[[i]], rhs_rep[[i]]], 1), proj_weight_curr, 
                                   bias = proj_bias_curr, padding = 0) 
-      cnn_out_total.append(F.conv2d(cnn_inp , cnn_weight_curr, bias = cnn_bias_curr, 
-                                                        padding = self.kernel_size // 2))
+      cnn_out_total.append(F.relu(F.conv2d(cnn_inp , cnn_weight_curr, bias = cnn_bias_curr, 
+                                                        padding = self.kernel_size // 2)))
 
     return torch.cat(cnn_out_total)
 

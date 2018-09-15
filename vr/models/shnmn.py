@@ -120,7 +120,9 @@ class SHNMN(nn.Module):
       self.alpha[0][4] = 1e7 # LHS
       self.alpha[1][7] = 1e7 # RHS
       self.alpha[2][5] = 1e7 # relation
-      self.alpha = Variable(self.alpha).cuda()
+      self.alpha = Variable(self.alpha)
+      if torch.cuda.is_available():
+        self.alpha = self.alpha.cuda()
     else:
       self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
       xavier_uniform(self.alpha)
@@ -137,8 +139,11 @@ class SHNMN(nn.Module):
 
     if hard_code_tau:
       assert(init in ['chain', 'tree'])
-      self.tau_0 = Variable(tau_0).cuda()
-      self.tau_1 = Variable(tau_1).cuda()
+      self.tau_0 = Variable(tau_0)
+      self.tau_1 = Variable(tau_1)
+      if torch.cuda.is_available():
+          self.tau_0 = self.tau_0.cuda()
+          self.tau_1 = self.tau_1.cuda()
     else:
       self.tau_0   = nn.Parameter(tau_0) 
       self.tau_1   = nn.Parameter(tau_1) 
@@ -184,13 +189,19 @@ class SHNMN(nn.Module):
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
     chain_tau_0, chain_tau_1 = _chain_tau()
+    if torch.cuda.is_available():
+        chain_tau_0 = chain_tau_0.cuda()
+        chain_tau_1 = chain_tau_1.cuda()
     h_final_chain = _shnmn_func(question, stemmed_img, 
                     self.num_modules, self.alpha, 
-                    Variable(chain_tau_0).cuda(), Variable(chain_tau_1).cuda(), self.func)
+                    Variable(chain_tau_0), Variable(chain_tau_1), self.func)
     tree_tau_0, tree_tau_1 = _tree_tau()
+    if torch.cuda.is_available():
+        tree_tau_0 = tree_tau_0.cuda()
+        tree_tau_1 = tree_tau_1.cuda()
     h_final_tree  = _shnmn_func(question, stemmed_img, 
                     self.num_modules, self.alpha, 
-                    Variable(tree_tau_0).cuda(), Variable(tree_tau_1).cuda(), self.func)
+                    Variable(tree_tau_0), Variable(tree_tau_1), self.func)
 
     prob = F.sigmoid(self.model_bernoulli[0])
     logits_tree  = self.classifier(h_final_tree)

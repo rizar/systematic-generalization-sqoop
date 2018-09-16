@@ -90,7 +90,7 @@ class RTFiLMedNet(nn.Module):
     self.num_extra_channels = 2 if self.use_coords_freq > 0 else 0
     if self.debug_every <= -1:
       self.print_verbose_every = 1
-      
+
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(
       stem_feature_dim, module_dim,
@@ -100,7 +100,7 @@ class RTFiLMedNet(nn.Module):
     tmp = self.stem(Variable(torch.zeros([1, feature_dim[0], feature_dim[1], feature_dim[2]])))
     module_H = tmp.size(2)
     module_W = tmp.size(3)
-    
+
     self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = coord_map((module_H, module_W))
     self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)

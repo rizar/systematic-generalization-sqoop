@@ -18,17 +18,17 @@ class SimpleEncoderBinary(nn.Module):
   '''
 
   def __init__(self, vocab, embedding_dim_in, hidden_dim, embedding_dim_out):
-    super(SimpleEncoder, self).__init__() 
+    super(SimpleEncoder, self).__init__()
     self.encoder = nn.Embedding(vocab, embedding_dim_in)
- 
+
     self.feed_forward_1 = nn.Linear(3*embedding_dim_in, hidden_dim)
     self.feed_forward_2 = nn.Linear(hidden_dim, embedding_dim_out)
 
     self.tanh = nn.Tanh()
 
-  def forward(self, x): 
+  def forward(self, x):
     s1_embed = self.encoder(x[:, 4]) # B x D
-    s2_embed = self.encoder(x[:, 6]) # B x D 
+    s2_embed = self.encoder(x[:, 6]) # B x D
     relation_embed = self.encoder(x[:, 5]) # B x D
 
     return self.feed_forward_2(self.tanh(self.feed_forward_1(torch.cat([s1_embed, s2_embed, relation_embed], dim = -1))))

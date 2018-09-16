@@ -463,7 +463,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                 weight_decay=args.weight_decay)
   if execution_engine:
     # separate learning rate for p(model) for the stochastic tree NMN
-    base_parameters = [] 
+    base_parameters = []
     sensitive_parameters = []
     for name, param in execution_engine.named_parameters():
       if not param.requires_grad: continue
@@ -678,14 +678,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         # record alphas and gradients here : DEBUGGING
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
-          alphas = [ execution_engine.alpha[i] if execution_engine.hard_code_alpha 
-                        else F.softmax(execution_engine.alpha[i]) for i in range(3)] 
+          alphas = [ execution_engine.alpha[i] if execution_engine.hard_code_alpha
+                        else F.softmax(execution_engine.alpha[i]) for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]
           alphas_grad = execution_engine.alpha.grad.data.cpu().numpy()
           if t % 500 == 0:
             pretty_print(alphas, alphas_grad)
-            #stats['alphas'].append(alphas)
-            #stats['grads'].append(alphas_grad)    
 
         ee_optimizer.step()
       elif args.model_type == 'RelNet':
@@ -1053,7 +1051,7 @@ def get_execution_engine(args):
     elif args.model_type == 'SHNMN':
       kwargs = {
         'vocab' : vocab,
-        'feature_dim' : args.feature_dim, 
+        'feature_dim' : args.feature_dim,
         'stem_dim' : args.stem_dim,
         'module_dim': args.module_dim,
         'module_kernel_size' : args.module_kernel_size,

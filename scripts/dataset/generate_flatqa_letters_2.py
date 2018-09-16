@@ -131,13 +131,13 @@ def get_random_spot(rng, objects, rel = None,  rel_holds = False, rel_obj = 0):
       max_center_x = objects[rel_obj].pos[0] if rel == 'left_of' else max_center
       min_center_x = objects[rel_obj].pos[0] if rel == 'right_of' else min_center
       max_center_y = objects[rel_obj].pos[1] if rel == 'below' else max_center
-      min_center_y = objects[rel_obj].pos[1] if rel == 'above' else min_center 
+      min_center_y = objects[rel_obj].pos[1] if rel == 'above' else min_center
     else:
       # want the relation to be true
       min_center_x = objects[rel_obj].pos[0] if rel == 'left_of' else min_center
       max_center_x = objects[rel_obj].pos[0] if rel == 'right_of' else max_center
       min_center_y = objects[rel_obj].pos[1] if rel == 'below' else min_center
-      max_center_y = objects[rel_obj].pos[1] if rel == 'above' else max_center 
+      max_center_y = objects[rel_obj].pos[1] if rel == 'above' else max_center
 
     if min_center_x >= max_center_x: return None
     if min_center_y >= max_center_y: return None
@@ -208,7 +208,7 @@ class Sampler:
     while True:
       rand_object = self._rng.choice(self.objects)
       if rand_object not in restricted:
-        return rand_object 
+        return rand_object
 
   def sample_relation(self, *args, **kwargs):
     return self._choose(RELATIONS)
@@ -236,7 +236,7 @@ class _LongTailSampler(Sampler):
     while True:
       rand_object = self._rng.choice(self.objects, p = shape_probs)
       if rand_object not in restricted:
-        return rand_object 
+        return rand_object
 
 
 
@@ -254,7 +254,7 @@ def flatQA_gen(vocab):
 
   train_pairs = []
   dev_pairs   = []
-  test_pairs  = []  
+  test_pairs  = []
 
   chosen = set([ (x,y) for x in vocab for y in vocab if x != y] )
   for i, x in enumerate(vocab):
@@ -262,20 +262,20 @@ def flatQA_gen(vocab):
     for y in ys:
       chosen.remove((x,y))
       train_pairs += [(x,y)]*args.num_repeats
-  
+
   random.shuffle(train_pairs)
 
   left = list(chosen)
   print('number of zero shot pairs: %d' %len(left))
   # dev / test pairs are all unseen
   dev_slice = len(left) // 2
- 
+
 
   for pair in left[ : dev_slice] :
     dev_pairs  += [pair]*args.num_repeats_eval
 
   for pair in left[ dev_slice : ] :
-    test_pairs += [pair]*args.num_repeats_eval 
+    test_pairs += [pair]*args.num_repeats_eval
 
 
   # generate data vocabulary
@@ -338,7 +338,7 @@ def flatQA_gen(vocab):
 
 
 
- 
+
 def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vocab):
   num_examples = len(obj_pairs)
   max_question_len = 8
@@ -362,7 +362,7 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
 
     i = 0
     rejection_sampling = {'a' : 0, 'b' : 0, 'c' : 0, 'd' : 0, 'e' : 0, 'f' : 0}
-  
+
     # different seeds for train/dev/test
     rng = numpy.random.RandomState(seed)
     before = time.time()
@@ -376,18 +376,18 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
         image = draw_scene(scene)
         image.save(buffer_, format='png')
         buffer_.seek(0)
-        features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8') 
-        questions_dataset[i]  = [question_vocab[w] for w in question] 
-        programs_dataset[i]   = [program_vocab[w] for w in program] 
-        answers_dataset[i]    = int( (i%2) == 0) 
+        features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8')
+        questions_dataset[i]  = [question_vocab[w] for w in question]
+        programs_dataset[i]   = [program_vocab[w] for w in program]
+        answers_dataset[i]    = int( (i%2) == 0)
         image_idxs_dataset[i] = i
-          
+
         i += 1
         if i % 1000 == 0:
           time_data = "{} seconds per example".format((time.time() - before) / i )
           print(time_data)
         print("\r>> Done with %d/%d examples : %s " %(i+1, len(obj_pairs),  rejection_sampling), end = '')
-        sys.stdout.flush() 
+        sys.stdout.flush()
 
   print("{} seconds per example".format((time.time() - before) / len(obj_pairs) ))
 
@@ -396,7 +396,7 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
 
 
 def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
-  # x rel y has value label where pair == (x, y) 
+  # x rel y has value label where pair == (x, y)
 
   max_question_len = 8
   if args.program == 'best':
@@ -425,7 +425,7 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
     if not obj2 or obj1.relate(rel, obj2): return None, None, None, False, 'b'
     obj1.shape = x
     obj2.shape = y
-   
+
 
     scene = generate_scene(rng, sampler, objects = [obj1, obj2], restrict = True, relation=rel)
     # choose x,y,x', y' st. x r' y, x r y', x' r y holds true
@@ -440,7 +440,7 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
   color2 = "green"
   shape1 = x
   shape2 = y
-  question = ["is", "there", "a", color1 , x, rel, color2, y] 
+  question = ["is", "there", "a", color1 , x, rel, color2, y]
   if args.program == 'best':
     program = ["<START>", relation_module(rel),
          "And", shape_module(shape1), "scene", color_module(color1), "scene",
@@ -491,9 +491,9 @@ def main():
 
     eval_sampler = sampler_class(True, 4, vocab)
 
-    question_file = h5py.File('train_questions.h5', 'r') 
+    question_file = h5py.File('train_questions.h5', 'r')
     questions = question_file['questions']
-    vocab_file = open('vocab.json'); vocab_obj = json.load(vocab_file); 
+    vocab_file = open('vocab.json'); vocab_obj = json.load(vocab_file);
 
     question_vocab = vocab_obj['question_token_to_idx']
     program_vocab  = vocab_obj['program_token_to_idx']
@@ -504,7 +504,7 @@ def main():
     for question in questions:
       x,y = (inverse_vocab[question[4] ], inverse_vocab[question[7] ])
       seen_pairs.append( (x,y) )
-    
+
     seen_pairs_uniq = list(set(seen_pairs))
     seen_pairs = []
     for seen_pair in seen_pairs_uniq:
@@ -529,8 +529,8 @@ if __name__ == '__main__':
   parser.add_argument('--num_repeats', type=int, default=1000)
   parser.add_argument('--num_repeats_eval', type=int, default=10)
   parser.add_argument('--data_dir', type=str, default='/data/milatmp1/smurty')
-  
-  parser.add_argument('--mode', type=str, choices=['from_scratch', 'gen_easy'], default='from_scratch') 
+
+  parser.add_argument('--mode', type=str, choices=['from_scratch', 'gen_easy'], default='from_scratch')
 
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)
@@ -542,7 +542,7 @@ if __name__ == '__main__':
   data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
   if not os.path.exists(data_full_dir):
     os.makedirs(data_full_dir)
-  
+
   os.chdir(data_full_dir)
   with open('args.txt', 'w') as dst:
     print(args, file=dst)

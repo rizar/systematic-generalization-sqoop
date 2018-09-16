@@ -2,7 +2,7 @@
 class TreeGenerator:
   def __init__(self):
     pass
-    
+
   def gen(self, tree_type='complete_binary'):
     if tree_type.startswith('complete_binary'):
       depth = tree_type[len('complete_binary'):]
@@ -64,7 +64,7 @@ def completeBinaryTree(depth=3):
       gen(idepth+1)
       gen(idepth+1)
   gen(0)
-  return arities    
+  return arities
 
 def chainTree(depth=8):
   if depth == 0: return [0]

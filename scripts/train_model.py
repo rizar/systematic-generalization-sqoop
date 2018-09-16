@@ -681,7 +681,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         # record alphas and gradients here : DEBUGGING
-        if args.model_type == 'SHNMN' and not args.hard_code_alpha:
+        if args.model_type == 'SHNMN':
           alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]
           alphas_grad = execution_engine.alpha.grad.data.cpu().numpy()

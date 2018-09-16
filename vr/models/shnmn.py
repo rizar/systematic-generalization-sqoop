@@ -68,15 +68,16 @@ def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
 
 class FindModule(nn.Module):
   def __init__(self, dim, kernel_size):
+    super().__init__()
     self.dim = dim
     self.kernel_size = kernel_size
     self.conv_1 = nn.Conv2d(2*dim, dim, kernel_size=1, padding=0) 
     self.conv_2 = nn.Conv2d(dim, dim, kernel_size=kernel_size, padding = kernel_size // 2) 
 
-  def _(self, question_rep, lhs_rep, rhs_rep):
+  def forward(self, question_rep, lhs_rep, rhs_rep):
     out = F.relu(self.conv_1(torch.cat([lhs_rep, rhs_rep], 1))) # concat along depth
-    question_rep = question_rep.view(-1, dim, 1, 1)
-    return F.relu(self.conv2(out*question_rep))
+    question_rep = question_rep.view(-1, self.dim, 1, 1)
+    return F.relu(self.conv_2(out*question_rep))
 
 class ConvFunc():
   def __init__(self, dim, kernel_size):

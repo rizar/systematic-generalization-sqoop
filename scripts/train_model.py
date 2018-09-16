@@ -189,8 +189,10 @@ parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
 #SHNMN options
 parser.add_argument('--hard_code_alpha', action="store_true")
-parser.add_argument('--init', default='random', type=str,
+parser.add_argument('--tau_init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
+parser.add_argument('--alpha_init', default='random', type=str,
+        choices=['random', 'good'])
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
 parser.add_argument('--hard_code_tau', action="store_true")
@@ -465,8 +467,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     # separate learning rate for p(model) for the stochastic tree NMN
     base_parameters = []
     sensitive_parameters = []
+    print("PARAMETERS:")
     for name, param in execution_engine.named_parameters():
-      if not param.requires_grad: continue
+      if not param.requires_grad:
+        continue
       print(name)
       if name.startswith('model_bernoulli') or name.startswith('alpha'):
         sensitive_parameters.append(param)
@@ -677,12 +681,11 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         # record alphas and gradients here : DEBUGGING
-        if args.model_type == 'SHNMN' and not args.hard_code_alpha:
-          alphas = [ execution_engine.alpha[i] if execution_engine.hard_code_alpha
-                        else F.softmax(execution_engine.alpha[i]) for i in range(3)]
+        if args.model_type == 'SHNMN':
+          alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]
           alphas_grad = execution_engine.alpha.grad.data.cpu().numpy()
-          if t % 500 == 0:
+          if t % 10 == 0:
             pretty_print(alphas, alphas_grad)
 
         ee_optimizer.step()
@@ -1067,7 +1070,8 @@ def get_execution_engine(args):
         'classifier_dropout' : args.classifier_dropout,
         'hard_code_alpha' : args.hard_code_alpha,
         'hard_code_tau' : args.hard_code_tau,
-        'init' : args.init,
+        'tau_init' : args.tau_init,
+        'alpha_init' : args.alpha_init,
         'model_type' : args.shnmn_type,
         'model_bernoulli' : args.model_bernoulli,
         'num_modules' : 3

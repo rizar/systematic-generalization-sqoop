@@ -46,6 +46,20 @@ def _tree_tau():
   return tau_0, tau_1
 
 
+def _random_alpha(num_modules):
+  alpha = torch.Tensor(num_modules, NUM_QUESTION_TOKENS)
+  xavier_uniform(alpha)
+  return alpha
+
+
+def _good_alpha():
+  alpha = torch.zeros(3, NUM_QUESTION_TOKENS)
+  alpha[0][4] = 10 # LHS
+  alpha[1][7] = 10 # RHS
+  alpha[2][5] = 10 # relation
+  return alpha
+
+
 def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
   sentinel = torch.zeros_like(img) # B x 1 x C x H x W
   h_prev = torch.cat([sentinel, img], dim=1) # B x 2 x C x H x W
@@ -114,37 +128,39 @@ class SHNMN(nn.Module):
       stem_batchnorm, classifier_fc_layers,
       classifier_proj_dim, classifier_downsample,classifier_batchnorm,
       num_modules, hard_code_alpha=False, hard_code_tau=False,
-      init='random', model_type='soft', model_bernoulli=0.5,**kwargs):
+      tau_init='random', alpha_init='random',
+      model_type='soft', model_bernoulli=0.5,**kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
     self.hard_code_alpha = hard_code_alpha
     self.hard_code_tau = hard_code_tau
 
+    # create alphas
+    if alpha_init == 'random':
+      alpha = _random_alpha(num_modules)
+    else:
+      alpha = _good_alpha()
+
     if hard_code_alpha:
-      self.alpha = torch.zeros(num_modules, NUM_QUESTION_TOKENS)
-      self.alpha[0][4] = 1e7 # LHS
-      self.alpha[1][7] = 1e7 # RHS
-      self.alpha[2][5] = 1e7 # relation
-      self.alpha = Variable(self.alpha)
+      self.alpha = Variable(alpha)
       if torch.cuda.is_available():
         self.alpha = self.alpha.cuda()
     else:
-      self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
-      xavier_uniform(self.alpha)
+      self.alpha = nn.Parameter(alpha)
 
-
-    if init == 'tree':
+    # create taus
+    if tau_init == 'tree':
       tau_0, tau_1 = _tree_tau()
       print("initializing with tree.")
-    elif init == 'chain':
+    elif tau_init == 'chain':
       tau_0, tau_1 = _chain_tau()
       print("initializing with chain")
     else:
       tau_0, tau_1 = _random_tau(num_modules)
 
     if hard_code_tau:
-      assert(init in ['chain', 'tree'])
+      assert(tau_init in ['chain', 'tree'])
       self.tau_0 = Variable(tau_0)
       self.tau_1 = Variable(tau_1)
       if torch.cuda.is_available():

@@ -66,6 +66,18 @@ def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
   return h_prev[:, -1, :, :, :]
 
 
+class FindModule(nn.Module):
+  def __init__(self, dim, kernel_size):
+    self.dim = dim
+    self.kernel_size = kernel_size
+    self.conv_1 = nn.Conv2d(2*dim, dim, kernel_size=1, padding=0) 
+    self.conv_2 = nn.Conv2d(dim, dim, kernel_size=kernel_size, padding = kernel_size // 2) 
+
+  def _(self, question_rep, lhs_rep, rhs_rep):
+    out = F.relu(self.conv_1(torch.cat([lhs_rep, rhs_rep], 1))) # concat along depth
+    question_rep = question_rep.view(-1, dim, 1, 1)
+    return F.relu(self.conv2(out*question_rep))
+
 class ConvFunc():
   def __init__(self, dim, kernel_size):
     self.dim = dim
@@ -108,7 +120,7 @@ class SHNMN(nn.Module):
       stem_subsample_layers, stem_kernel_size, stem_padding, 
       stem_batchnorm, classifier_fc_layers, 
       classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', model_type ='soft', model_bernoulli=0.5,**kwargs):
+      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', model_type ='soft', model_bernoulli=0.5, use_module = 'conv', **kwargs):
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
@@ -148,17 +160,27 @@ class SHNMN(nn.Module):
       self.tau_0   = nn.Parameter(tau_0) 
       self.tau_1   = nn.Parameter(tau_1) 
 
-    embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)    
-    embedding_dim_2 = module_dim + (2*module_dim*module_dim)
+
+    if use_module == 'conv':
+      embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)    
+      embedding_dim_2 = module_dim + (2*module_dim*module_dim)
                 
-    self.question_embeddings_1 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_1) 
-    self.question_embeddings_2 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_2) 
+      question_embeddings_1 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_1) 
+      question_embeddings_2 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_2) 
 
-    stdv_1 = 1. / math.sqrt(module_dim*module_kernel_size*module_kernel_size)
-    stdv_2 = 1. / math.sqrt(2*module_dim)
+      stdv_1 = 1. / math.sqrt(module_dim*module_kernel_size*module_kernel_size)
+      stdv_2 = 1. / math.sqrt(2*module_dim)
 
-    self.question_embeddings_1.weight.data.uniform_(-stdv_1, stdv_1)
-    self.question_embeddings_2.weight.data.uniform_(-stdv_2, stdv_2)
+      question_embeddings_1.weight.data.uniform_(-stdv_1, stdv_1)
+      question_embeddings_2.weight.data.uniform_(-stdv_2, stdv_2)
+      self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), embedding_dim_1+embedding_dim_2)
+      self.question_embeddings.weight.data = torch.cat([question_embeddings_1.weight.data,
+                                                        question_embeddings_2.weight.data],dim=-1)
+    
+      self.func = ConvFunc(module_dim, module_kernel_size)
+    else:
+      self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), module_dim)
+      self.func = FindModule(module_dim, module_kernel_size)
 
 
     # stem for processing the image into a 3D tensor
@@ -179,13 +201,13 @@ class SHNMN(nn.Module):
               classifier_downsample,
               with_batchnorm=classifier_batchnorm) 
 
-    self.func = ConvFunc(module_dim, module_kernel_size)
     self.model_type = model_type
+    self.use_module = use_module
     self.model_bernoulli = nn.Parameter(torch.Tensor([model_bernoulli]))
 
   
   def forward_hard(self, image, question):
-    question = torch.cat([self.question_embeddings_1(question), self.question_embeddings_2(question)],dim=-1) 
+    question = self.question_embeddings(question)
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
     chain_tau_0, chain_tau_1 = _chain_tau()
@@ -210,7 +232,7 @@ class SHNMN(nn.Module):
 
 
   def forward_soft(self, image, question):
-    question = torch.cat([self.question_embeddings_1(question), self.question_embeddings_2(question)],dim=-1) 
+    question = self.question_embeddings(question)
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
     h_final = _shnmn_func(question, stemmed_img, self.num_modules, self.alpha, self.tau_0, self.tau_1, self.func)

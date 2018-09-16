@@ -194,6 +194,7 @@ parser.add_argument('--init', default='random', type=str,
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
 parser.add_argument('--hard_code_tau', action="store_true")
+parser.add_argument('--use_module', default='conv', type=str, choices=['conv','find'])
 parser.add_argument('--model_bernoulli', default=0.0, type=float)
 
 #RelationNet options
@@ -1072,7 +1073,8 @@ def get_execution_engine(args):
         'init' : args.init,
         'model_type' : args.shnmn_type,
         'model_bernoulli' : args.model_bernoulli,
-        'num_modules' : 3
+        'num_modules' : 3,
+        'use_module' : args.use_module
       }
       ee = SHNMN(**kwargs)
 

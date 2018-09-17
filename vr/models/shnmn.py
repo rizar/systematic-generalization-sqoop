@@ -240,5 +240,6 @@ class SHNMN(nn.Module):
     return self.classifier(h_final)
 
   def forward(self, image, question):
+    question = question[: [4,5,7]] # remove stop words....
     if self.model_type == 'hard': return self.forward_hard(image, question)
     else: return self.forward_soft(image, question)

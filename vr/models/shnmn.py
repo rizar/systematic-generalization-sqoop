@@ -17,7 +17,7 @@ from vr.models.tfilmed_net import ConcatFiLMedResBlock
 from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
-NUM_QUESTION_TOKENS=8
+NUM_QUESTION_TOKENS=3 # with stop words
 
 def _random_tau(num_modules):
   tau_0 = torch.zeros(num_modules, num_modules+1)
@@ -240,6 +240,6 @@ class SHNMN(nn.Module):
     return self.classifier(h_final)
 
   def forward(self, image, question):
-    question = question[: [4,5,7]] # remove stop words....
+    question = question[:, [4,5,7]] # remove stop words....
     if self.model_type == 'hard': return self.forward_hard(image, question)
     else: return self.forward_soft(image, question)

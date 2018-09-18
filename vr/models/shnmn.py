@@ -130,9 +130,9 @@ class SHNMN(nn.Module):
 
     if hard_code_alpha:
       self.alpha = torch.zeros(num_modules, NUM_QUESTION_TOKENS)
-      self.alpha[0][4] = 1e7 # LHS
-      self.alpha[1][7] = 1e7 # RHS
-      self.alpha[2][5] = 1e7 # relation
+      self.alpha[0][0] = 1e7 # LHS
+      self.alpha[1][1] = 1e7 # RHS
+      self.alpha[2][2] = 1e7 # relation
       self.alpha = Variable(self.alpha)
       if torch.cuda.is_available():
         self.alpha = self.alpha.cuda()

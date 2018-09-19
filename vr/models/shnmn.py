@@ -17,7 +17,6 @@ from vr.models.tfilmed_net import ConcatFiLMedResBlock
 from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
-NUM_QUESTION_TOKENS=3 # with stop words
 
 def _random_tau(num_modules):
   tau_0 = torch.zeros(num_modules, num_modules+1)
@@ -41,6 +40,18 @@ def _tree_tau():
   tau_0[1][1] = tau_1[1][0] = 10 #2st block - lhs inp img, rhs inp sentinel
   tau_0[2][2] = tau_1[2][3] = 10 #3rd block - lhs inp 1st block, rhs inp 2nd block 
   return tau_0, tau_1
+
+def correct_alpha_init(alpha, use_stopwords=True):
+  if use_stopwords:
+    alpha[0][4] = 10
+    alpha[1][7] = 10
+    alpha[2][5] = 10
+  else:
+    alpha[0][0] = 10
+    alpha[1][2] = 10
+    alpha[2][1] = 10
+
+  return alpha
 
 
 def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
@@ -115,31 +126,58 @@ class ConvFunc():
 
     return torch.cat(cnn_out_total)
 
+INITS = {'xavier_uniform' : xavier_uniform, 'constant' : constant, 'uniform' : uniform, 'correct' : correct_alpha_init}
 class SHNMN(nn.Module):
-  def __init__(self, vocab, feature_dim, module_dim, 
-      module_kernel_size, stem_dim, stem_num_layers, 
-      stem_subsample_layers, stem_kernel_size, stem_padding, 
-      stem_batchnorm, classifier_fc_layers, 
-      classifier_proj_dim, classifier_downsample,classifier_batchnorm, 
-      num_modules, hard_code_alpha=False, hard_code_tau=False, init='random', model_type ='soft', model_bernoulli=0.5, use_module = 'conv', **kwargs):
+  def __init__(self, 
+      vocab, 
+      feature_dim, 
+      module_dim, 
+      module_kernel_size, 
+      stem_dim, 
+      stem_num_layers, 
+      stem_subsample_layers, 
+      stem_kernel_size, 
+      stem_padding, 
+      stem_batchnorm, 
+      classifier_fc_layers, 
+      classifier_proj_dim, 
+      classifier_downsample,classifier_batchnorm, 
+      num_modules, 
+      hard_code_alpha=False, 
+      hard_code_tau=False, 
+      tau_init='random', 
+      alpha_init='xavier_uniform', 
+      model_type ='soft', 
+      model_bernoulli=0.5, 
+      use_module = 'conv', 
+      use_stopwords = True, 
+      **kwargs):
+
     super().__init__()
     self.num_modules = num_modules
     # alphas and taus from Overleaf Doc.
     self.hard_code_alpha = hard_code_alpha
     self.hard_code_tau = hard_code_tau
 
+    self.use_stopwords = use_stopwords
+    if self.use_stopwords:
+      num_question_tokens = 8
+    else:
+      num_question_tokens = 3
+
+    if alpha_init == 'correct':
+      alpha = INIT[alpha_init](torch.Tensor(num_modules, num_question_tokens), use_stopwords) 
+    else:
+      alpha = INIT[alpha_init](torch.Tensor(num_modules, num_question_tokens)) 
+    
+
     if hard_code_alpha:
-      self.alpha = torch.zeros(num_modules, NUM_QUESTION_TOKENS)
-      self.alpha[0][0] = 1e7 # LHS
-      self.alpha[1][2] = 1e7 # RHS
-      self.alpha[2][1] = 1e7 # relation
-      self.alpha = Variable(self.alpha)
+      assert(alpha_init == 'correct')
+      self.alpha = Variable(alpha)
       if torch.cuda.is_available():
         self.alpha = self.alpha.cuda()
     else:
-      self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
-      constant(self.alpha, 1)
-      #xavier_uniform(self.alpha)
+      self.alpha = nn.Parameter(alpha)
 
 
     if init == 'tree':
@@ -241,6 +279,7 @@ class SHNMN(nn.Module):
     return self.classifier(h_final)
 
   def forward(self, image, question):
-    question = question[:, [4,5,7]] # remove stop words....
+    if not self.use_stopwords:
+      question = question[:, [4,5,7]] # remove stop words....
     if self.model_type == 'hard': return self.forward_hard(image, question)
     else: return self.forward_soft(image, question)

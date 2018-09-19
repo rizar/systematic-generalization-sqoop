@@ -10,7 +10,7 @@ from vr.models.layers import init_modules, ResidualBlock, SimpleVisualBlock, Glo
 from vr.models.layers import build_classifier, build_stem, ConcatBlock
 import vr.programs
 
-from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
+from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant, uniform
 
 from vr.models.tfilmed_net import ConcatFiLMedResBlock
 
@@ -131,14 +131,15 @@ class SHNMN(nn.Module):
     if hard_code_alpha:
       self.alpha = torch.zeros(num_modules, NUM_QUESTION_TOKENS)
       self.alpha[0][0] = 1e7 # LHS
-      self.alpha[1][1] = 1e7 # RHS
-      self.alpha[2][2] = 1e7 # relation
+      self.alpha[1][2] = 1e7 # RHS
+      self.alpha[2][1] = 1e7 # relation
       self.alpha = Variable(self.alpha)
       if torch.cuda.is_available():
         self.alpha = self.alpha.cuda()
     else:
       self.alpha = nn.Parameter(torch.Tensor(num_modules, NUM_QUESTION_TOKENS))
-      xavier_uniform(self.alpha)
+      constant(self.alpha, 1)
+      #xavier_uniform(self.alpha)
 
 
     if init == 'tree':

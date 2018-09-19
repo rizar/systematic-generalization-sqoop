@@ -69,9 +69,9 @@ class ConcatBlock(nn.Module):
     super(ConcatBlock, self).__init__()
     self.proj = nn.Conv2d(2 * dim, dim, kernel_size=1, padding=0)
     if use_simple:
-        self.vis_block = SimpleVisualBlock(dim, kernel_size=kernel_size) 
+        self.vis_block = SimpleVisualBlock(dim, kernel_size=kernel_size)
     else:
-        self.vis_block = ResidualBlock(dim, kernel_size=kernel_size, 
+        self.vis_block = ResidualBlock(dim, kernel_size=kernel_size,
                 with_residual=with_residual,with_batchnorm=with_batchnorm)
 
   def forward(self, x, y):
@@ -110,7 +110,7 @@ def build_stem(feature_dim, stem_dim, module_dim, num_layers=2, with_batchnorm=T
     subsample_layers = []
 
   for i, cur_kernel_size, cur_stride, cur_padding in zip(range(num_layers), kernel_size, stride, padding):
-    curr_out = module_dim if (i == (num_layers-1) ) else stem_dim 
+    curr_out = module_dim if (i == (num_layers-1) ) else stem_dim
     if cur_padding is None:  # Calculate default padding when None provided
       if cur_kernel_size % 2 == 0 and not acceptEvenKernel:
         raise(NotImplementedError)

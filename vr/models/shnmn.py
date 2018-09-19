@@ -18,6 +18,7 @@ from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
 from functools import partial
 
 
+
 def _random_tau(num_modules):
   tau_0 = torch.zeros(num_modules, num_modules+1)
   tau_1 = torch.zeros(num_modules, num_modules+1)
@@ -25,20 +26,22 @@ def _random_tau(num_modules):
   xavier_uniform(tau_1)
   return tau_0, tau_1
 
+
 def _chain_tau():
   tau_0 = torch.zeros(3, 4)
   tau_1 = torch.zeros(3, 4)
   tau_0[0][1] = tau_1[0][0] = 10 #1st block - lhs inp img, rhs inp sentinel
   tau_0[1][2] = tau_1[1][0] = 10 #2nd block - lhs inp 1st block, rhs inp sentinel
-  tau_0[2][3] = tau_1[2][0] = 10 #3rd block - lhs inp 2nd block, rhs inp sentinel 
+  tau_0[2][3] = tau_1[2][0] = 10 #3rd block - lhs inp 2nd block, rhs inp sentinel
   return tau_0, tau_1
+
 
 def _tree_tau():
   tau_0 = torch.zeros(3, 4)
   tau_1 = torch.zeros(3, 4)
   tau_0[0][1] = tau_1[0][0] = 10 #1st block - lhs inp img, rhs inp sentinel
   tau_0[1][1] = tau_1[1][0] = 10 #2st block - lhs inp img, rhs inp sentinel
-  tau_0[2][2] = tau_1[2][3] = 10 #3rd block - lhs inp 1st block, rhs inp 2nd block 
+  tau_0[2][2] = tau_1[2][3] = 10 #3rd block - lhs inp 1st block, rhs inp 2nd block
   return tau_0, tau_1
 
 def correct_alpha_init(alpha, use_stopwords=True):
@@ -54,25 +57,37 @@ def correct_alpha_init(alpha, use_stopwords=True):
   return alpha
 
 
+def _random_alpha(num_modules):
+  alpha = torch.Tensor(num_modules, NUM_QUESTION_TOKENS)
+  xavier_uniform(alpha)
+  return alpha
+
+
+def _good_alpha():
+  alpha = torch.zeros(3, NUM_QUESTION_TOKENS)
+  alpha[0][4] = 10 # LHS
+  alpha[1][7] = 10 # RHS
+  alpha[2][5] = 10 # relation
+  return alpha
+
+
 def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
-  sentinel    = torch.zeros_like(img) # B x 1 x C x H x W
-  h_prev = torch.cat([sentinel, img], dim = 1) # B x 2 x C x H x W
+  sentinel = torch.zeros_like(img) # B x 1 x C x H x W
+  h_prev = torch.cat([sentinel, img], dim=1) # B x 2 x C x H x W
 
   for i in range(num_modules):
     alpha_curr = F.softmax(alpha[i])
     tau_0_curr = F.softmax(tau_0[i, :(i+2)])
     tau_1_curr = F.softmax(tau_1[i, :(i+2)])
 
-
-
-    question_rep = torch.sum( alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
-    # B x C x H x W  
-    lhs_rep = torch.sum(tau_0_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
+    question_rep = torch.sum(alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
     # B x C x H x W
-    rhs_rep = torch.sum(tau_1_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1) 
+    lhs_rep = torch.sum(tau_0_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1)
+    # B x C x H x W
+    rhs_rep = torch.sum(tau_1_curr.view(1, (i+2), 1, 1, 1)*h_prev, dim=1)
     h_i = func(question_rep, lhs_rep, rhs_rep) # B x C x H x W
 
-    h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim = 1)
+    h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim=1)
 
   return h_prev[:, -1, :, :, :]
 
@@ -100,16 +115,18 @@ class ConvFunc():
     cnn_bias_dim = self.dim
     proj_cnn_weight_dim = 2*self.dim*self.dim
     proj_cnn_bias_dim = self.dim
-    if question_rep.size(1) != proj_cnn_weight_dim + proj_cnn_bias_dim + cnn_weight_dim + cnn_bias_dim: 
+    if (question_rep.size(1) !=
+          proj_cnn_weight_dim + proj_cnn_bias_dim
+          + cnn_weight_dim + cnn_bias_dim):
       raise ValueError
 
     # pick out CNN and projection CNN weights/biases
     cnn_weight = question_rep[:, : cnn_weight_dim]
     cnn_bias = question_rep[:, cnn_weight_dim : cnn_weight_dim + cnn_bias_dim]
-    proj_weight = question_rep[:, cnn_weight_dim+cnn_bias_dim : 
+    proj_weight = question_rep[:, cnn_weight_dim+cnn_bias_dim :
                               cnn_weight_dim+cnn_bias_dim+proj_cnn_weight_dim]
     proj_bias   = question_rep[:, cnn_weight_dim+cnn_bias_dim+proj_cnn_weight_dim:]
-      
+
     cnn_out_total = []
     bs = question_rep.size(0)
 
@@ -119,10 +136,11 @@ class ConvFunc():
       proj_weight_curr = proj_weight[i].view(self.dim, 2*self.dim, 1, 1)
       proj_bias_curr = proj_bias[i]
 
-      cnn_inp = F.conv2d(torch.cat( [lhs_rep[[i]], rhs_rep[[i]]], 1), proj_weight_curr, 
-                                  bias = proj_bias_curr, padding = 0) 
-      cnn_out_total.append(F.relu(F.conv2d(cnn_inp , cnn_weight_curr, bias = cnn_bias_curr, 
-                                                        padding = self.kernel_size // 2)))
+      cnn_inp = F.conv2d(torch.cat([lhs_rep[[i]], rhs_rep[[i]]], 1),
+                         proj_weight_curr,
+                         bias=proj_bias_curr, padding=0)
+      cnn_out_total.append(F.relu(F.conv2d(
+        cnn_inp, cnn_weight_curr, bias=cnn_bias_curr, padding=self.kernel_size // 2)))
 
     return torch.cat(cnn_out_total)
 
@@ -173,6 +191,7 @@ class SHNMN(nn.Module):
 
     if hard_code_alpha:
       assert(alpha_init == 'correct')
+
       self.alpha = Variable(alpha)
       if torch.cuda.is_available():
         self.alpha = self.alpha.cuda()
@@ -180,25 +199,27 @@ class SHNMN(nn.Module):
       self.alpha = nn.Parameter(alpha)
 
 
-    if init == 'tree':
+    # create taus
+    if tau_init == 'tree':
       tau_0, tau_1 = _tree_tau()
       print("initializing with tree.")
-    elif init == 'chain':
+    elif tau_init == 'chain':
       tau_0, tau_1 = _chain_tau()
       print("initializing with chain")
     else:
       tau_0, tau_1 = _random_tau(num_modules)
 
     if hard_code_tau:
-      assert(init in ['chain', 'tree'])
+      assert(tau_init in ['chain', 'tree'])
       self.tau_0 = Variable(tau_0)
       self.tau_1 = Variable(tau_1)
       if torch.cuda.is_available():
           self.tau_0 = self.tau_0.cuda()
           self.tau_1 = self.tau_1.cuda()
     else:
-      self.tau_0   = nn.Parameter(tau_0) 
-      self.tau_1   = nn.Parameter(tau_1) 
+      self.tau_0   = nn.Parameter(tau_0)
+      self.tau_1   = nn.Parameter(tau_1)
+
 
 
     if use_module == 'conv':
@@ -239,13 +260,13 @@ class SHNMN(nn.Module):
               classifier_fc_layers,
               classifier_proj_dim,
               classifier_downsample,
-              with_batchnorm=classifier_batchnorm) 
+              with_batchnorm=classifier_batchnorm)
 
     self.model_type = model_type
     self.use_module = use_module
     self.model_bernoulli = nn.Parameter(torch.Tensor([model_bernoulli]))
 
-  
+
   def forward_hard(self, image, question):
     question = self.question_embeddings(question)
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
@@ -254,15 +275,15 @@ class SHNMN(nn.Module):
     if torch.cuda.is_available():
         chain_tau_0 = chain_tau_0.cuda()
         chain_tau_1 = chain_tau_1.cuda()
-    h_final_chain = _shnmn_func(question, stemmed_img, 
-                    self.num_modules, self.alpha, 
+    h_final_chain = _shnmn_func(question, stemmed_img,
+                    self.num_modules, self.alpha,
                     Variable(chain_tau_0), Variable(chain_tau_1), self.func)
     tree_tau_0, tree_tau_1 = _tree_tau()
     if torch.cuda.is_available():
         tree_tau_0 = tree_tau_0.cuda()
         tree_tau_1 = tree_tau_1.cuda()
-    h_final_tree  = _shnmn_func(question, stemmed_img, 
-                    self.num_modules, self.alpha, 
+    h_final_tree  = _shnmn_func(question, stemmed_img,
+                    self.num_modules, self.alpha,
                     Variable(tree_tau_0), Variable(tree_tau_1), self.func)
 
     prob = F.sigmoid(self.model_bernoulli[0])

@@ -59,14 +59,14 @@ def main(args):
   print(all_checkpoints)
 
   for i, checkpoint in enumerate(all_checkpoints):
-     
-    model, _ = utils.load_execution_engine(checkpoint, False, 'SHNMN') 
+
+    model, _ = utils.load_execution_engine(checkpoint, False, 'SHNMN')
     for name, param in model.named_parameters():
       if param.requires_grad:
         print(name)
 
-    f = open('f_%d.txt' %i, 'w')  
-    f.write('%s\n' %checkpoint) 
+    f = open('f_%d.txt' %i, 'w')
+    f.write('%s\n' %checkpoint)
     f.write('HARD_TAU | HARD_ALPHA \n')
     f.write('%s-%s\n'%(model.hard_code_tau, model.hard_code_alpha))
     f.write('TAUS\n')

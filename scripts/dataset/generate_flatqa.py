@@ -380,14 +380,14 @@ def generate_dataset(prefix, num_examples, seed, sampler, save_vocab=False):
           program = ["<START>",
                      shape_module(shape1), color_module(color1),
                      unary_relation_module(rel),
-                     shape_module(shape2), color_module(color2), 
+                     shape_module(shape2), color_module(color2),
                      "scene", "<END>"]
         elif args.program == 'chain_shortcut':
-          program = ["<START>", 
-                     binary_shape_module(shape1), 'scene', 
-                     binary_color_module(color1), 'scene', 
+          program = ["<START>",
+                     binary_shape_module(shape1), 'scene',
+                     binary_color_module(color1), 'scene',
                      unary_relation_module(rel),
-                     binary_shape_module(shape2), 'scene', 
+                     binary_shape_module(shape2), 'scene',
                      binary_color_module(color2), 'scene',
                      'scene', "<END>"]
 
@@ -606,7 +606,7 @@ class _HashQuestionSampler(Sampler):
                   self._both_answers.add(q)
 
   def check_whole_qa(self, shape1, color1, shape2, color2, rel, answer):
-    q = (shape1, color1, shape2, color2, rel) 
+    q = (shape1, color1, shape2, color2, rel)
     if q in self._both_answers:
       return True
     return self._test != ((q in self._force_yes) == bool(answer))

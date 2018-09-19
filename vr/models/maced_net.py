@@ -279,7 +279,7 @@ class MAC(nn.Module):
     return out
 
 class OutputUnit(nn.Module):
-  def __init__(self, module_dim, hidden_units, num_outputs, 
+  def __init__(self, module_dim, hidden_units, num_outputs,
                nonlinearity, with_batchnorm, dropout, question2output):
     super().__init__()
 

@@ -77,7 +77,7 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
       success_report = "{} out of {}".format(n_train_successes, n_seeds)
 
       # Print
-      to_print = ["{} ({} steps)".format(root, str(min_progress)), 
+      to_print = ["{} ({} steps)".format(root, str(min_progress)),
                   success_report, "({:.1f})".format(100 * train_values.iloc[-1])]
       if val_quantity:
         std = val_std.iloc[-1]

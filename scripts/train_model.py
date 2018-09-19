@@ -189,11 +189,15 @@ parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
 #SHNMN options
 parser.add_argument('--hard_code_alpha', action="store_true")
-parser.add_argument('--init', default='random', type=str,
+parser.add_argument('--hard_code_tau', action="store_true")
+parser.add_argument('--use_stopwords', action="store_true")
+parser.add_argument('--tau_init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
+parser.add_argument('--alpha_init', default='xavier_uniform', type=str,
+        choices=['xavier_uniform', 'constant', 'uniform', 'correct'])
+
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
-parser.add_argument('--hard_code_tau', action="store_true")
 parser.add_argument('--use_module', default='conv', type=str, choices=['conv','find'])
 parser.add_argument('--model_bernoulli', default=0.0, type=float)
 
@@ -1070,7 +1074,9 @@ def get_execution_engine(args):
         'classifier_dropout' : args.classifier_dropout,
         'hard_code_alpha' : args.hard_code_alpha,
         'hard_code_tau' : args.hard_code_tau,
-        'init' : args.init,
+        'use_stopwords' : args.use_stopwords,
+        'tau_init' : args.tau_init,
+        'alpha_init' : args.alpha_init,
         'model_type' : args.shnmn_type,
         'model_bernoulli' : args.model_bernoulli,
         'num_modules' : 3,

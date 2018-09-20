@@ -166,9 +166,11 @@ class SHNMN(nn.Module):
       num_question_tokens = 3
 
     if alpha_init == 'correct':
-      alpha = INIT[alpha_init](torch.Tensor(num_modules, num_question_tokens), use_stopwords) 
+      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), use_stopwords) 
+    elif alpha_init == 'constant':
+      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), 1) 
     else:
-      alpha = INIT[alpha_init](torch.Tensor(num_modules, num_question_tokens)) 
+      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens)) 
     
 
     if hard_code_alpha:
@@ -180,17 +182,17 @@ class SHNMN(nn.Module):
       self.alpha = nn.Parameter(alpha)
 
 
-    if init == 'tree':
+    if tau_init == 'tree':
       tau_0, tau_1 = _tree_tau()
       print("initializing with tree.")
-    elif init == 'chain':
+    elif tau_init == 'chain':
       tau_0, tau_1 = _chain_tau()
       print("initializing with chain")
     else:
       tau_0, tau_1 = _random_tau(num_modules)
 
     if hard_code_tau:
-      assert(init in ['chain', 'tree'])
+      assert(tau_init in ['chain', 'tree'])
       self.tau_0 = Variable(tau_0)
       self.tau_1 = Variable(tau_1)
       if torch.cuda.is_available():

@@ -65,7 +65,7 @@ def forward_chain(image_tensor, vocab, function_modules, item_list, film_params)
         module_name = vocab['program_idx_to_token'][int(input_[j])]
         mod = function_modules[module_name]
         h_next.append(mod(h_cur[[j]]))
-      
+
     h_cur = torch.cat(h_next)
 
   return h_cur
@@ -111,7 +111,7 @@ def forward_tree(image, question, stem, vocab, unary_function_modules, binary_fu
   if film_params is not None:
     gammas, betas, coords = film_params
 
-  for j in range(question.shape[0]): 
+  for j in range(question.shape[0]):
 
 
     lhs_color_idx = int(question[j, 3])
@@ -135,8 +135,8 @@ def forward_tree(image, question, stem, vocab, unary_function_modules, binary_fu
         lhs_color_out = unary_function_modules['film'](h_cur[[j]], gammas[:, lhs_color_idx, :], betas[:, lhs_color_idx, :], coords)
         rhs_color_out = unary_function_modules['film'](h_cur[[j]], gammas[:, rhs_color_idx, :], betas[:, rhs_color_idx, :], coords)
 
-        rel_lhs = binary_function_modules['film']([rel_lhs, lhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords) 
-        rel_rhs = binary_function_modules['film']([rel_rhs, rhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords) 
+        rel_lhs = binary_function_modules['film']([rel_lhs, lhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords)
+        rel_rhs = binary_function_modules['film']([rel_rhs, rhs_color_out], gammas[:, and_idx, :], betas[:, and_idx, :], coords)
 
       h_out.append(binary_function_modules['film']([rel_lhs, rel_rhs], gammas[:, rel_idx, :], betas[:, rel_idx, :], coords ))
 
@@ -148,8 +148,8 @@ def forward_tree(image, question, stem, vocab, unary_function_modules, binary_fu
       if color:
         lhs_color_out = unary_function_modules[color_lhs](h_cur[[j]])
         rhs_color_out = unary_function_modules[color_rhs](h_cur[[j]])
-        rel_lhs = binary_function_modules['And'](rel_lhs, lhs_color_out) 
-        rel_rhs = binary_function_modules['And'](rel_rhs, rhs_color_out) 
+        rel_lhs = binary_function_modules['And'](rel_lhs, lhs_color_out)
+        rel_rhs = binary_function_modules['And'](rel_rhs, rhs_color_out)
 
 
       h_out.append(binary_function_modules[rel](rel_lhs, rel_rhs))
@@ -222,7 +222,7 @@ class SimpleModuleNet(nn.Module):
     self.binary_function_modules = {}
     self.vocab = vocab
     self.use_film = use_film
-    
+
     if self.use_film:
       unary_mod = FiLMedResBlock(module_dim, with_residual=module_residual,
                     with_intermediate_batchnorm=False, with_batchnorm=False,
@@ -247,18 +247,18 @@ class SimpleModuleNet(nn.Module):
                     batchnorm_affine=False,
                     num_layers=1,
                     condition_method='bn-film',
-                    debug_every=float('inf')) 
+                    debug_every=float('inf'))
 
       self.unary_function_modules['film'] = unary_mod
       self.binary_function_modules['film'] = binary_mod
       self.add_module('film_unary', unary_mod)
       self.add_module('film_binary', binary_mod)
-    
- 
+
+
     else:
       for fn_str in vocab['program_token_to_idx']:
         arity = self.vocab['program_token_arity'][fn_str]
-        if arity == 2 and forward_func == 'tree':   
+        if arity == 2 and forward_func == 'tree':
           binary_mod = ConcatBlock(
                        module_dim,
                        kernel_size=module_kernel_size,
@@ -270,7 +270,7 @@ class SimpleModuleNet(nn.Module):
           self.binary_function_modules[fn_str] = binary_mod
 
         else:
-          mod = SimpleVisualBlock(module_dim, kernel_size=module_kernel_size)  
+          mod = SimpleVisualBlock(module_dim, kernel_size=module_kernel_size)
           #mod = ResidualBlock(
           #      module_dim,
           #      kernel_size=module_kernel_size,

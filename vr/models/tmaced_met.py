@@ -83,7 +83,7 @@ class TMAC(nn.Module):
 
     #Define units
     unique_children_number = set(map(len, self.children_list))
-    
+
     if self.sharing_params_patterns[0]:
       mod = InputUnit(module_dim)
       self.add_module('InputUnit', mod)
@@ -191,19 +191,19 @@ class TMAC(nn.Module):
     for nidx in range(len(self.children_list)-1,-1,-1):
       children = self.children_list[nidx]
       num_children = len(children)
-      
+
       inputUnit = self.InputUnits[nidx] if isinstance(self.InputUnits, list) else self.InputUnits
-      
+
       if self.sharing_params_patterns[1]:
         controlUnit = self.ControlUnits[num_children]
       else:
         controlUnit = self.ControlUnits[nidx]
-      
+
       if self.sharing_params_patterns[2]:
         readUnit = self.ReadUnits[num_children]
       else:
         readUnit = self.ReadUnits[nidx]
-      
+
       if self.sharing_params_patterns[3]:
         writeUnit = self.WriteUnits[num_children]
       else:
@@ -301,21 +301,21 @@ class WriteUnit(nn.Module):
     self.num_children = num_children
     if num_children == 0: self.num_children += 1
     self.common_dim = common_dim
-    
+
     self.control_memory_transfomer = nn.Linear((self.num_children+1) * common_dim, common_dim) #Eq (w1)
 
     init_modules(self.modules())
 
   def forward(self, memories, current_read, _idx):
     #memories (N x num_cell x d), controls (N x num_cell x d), current_read (N x d), idx (int starting from 1)
-    
+
     idx = copy.deepcopy(_idx)
     if len(idx) == 0: idx = [-1]
     assert len(idx) == self.num_children
     prior_memories = []
     for i in idx:
       prior_memories.append(memories[:,i+1,:])
-    
+
     res_memory = self.control_memory_transfomer( torch.cat(prior_memories + [current_read], 1) ) #N x d
 
     return res_memory
@@ -354,7 +354,7 @@ class ReadUnit(nn.Module):
 
     image = image.transpose(1,2).transpose(2,3) #NXHxWxd
     trans_image = image
-    
+
     trans_image = self.read_dropout_module(trans_image)
     for i in range(len(pre_memories)):
       pre_memories[i] = self.read_dropout_module(pre_memories[i])
@@ -414,7 +414,7 @@ class ControlUnit(nn.Module):
   def forward(self, pre_controls, question, context, mask):
 
     #pre_control (Nxd), question (Nxd), context(NxLxd), mask(NxL)
-    
+
     assert len(pre_controls) == self.num_children
 
     #Eq (c1)

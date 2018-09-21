@@ -232,6 +232,7 @@ parser.add_argument('--num_iterations', default=100000, type=int)
 parser.add_argument('--optimizer', default='Adam',
   choices=['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'RMSprop', 'SGD'])
 parser.add_argument('--learning_rate', default=5e-4, type=float)
+parser.add_argument('--sensitive_learning_rate', default=1e-3, type=float)
 parser.add_argument('--reward_decay', default=0.9, type=float)
 parser.add_argument('--weight_decay', default=0, type=float)
 
@@ -481,7 +482,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       else:
         base_parameters.append(param)
     print("SENSITIVE PARAMS ARE: ", sensitive_parameters)
-    ee_optimizer = optim_method([ {'params' : sensitive_parameters, 'lr' : 3e-3} , {'params' : base_parameters} ],
+    ee_optimizer = optim_method([ {'params' : sensitive_parameters, 'lr' : args.sensitive_learning_rate} , {'params' : base_parameters} ],
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if baseline_model:

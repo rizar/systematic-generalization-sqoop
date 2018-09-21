@@ -193,7 +193,7 @@ parser.add_argument('--hard_code_tau', action="store_true")
 parser.add_argument('--use_stopwords', action="store_true")
 parser.add_argument('--tau_init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
-parser.add_argument('--alpha_init', default='xavier_uniform', type=str,
+parser.add_argument('--alpha_init', default='correct', type=str,
         choices=['xavier_uniform', 'constant', 'uniform', 'correct'])
 
 
@@ -684,8 +684,11 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         scores = execution_engine(feats_var, questions_var)
         loss = loss_fn(scores, answers_var)
         loss.backward()
-        # record alphas and gradients here : DEBUGGING
-        if args.model_type == 'SHNMN':
+        # record alphas and gradients and p(model) here : DEBUGGING
+        p_model = F.sigmoid(execution_engine.model_bernoulli).data.cpu().numpy()[0]
+        if t % 10 == 0: 
+          print('p_model:', p_model) 
+        if args.model_type == 'SHNMN' and not args.hard_code_alpha:
           alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]
           alphas_grad = execution_engine.alpha.grad.data.cpu().numpy()

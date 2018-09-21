@@ -148,7 +148,7 @@ class ResidualFunc:
       cnn1_out = F.relu(F.conv2d(cnn_inp, cnn1_weight_curr, bias=cnn1_bias_curr, padding=self.kernel_size // 2))
       cnn2_out = F.conv2d(cnn1_out, cnn2_weight_curr, bias=cnn2_bias_curr,padding=self.kernel_size // 2)
 
-      cnn_out_total.append(F.relu(cnn1_out + cnn2_out) )
+      cnn_out_total.append(F.relu(cnn_inp + cnn2_out) )
 
     return torch.cat(cnn_out_total)
 

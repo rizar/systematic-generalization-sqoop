@@ -685,9 +685,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         # record alphas and gradients and p(model) here : DEBUGGING
-        p_model = F.sigmoid(execution_engine.model_bernoulli).data.cpu().numpy()[0]
-        if t % 10 == 0: 
-          print('p_model:', p_model) 
+        p_model = F.sigmoid(execution_engine.tree_odds).data.cpu().numpy()[0]
+        if t % 10 == 0:
+          print('p_model:', p_model)
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
           alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]

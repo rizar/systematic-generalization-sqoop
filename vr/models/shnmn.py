@@ -1,3 +1,4 @@
+import numpy
 import math
 import torch
 import sys
@@ -97,8 +98,8 @@ class FindModule(nn.Module):
     super().__init__()
     self.dim = dim
     self.kernel_size = kernel_size
-    self.conv_1 = nn.Conv2d(2*dim, dim, kernel_size=1, padding=0) 
-    self.conv_2 = nn.Conv2d(dim, dim, kernel_size=kernel_size, padding = kernel_size // 2) 
+    self.conv_1 = nn.Conv2d(2*dim, dim, kernel_size=1, padding=0)
+    self.conv_2 = nn.Conv2d(dim, dim, kernel_size=kernel_size, padding = kernel_size // 2)
 
   def forward(self, question_rep, lhs_rep, rhs_rep):
     out = F.relu(self.conv_1(torch.cat([lhs_rep, rhs_rep], 1))) # concat along depth
@@ -146,29 +147,29 @@ class ConvFunc():
 
 INITS = {'xavier_uniform' : xavier_uniform, 'constant' : constant, 'uniform' : uniform, 'correct' : correct_alpha_init}
 class SHNMN(nn.Module):
-  def __init__(self, 
-      vocab, 
-      feature_dim, 
-      module_dim, 
-      module_kernel_size, 
-      stem_dim, 
-      stem_num_layers, 
-      stem_subsample_layers, 
-      stem_kernel_size, 
-      stem_padding, 
-      stem_batchnorm, 
-      classifier_fc_layers, 
-      classifier_proj_dim, 
-      classifier_downsample,classifier_batchnorm, 
-      num_modules, 
-      hard_code_alpha=False, 
-      hard_code_tau=False, 
-      tau_init='random', 
-      alpha_init='xavier_uniform', 
-      model_type ='soft', 
-      model_bernoulli=0.5, 
-      use_module = 'conv', 
-      use_stopwords = True, 
+  def __init__(self,
+      vocab,
+      feature_dim,
+      module_dim,
+      module_kernel_size,
+      stem_dim,
+      stem_num_layers,
+      stem_subsample_layers,
+      stem_kernel_size,
+      stem_padding,
+      stem_batchnorm,
+      classifier_fc_layers,
+      classifier_proj_dim,
+      classifier_downsample,classifier_batchnorm,
+      num_modules,
+      hard_code_alpha=False,
+      hard_code_tau=False,
+      tau_init='random',
+      alpha_init='xavier_uniform',
+      model_type ='soft',
+      model_bernoulli=0.5,
+      use_module = 'conv',
+      use_stopwords = True,
       **kwargs):
 
     super().__init__()
@@ -184,12 +185,12 @@ class SHNMN(nn.Module):
       num_question_tokens = 3
 
     if alpha_init == 'correct':
-      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), use_stopwords) 
+      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), use_stopwords)
     elif alpha_init == 'constant':
-      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), 1) 
+      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), 1)
     else:
-      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens)) 
-    
+      alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens))
+
 
     if hard_code_alpha:
       assert(alpha_init == 'correct')
@@ -225,11 +226,11 @@ class SHNMN(nn.Module):
 
 
     if use_module == 'conv':
-      embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)    
+      embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)
       embedding_dim_2 = module_dim + (2*module_dim*module_dim)
-                
-      question_embeddings_1 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_1) 
-      question_embeddings_2 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_2) 
+
+      question_embeddings_1 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_1)
+      question_embeddings_2 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_2)
 
       stdv_1 = 1. / math.sqrt(module_dim*module_kernel_size*module_kernel_size)
       stdv_2 = 1. / math.sqrt(2*module_dim)
@@ -239,7 +240,7 @@ class SHNMN(nn.Module):
       self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), embedding_dim_1+embedding_dim_2)
       self.question_embeddings.weight.data = torch.cat([question_embeddings_1.weight.data,
                                                         question_embeddings_2.weight.data],dim=-1)
-    
+
       self.func = ConvFunc(module_dim, module_kernel_size)
     else:
       self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), module_dim)
@@ -266,7 +267,9 @@ class SHNMN(nn.Module):
 
     self.model_type = model_type
     self.use_module = use_module
-    self.model_bernoulli = nn.Parameter(torch.Tensor([model_bernoulli]))
+    p = model_bernoulli
+    tree_odds = -numpy.log((1 - p) / p)
+    self.tree_odds = nn.Parameter(torch.Tensor([tree_odds]))
 
 
   def forward_hard(self, image, question):
@@ -288,10 +291,13 @@ class SHNMN(nn.Module):
                     self.num_modules, self.alpha,
                     Variable(tree_tau_0), Variable(tree_tau_1), self.func)
 
-    prob = F.sigmoid(self.model_bernoulli[0])
-    logits_tree  = self.classifier(h_final_tree)
-    logits_chain = self.classifier(h_final_chain)
-    return prob*logits_tree + (1.0 - prob)*logits_chain
+    p_tree = F.sigmoid(self.tree_odds[0])
+    output_probs_tree  = F.softmax(self.classifier(h_final_tree))
+    output_probs_chain = F.softmax(self.classifier(h_final_chain))
+    probs_mixture = p_tree * output_probs_tree + (1.0 - p_tree) * output_probs_chain
+    eps = 1e-6
+    probs_mixture = (1 - eps) * probs_mixture + eps
+    return torch.log(probs_mixture)
 
 
   def forward_soft(self, image, question):

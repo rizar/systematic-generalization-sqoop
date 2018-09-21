@@ -106,14 +106,11 @@ class FindModule(nn.Module):
     return F.relu(self.conv_2(out*question_rep))
 
 class ResidualFunc:
-'''
-	Implementation of the homonegeous blocks from Johnson et al.
-'''
-	def __init__(self, dim, kernel_size):
-		self.dim = dim
-		self.kernel_size = kernel_size
+  def __init__(self, dim, kernel_size):
+    self.dim = dim
+    self.kernel_size = kernel_size
 
-	def __call__(self, question_rep, lhs_rep, rhs_rep):
+  def __call__(self, question_rep, lhs_rep, rhs_rep):
     cnn_weight_dim = self.dim * self.dim * self.kernel_size * self.kernel_size
     cnn_bias_dim = self.dim
     proj_cnn_weight_dim = 2 * self.dim * self.dim

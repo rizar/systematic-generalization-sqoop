@@ -39,6 +39,7 @@ class ConvLSTM(nn.Module):
                            subsample_layers=stem_subsample_layers)
     tmp = self.stem(Variable(torch.zeros([1] + feature_dim)))
     _, F, H, W = tmp.size()
+    print('stem dim ', H, W)
 
     # initialize classifier
     # TODO(mnoukhov): fix this for >1 layer RNN

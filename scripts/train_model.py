@@ -199,7 +199,7 @@ parser.add_argument('--alpha_init', default='correct', type=str,
 
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
-parser.add_argument('--use_module', default='conv', type=str, choices=['conv','find'])
+parser.add_argument('--use_module', default='conv', type=str, choices=['conv', 'find', 'residual'])
 parser.add_argument('--model_bernoulli', default=0.0, type=float)
 
 #RelationNet options
@@ -687,8 +687,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         # record alphas and gradients and p(model) here : DEBUGGING
         p_model = F.sigmoid(execution_engine.model_bernoulli).data.cpu().numpy()[0]
-        if t % 10 == 0: 
-          print('p_model:', p_model) 
+        if t % 10 == 0:
+          print('p_model:', p_model)
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
           alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]

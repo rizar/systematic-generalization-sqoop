@@ -224,7 +224,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default=[1024], type=parse_int_list)
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default=0, type=one_or_list(parse_float_list))
+parser.add_argument('--classifier_dropout', default=[0], type=parse_float_list)
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -686,9 +686,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         # record alphas and gradients and p(model) here : DEBUGGING
-        p_model = F.sigmoid(execution_engine.model_bernoulli).data.cpu().numpy()[0]
-        if t % 10 == 0:
-          print('p_model:', p_model)
+        if args.model_type == 'SHNMN':
+          p_model = F.sigmoid(execution_engine.model_bernoulli).data.cpu().numpy()[0]
+          if t % 10 == 0:
+            print('p_model:', p_model)
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
           alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]

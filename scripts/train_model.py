@@ -199,7 +199,7 @@ parser.add_argument('--alpha_init', default='correct', type=str,
 
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
-parser.add_argument('--use_module', default='conv', type=str, choices=['conv','find'])
+parser.add_argument('--use_module', default='conv', type=str, choices=['conv', 'find', 'residual'])
 parser.add_argument('--model_bernoulli', default=0.0, type=float)
 
 #RelationNet options
@@ -224,7 +224,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default=[1024], type=parse_int_list)
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default=0, type=one_or_list(parse_float_list))
+parser.add_argument('--classifier_dropout', default=[0], type=parse_float_list)
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -232,6 +232,7 @@ parser.add_argument('--num_iterations', default=100000, type=int)
 parser.add_argument('--optimizer', default='Adam',
   choices=['Adadelta', 'Adagrad', 'Adam', 'Adamax', 'ASGD', 'RMSprop', 'SGD'])
 parser.add_argument('--learning_rate', default=5e-4, type=float)
+parser.add_argument('--sensitive_learning_rate', default=1e-3, type=float)
 parser.add_argument('--reward_decay', default=0.9, type=float)
 parser.add_argument('--weight_decay', default=0, type=float)
 
@@ -481,7 +482,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       else:
         base_parameters.append(param)
     print("SENSITIVE PARAMS ARE: ", sensitive_parameters)
-    ee_optimizer = optim_method([ {'params' : sensitive_parameters, 'lr' : 3e-3} , {'params' : base_parameters} ],
+    ee_optimizer = optim_method([ {'params' : sensitive_parameters, 'lr' : args.sensitive_learning_rate} , {'params' : base_parameters} ],
                                 lr=args.learning_rate,
                                 weight_decay=args.weight_decay)
   if baseline_model:
@@ -685,9 +686,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss = loss_fn(scores, answers_var)
         loss.backward()
         # record alphas and gradients and p(model) here : DEBUGGING
-        p_model = F.sigmoid(execution_engine.tree_odds).data.cpu().numpy()[0]
-        if t % 10 == 0:
-          print('p_model:', p_model)
+        if args.model_type == 'SHNMN':
+          p_model = F.sigmoid(execution_engine.tree_odds).data.cpu().numpy()[0]
+          if t % 10 == 0:
+            print('p_model:', p_model)
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
           alphas = [execution_engine.alpha[i] for i in range(3)]
           alphas = [t.data.cpu().numpy() for t in alphas]

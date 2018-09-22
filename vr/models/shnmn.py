@@ -106,7 +106,56 @@ class FindModule(nn.Module):
     question_rep = question_rep.view(-1, self.dim, 1, 1)
     return F.relu(self.conv_2(out*question_rep))
 
-class ConvFunc():
+class ResidualFunc:
+  def __init__(self, dim, kernel_size):
+    self.dim = dim
+    self.kernel_size = kernel_size
+
+  def __call__(self, question_rep, lhs_rep, rhs_rep):
+    cnn_weight_dim = self.dim * self.dim * self.kernel_size * self.kernel_size
+    cnn_bias_dim = self.dim
+    proj_cnn_weight_dim = 2 * self.dim * self.dim
+    proj_cnn_bias_dim = self.dim
+    if (question_rep.size(1) !=
+          proj_cnn_weight_dim + proj_cnn_bias_dim
+          + 2 * (cnn_weight_dim + cnn_bias_dim)):
+      raise ValueError
+
+    # pick out CNN and projection CNN weights/biases
+    cnn1_weight = question_rep[:,:cnn_weight_dim]
+    cnn2_weight = question_rep[:,cnn_weight_dim:2 * cnn_weight_dim]
+    cnn1_bias = question_rep[:,2 * cnn_weight_dim:(2 * cnn_weight_dim) + cnn_bias_dim]
+    cnn2_bias = question_rep[:,(2 * cnn_weight_dim) + cnn_bias_dim:2 * (cnn_weight_dim + cnn_bias_dim)]
+    proj_weight = question_rep[:, 2 * (cnn_weight_dim + cnn_bias_dim) :
+                              2 * (cnn_weight_dim + cnn_bias_dim) + proj_cnn_weight_dim]
+    proj_bias   = question_rep[:, 2*(cnn_weight_dim + cnn_bias_dim) + proj_cnn_weight_dim:]
+
+    cnn_out_total = []
+    bs = question_rep.size(0)
+
+    for i in range(bs):
+      cnn1_weight_curr = cnn1_weight[i].view(self.dim, self.dim, self.kernel_size, self.kernel_size)
+      cnn1_bias_curr   = cnn1_bias[i]
+      cnn2_weight_curr = cnn2_weight[i].view(self.dim, self.dim, self.kernel_size, self.kernel_size)
+      cnn2_bias_curr   = cnn2_bias[i]
+
+      proj_weight_curr = proj_weight[i].view(self.dim, 2*self.dim, 1, 1)
+      proj_bias_curr = proj_bias[i]
+
+      cnn_inp = F.relu(F.conv2d(torch.cat([lhs_rep[[i]], rhs_rep[[i]]], 1),
+                         proj_weight_curr,
+                         bias=proj_bias_curr, padding=0))
+
+      cnn1_out = F.relu(F.conv2d(cnn_inp, cnn1_weight_curr, bias=cnn1_bias_curr, padding=self.kernel_size // 2))
+      cnn2_out = F.conv2d(cnn1_out, cnn2_weight_curr, bias=cnn2_bias_curr,padding=self.kernel_size // 2)
+
+      cnn_out_total.append(F.relu(cnn_inp + cnn2_out) )
+
+    return torch.cat(cnn_out_total)
+
+
+
+class ConvFunc:
   def __init__(self, dim, kernel_size):
     self.dim = dim
     self.kernel_size = kernel_size
@@ -242,6 +291,26 @@ class SHNMN(nn.Module):
                                                         question_embeddings_2.weight.data],dim=-1)
 
       self.func = ConvFunc(module_dim, module_kernel_size)
+
+    elif use_module == 'residual':
+      embedding_dim_1 = module_dim + (module_dim*module_dim*module_kernel_size*module_kernel_size)
+      embedding_dim_2 = module_dim + (2*module_dim*module_dim)
+
+      question_embeddings_a = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_1)
+      question_embeddings_b = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_1)
+      question_embeddings_2 = nn.Embedding(len(vocab['question_idx_to_token']),embedding_dim_2)
+
+      stdv_1 = 1. / math.sqrt(module_dim*module_kernel_size*module_kernel_size)
+      stdv_2 = 1. / math.sqrt(2*module_dim)
+
+      question_embeddings_a.weight.data.uniform_(-stdv_1, stdv_1)
+      question_embeddings_b.weight.data.uniform_(-stdv_1, stdv_1)
+      question_embeddings_2.weight.data.uniform_(-stdv_2, stdv_2)
+      self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), 2*embedding_dim_1+embedding_dim_2)
+      self.question_embeddings.weight.data = torch.cat([question_embeddings_a.weight.data, question_embeddings_b.weight.data,
+                                                        question_embeddings_2.weight.data],dim=-1)
+      self.func = ResidualFunc(module_dim, module_kernel_size)
+
     else:
       self.question_embeddings = nn.Embedding(len(vocab['question_idx_to_token']), module_dim)
       self.func = FindModule(module_dim, module_kernel_size)

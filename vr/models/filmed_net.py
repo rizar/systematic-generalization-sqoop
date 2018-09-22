@@ -33,6 +33,7 @@ class FiLMedNet(nn.Module):
                stem_subsample_layers=None,
                stem_stride=1,
                stem_padding=None,
+               stem_dim=64,
                num_modules=4,
                module_num_layers=1,
                module_dim=128,
@@ -97,7 +98,7 @@ class FiLMedNet(nn.Module):
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
     self.stem = build_stem(
-      stem_feature_dim, module_dim,
+      stem_feature_dim, stem_dim, module_dim,
       num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
       kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
       subsample_layers=stem_subsample_layers)

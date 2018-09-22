@@ -200,7 +200,7 @@ parser.add_argument('--alpha_init', default='correct', type=str,
 parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
 parser.add_argument('--use_module', default='conv', type=str, choices=['conv', 'find', 'residual'])
-parser.add_argument('--model_bernoulli', default=0.0, type=float)
+parser.add_argument('--model_bernoulli', default=0.5, type=float)
 
 #RelationNet options
 parser.add_argument('--module_stem_feature_dim', default=24, type=int)

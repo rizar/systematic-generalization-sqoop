@@ -224,7 +224,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default=[1024], type=parse_int_list)
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default=[0], type=parse_float_list)
+parser.add_argument('--classifier_dropout', default=[], type=one_or_list(parse_float_list))
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -859,7 +859,6 @@ def get_program_generator(args):
         kwargs['embedding_uniform_boundary'] = args.mac_embedding_uniform_boundary
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
-      kwargs['stem_dim'] = args.stem_dim
       kwargs['debug_every'] = args.debug_every
       if args.simple_encoder:
         pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
@@ -899,7 +898,6 @@ def get_execution_engine(args):
       'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
       'module_input_proj': args.module_input_proj,
-      'use_color' : args.use_color,
       'module_batchnorm': args.module_batchnorm == 1,
       'classifier_proj_dim': args.classifier_proj_dim,
       'classifier_downsample': args.classifier_downsample,
@@ -1058,6 +1056,7 @@ def get_execution_engine(args):
     elif args.model_type == 'SimpleNMN':
         kwargs['use_film'] = args.nmn_use_film
         kwargs['forward_func'] = args.nmn_type
+        kwargs['use_color'] = args.use_color,
         ee = SimpleModuleNet(**kwargs)
 
     elif args.model_type == 'SHNMN':

@@ -1,3 +1,4 @@
+import numpy
 import math
 import torch
 import sys
@@ -335,7 +336,9 @@ class SHNMN(nn.Module):
 
     self.model_type = model_type
     self.use_module = use_module
-    self.model_bernoulli = nn.Parameter(torch.Tensor([model_bernoulli]))
+    p = model_bernoulli
+    tree_odds = -numpy.log((1 - p) / p)
+    self.tree_odds = nn.Parameter(torch.Tensor([tree_odds]))
 
 
   def forward_hard(self, image, question):
@@ -357,10 +360,13 @@ class SHNMN(nn.Module):
                     self.num_modules, self.alpha,
                     Variable(tree_tau_0), Variable(tree_tau_1), self.func)
 
-    prob = F.sigmoid(self.model_bernoulli[0])
-    logits_tree  = self.classifier(h_final_tree)
-    logits_chain = self.classifier(h_final_chain)
-    return prob*logits_tree + (1.0 - prob)*logits_chain
+    p_tree = F.sigmoid(self.tree_odds[0])
+    output_probs_tree  = F.softmax(self.classifier(h_final_tree))
+    output_probs_chain = F.softmax(self.classifier(h_final_chain))
+    probs_mixture = p_tree * output_probs_tree + (1.0 - p_tree) * output_probs_chain
+    eps = 1e-6
+    probs_mixture = (1 - eps) * probs_mixture + eps
+    return torch.log(probs_mixture)
 
 
   def forward_soft(self, image, question):

@@ -89,7 +89,7 @@ def forward_chain2(image, question, stem, vocab, function_modules, binary_functi
   rel = question[:, 5]
   h_cur = stem(image)
 
-  item_list = [rel, color_lhs, lhs, color_rhs, rhs] if color else [rel, lhs, rhs]
+  item_list = [color_lhs, lhs, color_rhs, rhs, rel] if color else [lhs, rhs, rel]
   return forward_chain(h_cur, vocab, function_modules, item_list, film_params)
 
 def forward_chain3(image, question, stem, vocab, function_modules, binary_function_modules, color=False, film_params = None):
@@ -100,7 +100,7 @@ def forward_chain3(image, question, stem, vocab, function_modules, binary_functi
   rel = question[:, 5]
   h_cur = stem(image)
 
-  item_list = [color_lhs, lhs, color_rhs, rhs, rel] if color else [lhs, rhs, rel]
+  item_list = [rel, color_lhs, lhs, color_rhs, rhs] if color else [rel, lhs, rhs]
   return forward_chain(h_cur, vocab, function_modules, item_list, film_params)
 
 def forward_tree(image, question, stem, vocab, unary_function_modules, binary_function_modules, color=False, film_params = None):

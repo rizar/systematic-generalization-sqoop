@@ -264,18 +264,17 @@ class SimpleModuleNet(nn.Module):
                        kernel_size=module_kernel_size,
                        with_residual=module_residual,
                        with_batchnorm=module_batchnorm,
-                       use_simple=True)
+                       use_simple=False)
 
           self.add_module(fn_str, binary_mod)
           self.binary_function_modules[fn_str] = binary_mod
 
         else:
-          mod = SimpleVisualBlock(module_dim, kernel_size=module_kernel_size)
-          #mod = ResidualBlock(
-          #      module_dim,
-          #      kernel_size=module_kernel_size,
-          #      with_residual=module_residual,
-          #      with_batchnorm=module_batchnorm)
+          mod = ResidualBlock(
+                module_dim,
+                kernel_size=module_kernel_size,
+                with_residual=module_residual,
+                with_batchnorm=module_batchnorm)
 
           self.add_module(fn_str, mod)
           self.unary_function_modules[fn_str] = mod

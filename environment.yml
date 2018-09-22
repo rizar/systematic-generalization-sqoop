@@ -1,15 +1,15 @@
 name: nmn
 channels:
-- pytorch
-- defaults
+    - pytorch
+    - defaults
 dependencies:
-- python=3.5
-- pytorch=0.3
-- cuda90
-- torchvision
-- h5py
-- numpy
-- scipy
-- tqdm
-- termcolor
-- pillow
+    - python=3.6
+    - pytorch=0.3
+    - cuda90
+    - torchvision
+    - h5py
+    - numpy
+    - scipy
+    - tqdm
+    - termcolor
+    - pillow

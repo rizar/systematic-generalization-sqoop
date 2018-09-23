@@ -477,7 +477,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       if not param.requires_grad:
         continue
       print(name)
-      if name.startswith('model_bernoulli') or name.startswith('alpha'):
+      if name.startswith('tree_odds') or name.startswith('alpha'):
         sensitive_parameters.append(param)
       else:
         base_parameters.append(param)

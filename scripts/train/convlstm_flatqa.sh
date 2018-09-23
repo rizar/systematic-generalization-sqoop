@@ -19,8 +19,8 @@ python $NMN/scripts/train_model.py \
   --rnn_wordvec_dim 64 \
   --rnn_hidden_dim 128 \
   \
-  --module_stem_num_layers 4 \
-  --module_stem_stride 2 \
+  --module_stem_num_layers 6 \
+  --module_stem_subsample_layers 1,3 \
   --module_stem_batchnorm 1 \
   \
   --module_dim 64 \

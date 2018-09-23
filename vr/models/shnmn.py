@@ -31,29 +31,29 @@ def _random_tau(num_modules):
 def _chain_tau():
   tau_0 = torch.zeros(3, 4)
   tau_1 = torch.zeros(3, 4)
-  tau_0[0][1] = tau_1[0][0] = 10 #1st block - lhs inp img, rhs inp sentinel
-  tau_0[1][2] = tau_1[1][0] = 10 #2nd block - lhs inp 1st block, rhs inp sentinel
-  tau_0[2][3] = tau_1[2][0] = 10 #3rd block - lhs inp 2nd block, rhs inp sentinel
+  tau_0[0][1] = tau_1[0][0] = 100 #1st block - lhs inp img, rhs inp sentinel
+  tau_0[1][2] = tau_1[1][0] = 100 #2nd block - lhs inp 1st block, rhs inp sentinel
+  tau_0[2][3] = tau_1[2][0] = 100 #3rd block - lhs inp 2nd block, rhs inp sentinel
   return tau_0, tau_1
 
 
 def _tree_tau():
   tau_0 = torch.zeros(3, 4)
   tau_1 = torch.zeros(3, 4)
-  tau_0[0][1] = tau_1[0][0] = 10 #1st block - lhs inp img, rhs inp sentinel
-  tau_0[1][1] = tau_1[1][0] = 10 #2st block - lhs inp img, rhs inp sentinel
-  tau_0[2][2] = tau_1[2][3] = 10 #3rd block - lhs inp 1st block, rhs inp 2nd block
+  tau_0[0][1] = tau_1[0][0] = 100 #1st block - lhs inp img, rhs inp sentinel
+  tau_0[1][1] = tau_1[1][0] = 100 #2st block - lhs inp img, rhs inp sentinel
+  tau_0[2][2] = tau_1[2][3] = 100 #3rd block - lhs inp 1st block, rhs inp 2nd block
   return tau_0, tau_1
 
 def correct_alpha_init(alpha, use_stopwords=True):
   if use_stopwords:
-    alpha[0][4] = 10
-    alpha[1][7] = 10
-    alpha[2][5] = 10
+    alpha[0][4] = 100
+    alpha[1][7] = 100
+    alpha[2][5] = 100
   else:
-    alpha[0][0] = 10
-    alpha[1][2] = 10
-    alpha[2][1] = 10
+    alpha[0][0] = 100
+    alpha[1][2] = 100
+    alpha[2][1] = 100
 
   return alpha
 

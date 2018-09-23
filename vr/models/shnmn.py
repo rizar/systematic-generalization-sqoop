@@ -46,8 +46,8 @@ def _tree_tau():
   return tau_0, tau_1
 
 
-def correct_alpha_init(_, use_stopwords=True):
-  alpha = torch.zeros(3, 8 if use_stopwords else 3)
+def correct_alpha_init(alpha, use_stopwords=True):
+  alpha.zero_()
   if use_stopwords:
     alpha[0][4] = 10
     alpha[1][7] = 10

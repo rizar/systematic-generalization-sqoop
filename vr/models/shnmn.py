@@ -45,7 +45,9 @@ def _tree_tau():
   tau_0[2][2] = tau_1[2][3] = 10 #3rd block - lhs inp 1st block, rhs inp 2nd block
   return tau_0, tau_1
 
-def correct_alpha_init(alpha, use_stopwords=True):
+
+def correct_alpha_init(_, use_stopwords=True):
+  alpha = torch.zeros(3, 8 if use_stopwords else 3)
   if use_stopwords:
     alpha[0][4] = 10
     alpha[1][7] = 10
@@ -56,21 +58,6 @@ def correct_alpha_init(alpha, use_stopwords=True):
     alpha[2][1] = 10
 
   return alpha
-
-
-def _random_alpha(num_modules):
-  alpha = torch.Tensor(num_modules, NUM_QUESTION_TOKENS)
-  xavier_uniform(alpha)
-  return alpha
-
-
-def _good_alpha():
-  alpha = torch.zeros(3, NUM_QUESTION_TOKENS)
-  alpha[0][4] = 10 # LHS
-  alpha[1][7] = 10 # RHS
-  alpha[2][5] = 10 # relation
-  return alpha
-
 
 def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
   sentinel = torch.zeros_like(img) # B x 1 x C x H x W
@@ -239,6 +226,8 @@ class SHNMN(nn.Module):
       alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), 1)
     else:
       alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens))
+    print('initial alpha ')
+    print(alpha)
 
 
     if hard_code_alpha:
@@ -373,11 +362,14 @@ class SHNMN(nn.Module):
     question = self.question_embeddings(question)
     stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
-    h_final = _shnmn_func(question, stemmed_img, self.num_modules, self.alpha, self.tau_0, self.tau_1, self.func)
+    h_final = _shnmn_func(question, stemmed_img, self.num_modules,
+                          self.alpha, self.tau_0, self.tau_1, self.func)
     return self.classifier(h_final)
 
   def forward(self, image, question):
     if not self.use_stopwords:
       question = question[:, [4,5,7]] # remove stop words....
-    if self.model_type == 'hard': return self.forward_hard(image, question)
-    else: return self.forward_soft(image, question)
+    if self.model_type == 'hard':
+        return self.forward_hard(image, question)
+    else:
+        return self.forward_soft(image, question)

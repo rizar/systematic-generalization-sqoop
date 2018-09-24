@@ -207,7 +207,7 @@ class ConvFunc:
 
     return torch.cat(cnn_out_total)
 
-INITS = {'xavier_uniform' : xavier_uniform, 'constant' : constant, 'uniform' : uniform, 'correct_xyr' : correct_alpha_init_xyr, 'correct_xry' : correct_alpha_init_xry, 'correct_rxy' : correct_alpha_init_rxy}
+INITS = {'xavier_uniform' : xavier_uniform, 'constant' : constant, 'uniform' : uniform, 'correct' : correct_alpha_init_xyr, 'correct_xry' : correct_alpha_init_xry, 'correct_rxy' : correct_alpha_init_rxy}
 class SHNMN(nn.Module):
   def __init__(self,
       vocab,

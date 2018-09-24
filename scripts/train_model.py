@@ -194,7 +194,7 @@ parser.add_argument('--use_stopwords', action="store_true")
 parser.add_argument('--tau_init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
 parser.add_argument('--alpha_init', default='correct', type=str,
-        choices=['xavier_uniform', 'constant', 'uniform', 'correct_xyr', 'correct_xry', 'correct_rxy' ])
+        choices=['xavier_uniform', 'constant', 'uniform', 'correct', 'correct_xry', 'correct_rxy' ])
 
 
 parser.add_argument('--shnmn_type', default='soft', type=str,

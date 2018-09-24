@@ -46,7 +46,7 @@ def _tree_tau():
   return tau_0, tau_1
 
 
-def correct_alpha_init(alpha, use_stopwords=True):
+def correct_alpha_init_xyr(alpha, use_stopwords=True):
   alpha.zero_()
   if use_stopwords:
     alpha[0][4] = 100
@@ -56,6 +56,32 @@ def correct_alpha_init(alpha, use_stopwords=True):
     alpha[0][0] = 100
     alpha[1][2] = 100
     alpha[2][1] = 100
+
+  return alpha
+
+def correct_alpha_init_rxy(alpha, use_stopwords=True):
+  alpha.zero_()
+  if use_stopwords:
+    alpha[0][5] = 100
+    alpha[1][4] = 100
+    alpha[2][7] = 100
+  else:
+    alpha[0][1] = 100
+    alpha[1][0] = 100
+    alpha[2][2] = 100
+
+  return alpha
+
+def correct_alpha_init_xry(alpha, use_stopwords=True):
+  alpha.zero_()
+  if use_stopwords:
+    alpha[0][4] = 100
+    alpha[1][5] = 100
+    alpha[2][7] = 100
+  else:
+    alpha[0][0] = 100
+    alpha[1][1] = 100
+    alpha[2][2] = 100
 
   return alpha
 
@@ -181,7 +207,7 @@ class ConvFunc:
 
     return torch.cat(cnn_out_total)
 
-INITS = {'xavier_uniform' : xavier_uniform, 'constant' : constant, 'uniform' : uniform, 'correct' : correct_alpha_init}
+INITS = {'xavier_uniform' : xavier_uniform, 'constant' : constant, 'uniform' : uniform, 'correct_xyr' : correct_alpha_init_xyr, 'correct_xry' : correct_alpha_init_xry, 'correct_rxy' : correct_alpha_init_rxy}
 class SHNMN(nn.Module):
   def __init__(self,
       vocab,
@@ -220,7 +246,8 @@ class SHNMN(nn.Module):
     else:
       num_question_tokens = 3
 
-    if alpha_init == 'correct':
+    if alpha_init.startswith('correct'):
+      print('using correct initialization')
       alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), use_stopwords)
     elif alpha_init == 'constant':
       alpha = INITS[alpha_init](torch.Tensor(num_modules, num_question_tokens), 1)
@@ -231,7 +258,7 @@ class SHNMN(nn.Module):
 
 
     if hard_code_alpha:
-      assert(alpha_init == 'correct')
+      assert(alpha_init.startswith('correct'))
 
       self.alpha = Variable(alpha)
       if torch.cuda.is_available():

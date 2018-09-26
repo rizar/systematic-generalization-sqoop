@@ -13,6 +13,7 @@ class ConvLSTM(nn.Module):
   def __init__(self,
                vocab,
                feature_dim=[3, 64, 64],
+               stem_dim=128,
                module_dim=128,
                stem_num_layers=2,
                stem_batchnorm=True,
@@ -30,6 +31,7 @@ class ConvLSTM(nn.Module):
 
     # initialize stem
     self.stem = build_stem(feature_dim[0],
+                           stem_dim,
                            module_dim,
                            num_layers=stem_num_layers,
                            with_batchnorm=stem_batchnorm,
@@ -39,7 +41,6 @@ class ConvLSTM(nn.Module):
                            subsample_layers=stem_subsample_layers)
     tmp = self.stem(Variable(torch.zeros([1] + feature_dim)))
     _, F, H, W = tmp.size()
-    print('stem dim ', H, W)
 
     # initialize classifier
     # TODO(mnoukhov): fix this for >1 layer RNN

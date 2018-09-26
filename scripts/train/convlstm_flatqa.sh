@@ -22,6 +22,7 @@ python $NMN/scripts/train_model.py \
   --module_stem_num_layers 6 \
   --module_stem_subsample_layers 1,3 \
   --module_stem_batchnorm 1 \
+  --stem_dim 64 \
   \
   --module_dim 64 \
   \

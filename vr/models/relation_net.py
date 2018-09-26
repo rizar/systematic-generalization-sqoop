@@ -21,7 +21,7 @@ class RelationNet(nn.Module):
                stem_kernel_size=3,
                stem_stride=1,
                stem_padding=None,
-               stem_feature_dim=24,
+               stem_dim=24,
                module_num_layers=1,
                module_dim=128,
                classifier_fc_layers=(1024,),
@@ -43,7 +43,8 @@ class RelationNet(nn.Module):
 
     # initialize stem
     self.stem = build_stem(feature_dim[0],
-                           stem_feature_dim,
+                           stem_dim,
+                           stem_dim,
                            num_layers=stem_num_layers,
                            with_batchnorm=stem_batchnorm,
                            kernel_size=stem_kernel_size,
@@ -65,7 +66,7 @@ class RelationNet(nn.Module):
 
     # initialize relation model
     # (output of stem + 2 coordinates) * 2 objects + question vector
-    relation_modules = [nn.Linear((stem_feature_dim + 2)*2 + rnn_hidden_dim, module_dim)]
+    relation_modules = [nn.Linear((stem_dim + 2)*2 + rnn_hidden_dim, module_dim)]
     for _ in range(module_num_layers - 1):
       relation_modules.append(nn.Linear(module_dim, module_dim))
     self.relation = nn.Sequential(*relation_modules)

@@ -113,7 +113,6 @@ def build_stem(feature_dim,
     padding = num_layers * [None]
   if len(padding) == 1:
     padding = num_layers * padding
-
   if subsample_layers is None:
     subsample_layers = []
 

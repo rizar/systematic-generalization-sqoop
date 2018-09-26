@@ -203,9 +203,6 @@ parser.add_argument('--shnmn_type', default='soft', type=str,
 parser.add_argument('--use_module', default='conv', type=str, choices=['conv', 'find', 'residual'])
 parser.add_argument('--model_bernoulli', default=0.5, type=float)
 
-#RelationNet options
-parser.add_argument('--module_stem_feature_dim', default=24, type=int)
-
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -1087,7 +1084,6 @@ def get_execution_engine(args):
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
-      kwargs['stem_feature_dim'] = args.module_stem_feature_dim
       ee = RelationNet(**kwargs)
     elif args.model_type == 'ConvLSTM':
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim

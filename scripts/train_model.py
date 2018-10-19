@@ -88,7 +88,8 @@ parser.add_argument('--model_type', default='PG',
            'PG', 'EE', 'PG+EE',
            'LSTM', 'CNN+LSTM', 'CNN+LSTM+SA',
            'Hetero', 'MAC', 'TMAC',
-           'SimpleNMN', 'RelNet', 'SHNMN'])
+           'SimpleNMN', 'RelNet', 'SHNMN',
+           'ConvLSTM'])
 parser.add_argument('--train_program_generator', default=1, type=int)
 parser.add_argument('--train_execution_engine', default=1, type=int)
 parser.add_argument('--baseline_train_only_rnn', default=0, type=int)
@@ -202,9 +203,6 @@ parser.add_argument('--shnmn_type', default='soft', type=str,
 parser.add_argument('--use_module', default='conv', type=str, choices=['conv', 'find', 'residual'])
 parser.add_argument('--model_bernoulli', default=0.5, type=float)
 
-#RelationNet options
-parser.add_argument('--module_stem_feature_dim', default=24, type=int)
-
 
 # CNN options (for baselines)
 parser.add_argument('--cnn_res_block_dim', default=128, type=int)
@@ -224,7 +222,7 @@ parser.add_argument('--classifier_downsample', default='maxpool2',
            'avgpool2', 'avgpool3', 'avgpool4', 'avgpool5', 'avgpool7', 'avgpoolfull', 'aggressive'])
 parser.add_argument('--classifier_fc_dims', default=[1024], type=parse_int_list)
 parser.add_argument('--classifier_batchnorm', default=0, type=int)
-parser.add_argument('--classifier_dropout', default=[], type=one_or_list(parse_float_list))
+parser.add_argument('--classifier_dropout', default=0.0, type=one_or_list(parse_float_list))
 
 # Optimization options
 parser.add_argument('--batch_size', default=64, type=int)
@@ -430,12 +428,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
   # Set up model
   optim_method = getattr(torch.optim, args.optimizer)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE', 'RelNet']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE', 'RelNet', 'ConvLSTM']:
     program_generator, pg_kwargs = get_program_generator(args)
 
     print('Here is the conditioning network:')
     print(program_generator)
-  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'SHNMN', 'RelNet']:
+  if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'SHNMN', 'RelNet', 'ConvLSTM']:
     execution_engine, ee_kwargs = get_execution_engine(args)
     print('Here is the conditioned network:')
     print(execution_engine)
@@ -698,23 +696,18 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             pretty_print(alphas, alphas_grad)
 
         ee_optimizer.step()
-      elif args.model_type == 'RelNet':
-        programs_pred = program_generator(questions_var)
-        scores = execution_engine(feats_var, programs_pred)
+      elif args.model_type in ['RelNet', 'ConvLSTM']:
+        question_rep = program_generator(questions_var)
+        scores = execution_engine(feats_var, question_rep)
         loss = loss_fn(scores, answers_var)
 
         pg_optimizer.zero_grad()
         ee_optimizer.zero_grad()
         loss.backward()
+        pg_optimizer.step()
+        ee_optimizer.step()
       else:
         raise ValueError()
-
-        if args.train_program_generator == 1:
-          if args.grad_clip > 0:
-            torch.nn.utils.clip_grad_norm(program_generator.parameters(), args.grad_clip)
-          pg_optimizer.step()
-        if args.train_execution_engine == 1:
-          ee_optimizer.step()
 
       if t % args.record_loss_every == 0:
         running_loss += loss.data[0]
@@ -864,7 +857,7 @@ def get_program_generator(args):
         pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
       else:
         pg = FiLMGen(**kwargs)
-    elif args.model_type == 'RelNet':
+    elif args.model_type in ['RelNet', 'ConvLSTM']:
       kwargs['bidirectional'] = args.bidirectional == 1
       kwargs['encoder_type'] = args.encoder_type
       kwargs['taking_context'] = True   # return the last hidden state of LSTM
@@ -1091,8 +1084,10 @@ def get_execution_engine(args):
     elif args.model_type == 'RelNet':
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
-      kwargs['stem_feature_dim'] = args.module_stem_feature_dim
       ee = RelationNet(**kwargs)
+    elif args.model_type == 'ConvLSTM':
+      kwargs['rnn_hidden_dim'] = args.rnn_hidden_dim
+      ee = ConvLSTM(**kwargs)
     else:
       kwargs['sharing_patterns'] = args.nmnfilm2_sharing_params_patterns
       kwargs['use_film'] = args.nmn_use_film
@@ -1215,7 +1210,7 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     elif args.model_type == 'TMAC':
       programs_pred = program_generator(questions_var)
       scores = execution_engine(feats_var, programs_pred)
-    elif args.model_type == 'RelNet':
+    elif args.model_type in ['ConvLSTM', 'RelNet']:
       question_rep = program_generator(questions_var)
       scores = execution_engine(feats_var, question_rep)
     elif args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:

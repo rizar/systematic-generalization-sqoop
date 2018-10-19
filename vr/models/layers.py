@@ -92,8 +92,16 @@ class Flatten(nn.Module):
     return x.view(x.size(0), -1)
 
 
-def build_stem(feature_dim, stem_dim, module_dim, num_layers=2, with_batchnorm=True,
-               kernel_size=[3], stride=[1], padding=None, subsample_layers=None, acceptEvenKernel=False):
+def build_stem(feature_dim,
+               stem_dim,
+               module_dim,
+               num_layers=2,
+               with_batchnorm=True,
+               kernel_size=[3],
+               stride=[1],
+               padding=None,
+               subsample_layers=None,
+               acceptEvenKernel=False):
   layers = []
   prev_dim = feature_dim
 
@@ -105,7 +113,6 @@ def build_stem(feature_dim, stem_dim, module_dim, num_layers=2, with_batchnorm=T
     padding = num_layers * [None]
   if len(padding) == 1:
     padding = num_layers * padding
-
   if subsample_layers is None:
     subsample_layers = []
 
@@ -127,7 +134,7 @@ def build_stem(feature_dim, stem_dim, module_dim, num_layers=2, with_batchnorm=T
 
 
 def build_classifier(module_C, module_H, module_W, num_answers,
-                     fc_dims=[], proj_dim=None, downsample='maxpool2',
+                     fc_dims=[], proj_dim=None, downsample=None,
                      with_batchnorm=True, dropout=[]):
   layers = []
   prev_dim = module_C * module_H * module_W
@@ -139,30 +146,31 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     layers.append(nn.ReLU(inplace=True))
     prev_dim = proj_dim * module_H * module_W
     cur_dim = proj_dim
-  if 'maxpool' in downsample or 'avgpool' in downsample:
-    pool = nn.MaxPool2d if 'maxpool' in downsample else nn.AvgPool2d
-    if 'full' in downsample:
-      if module_H != module_W:
-        assert(NotImplementedError)
-      pool_size = module_H
-    else:
-      pool_size = int(downsample[-1])
-    # Note: Potentially sub-optimal padding for non-perfectly aligned pooling
-    padding = 0 if ((module_H % pool_size == 0) and (module_W % pool_size == 0)) else 1
-    layers.append(pool(kernel_size=pool_size, stride=pool_size, padding=padding))
-    prev_dim = cur_dim * math.ceil(module_H / pool_size) * math.ceil(module_W / pool_size)
-  if downsample == 'aggressive':
-    raise ValueError()
-    layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
-    layers.append(nn.AvgPool2d(kernel_size=module_H // 2, stride=module_W // 2))
-    prev_dim = proj_dim
-    fc_dims = []  # No FC layers here
+  if downsample is not None:
+    if 'maxpool' in downsample or 'avgpool' in downsample:
+      pool = nn.MaxPool2d if 'maxpool' in downsample else nn.AvgPool2d
+      if 'full' in downsample:
+        if module_H != module_W:
+          assert(NotImplementedError)
+        pool_size = module_H
+      else:
+        pool_size = int(downsample[-1])
+      # Note: Potentially sub-optimal padding for non-perfectly aligned pooling
+      padding = 0 if ((module_H % pool_size == 0) and (module_W % pool_size == 0)) else 1
+      layers.append(pool(kernel_size=pool_size, stride=pool_size, padding=padding))
+      prev_dim = cur_dim * math.ceil(module_H / pool_size) * math.ceil(module_W / pool_size)
+    if downsample == 'aggressive':
+      raise ValueError()
+      layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
+      layers.append(nn.AvgPool2d(kernel_size=module_H // 2, stride=module_W // 2))
+      prev_dim = proj_dim
+      fc_dims = []  # No FC layers here
   layers.append(Flatten())
 
-  if len(dropout) == 0:
+  if isinstance(dropout, float):
+    dropout = [dropout] * len(fc_dims)
+  elif not dropout:
     dropout = [0] * len(fc_dims)
-  elif len(dropout) == 1:
-    dropout = dropout * len(fc_dims)
 
   for next_dim, next_dropout in zip(fc_dims, dropout):
     layers.append(nn.Linear(prev_dim, next_dim))

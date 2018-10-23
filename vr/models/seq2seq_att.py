@@ -18,6 +18,9 @@ from torch.nn.utils.rnn import (pack_padded_sequence,
 from vr.embedding import expand_embedding_vocab
 
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 class Attn(nn.Module):
   def __init__(self, hidden_size):
     super(Attn, self).__init__()
@@ -47,31 +50,6 @@ class Attn(nn.Module):
     v = self.v.repeat(encoder_outputs.data.shape[0],1).unsqueeze(1) #[B*1*H]
     energy = torch.bmm(v, energy) # [B*1*T]
     return energy
-
-# class Attn(nn.Module):
-  # def __init__(self, hidden_size):
-    # super(Attn, self).__init__()
-
-    # self.hidden_size = hidden_size
-    # self.attn = nn.Linear(self.hidden_size, hidden_size)
-
-  # def forward(self, encoder_outputs, hn):
-    # batch_size = encoder_outputs.size(0)
-    # seq_len = encoder_outputs.size(1)
-
-    # attn_energies = Variable(torch.zeros(batch_size, seq_len)) # B x S
-    # attn_energies = attn_energies.cuda()
-
-    # for b in range(batch_size):
-      # for i in range(seq_len):
-        # attn_energies[b, i] = self.score(hn[b], encoder_outputs[b, i].unsqueeze(0))
-
-    # return F.softmax(attn_energies, dim=1).unsqueeze(1)
-
-  # def score(self, hidden, encoder_output):
-    # energy = self.attn(encoder_output)
-    # energy = hidden.dot(energy)
-    # return energy
 
 
 class Seq2SeqAtt(nn.Module):
@@ -272,7 +250,7 @@ def sort_for_rnn(x, null=0):
   sorted_lengths, sorted_idx = torch.sort(lengths, dim=0, descending=True)
   sorted_lengths = sorted_lengths.data.tolist() # remove for pytorch 0.4+
   # ugly
-  inverse_sorted_idx = torch.LongTensor(sorted_idx.shape).fill_(0).cuda()
+  inverse_sorted_idx = torch.LongTensor(sorted_idx.shape).fill_(0).to(device)
   for i, v in enumerate(sorted_idx):
     inverse_sorted_idx[v.data] = i
 

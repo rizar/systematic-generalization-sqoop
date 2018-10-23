@@ -69,10 +69,7 @@ class ModuleNet(nn.Module):
     module_H = tmp.size(2)
     module_W = tmp.size(3)
 
-    #self.stem_coords = coord_map((feature_dim[1], feature_dim[2]))
     self.coords = coord_map((module_H, module_W))
-    #self.default_weight = Variable(torch.ones(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
-    #self.default_bias = Variable(torch.zeros(1, 1, self.module_dim)).type(torch.cuda.FloatTensor)
 
     if verbose:
       print('Here is my stem:')

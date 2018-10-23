@@ -16,6 +16,10 @@ import vr.programs
 
 from vr.models.filmed_net import coord_map
 
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 class MAC(nn.Module):
   """Implementation of the Compositional Attention Networks from: https://openreview.net/pdf?id=S1Euwz-Rb"""
   def __init__(self, vocab, feature_dim,
@@ -117,7 +121,7 @@ class MAC(nn.Module):
     self.writeUnit = mod
 
     #parameters for initial memory and control vectors
-    self.init_memory = nn.Parameter(torch.randn(module_dim).cuda())
+    self.init_memory = nn.Parameter(torch.randn(module_dim).to(device))
 
     #first transformation of question embeddings
     self.init_question_transformer = nn.Linear(self.module_dim, self.module_dim)
@@ -182,12 +186,12 @@ class MAC(nn.Module):
       self.read_scores = []
     N, _, H, W = feats.size()
 
-    memory_storage = Variable(torch.zeros(N, 1+self.num_modules, self.module_dim)).type(torch.cuda.FloatTensor)
+    memory_storage = torch.zeros(N, 1+self.num_modules, self.module_dim).to(device)
     memory_storage[:,0,:] = self.init_memory.expand(N, self.module_dim)
 
     if self.memory_dropout > 0. and not isTest:
-      dropout_mask_memory = Variable(torch.Tensor(N, self.module_dim).fill_(
-        self.memory_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      dropout_mask_memory = torch.Tensor(N, self.module_dim).fill_(
+        self.memory_dropout).bernoulli_().to(device)
     else:
       dropout_mask_memory = None
 
@@ -208,7 +212,7 @@ class MAC(nn.Module):
     controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x M x D
     control_scores = torch.cat([c.unsqueeze(1) for c in control_scores], 1) # N x M x T
 
-    disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).cuda()
+    disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).to(device)
     connections = []
     for pre_connect in self.pre_connects:
       connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x M x M
@@ -220,7 +224,7 @@ class MAC(nn.Module):
       mu = self.compute_mu(controls)
       logvar = -5 + self.compute_logvar(controls)
       std = (0.5 * logvar).exp()
-      noise = Variable(torch.randn(*std.size())).cuda()
+      noise = Variable(torch.randn(*std.size())).to(device)
       kls = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp()))
       vib_costs_each_step = kls.sum(2)
       self.vib_costs = vib_costs_each_step.max(1)[0]
@@ -538,8 +542,8 @@ def sincos_coord_map(shape, p_h=64., p_w=64.):
       x_coords[i, j] = math.sin(1.0 * i / (10000. ** (1.0 * jcoord / p_h)))
       y_coords[i, j] = math.cos(1.0 * j / (10000. ** (1.0 * icoord / p_w)))
 
-  x_coords = x_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
-  y_coords = y_coords.type(torch.cuda.FloatTensor).unsqueeze(0)
+  x_coords = torch.Tensor(x_coords).to(device).unsqueeze(0)
+  y_coords = torch.Tensor(y_coords).to(device).unsqueeze(0)
 
   return Variable(torch.cat([x_coords, y_coords], 0))
 

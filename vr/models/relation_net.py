@@ -12,6 +12,9 @@ from vr.models.layers import init_modules, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem
 
 
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 class RelationNet(nn.Module):
   def __init__(self,
                vocab,
@@ -62,7 +65,7 @@ class RelationNet(nn.Module):
     xv = x.unsqueeze(1).repeat(1, module_H)
     yv = y.unsqueeze(0).repeat(module_W, 1)
     coords = torch.stack([xv,yv], dim=2).view(-1, 2)
-    self.coords = Variable(coords.cuda())
+    self.coords = Variable(coords.to(device))
 
     # initialize relation model
     # (output of stem + 2 coordinates) * 2 objects + question vector

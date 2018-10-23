@@ -36,6 +36,8 @@ from vr.treeGenerator import TreeGenerator
 
 parser = argparse.ArgumentParser()
 logger = logging.getLogger(__name__)
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
 
 def parse_int_list(input_):
   if input_ == None:
@@ -449,8 +451,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
   if args.allow_resume and os.path.exists(args.checkpoint_path):
     program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type, use_simple=args.simple_encoder)
     execution_engine, _  = vr.utils.load_execution_engine(args.checkpoint_path, model_type=args.model_type)
-    program_generator.cuda()
-    execution_engine.cuda()
+    program_generator.to(device)
+    execution_engine.to(device)
     with open(args.checkpoint_path + '.json', 'r') as f:
       checkpoint = json.load(f)
     for key in list(stats.keys()):
@@ -488,7 +490,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                       lr=args.learning_rate,
                                       weight_decay=args.weight_decay)
 
-  loss_fn = torch.nn.CrossEntropyLoss().cuda()
+  loss_fn = torch.nn.CrossEntropyLoss().to(device)
 
   if args.exponential_moving_average_weight < 1. and args.model_type == 'MAC':
     EMA = vr.utils.EMA(args.exponential_moving_average_weight)
@@ -536,11 +538,11 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       (questions, _, feats, answers, programs, _) = batch
       if isinstance(questions, list):
         questions = questions[0]
-      questions_var = Variable(questions.cuda())
-      feats_var = Variable(feats.cuda())
-      answers_var = Variable(answers.cuda())
+      questions_var = Variable(questions.to(device))
+      feats_var = Variable(feats.to(device))
+      answers_var = Variable(answers.to(device))
       if programs[0] is not None:
-        programs_var = Variable(programs.cuda())
+        programs_var = Variable(programs.to(device))
 
       reward = None
       if args.model_type == 'PG':
@@ -581,7 +583,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
         if args.train_program_generator == 1:
           pg_optimizer.zero_grad()
-          program_generator.reinforce_backward(centered_reward.cuda())
+          program_generator.reinforce_backward(centered_reward.to(device))
           pg_optimizer.step()
       elif args.model_type == 'FiLM' or args.model_type == 'MAC' or args.model_type == 'TMAC':
         if args.set_execution_engine_eval == 1:
@@ -863,7 +865,7 @@ def get_program_generator(args):
       pg = Seq2SeqAtt(**kwargs)
     else:
       pg = Seq2Seq(**kwargs)
-  pg.cuda()
+  pg.to(device)
   pg.train()
   return pg, kwargs
 
@@ -1090,7 +1092,7 @@ def get_execution_engine(args):
       kwargs['use_film'] = args.nmn_use_film
       kwargs['use_simple_block'] = args.nmn_use_simple_block
       ee = ModuleNet(**kwargs)
-  ee.cuda()
+  ee.to(device)
   ee.train()
   return ee, kwargs
 
@@ -1152,7 +1154,7 @@ def get_baseline_model(args):
       model.rnn.token_to_idx[token] = idx
     kwargs['vocab'] = vocab
     model.rnn.expand_vocab(vocab['question_token_to_idx'])
-  model.cuda()
+  model.to(device)
   model.train()
   return model, kwargs
 
@@ -1173,17 +1175,17 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     if isinstance(questions, list):
       questions = questions[0]
 
-    questions_var = questions.cuda()
-    feats_var = feats.cuda()
+    questions_var = questions.to(device)
+    feats_var = feats.to(device)
     if programs[0] is not None:
-      programs_var = programs.cuda()
+      programs_var = programs.to(device)
 
     scores = None  # Use this for everything but PG
     if args.model_type == 'PG':
       #TODO(mnoukhov) change to scores for attention
       vocab = vr.utils.load_vocab(args.vocab_json)
       for i in range(questions.size(0)):
-        program_pred = program_generator.sample(Variable(questions[i:i+1].cuda(), volatile=True))
+        program_pred = program_generator.sample(Variable(questions[i:i+1].to(device), volatile=True))
         program_pred_str = vr.preprocess.decode(program_pred, vocab['program_idx_to_token'])
         program_str = vr.preprocess.decode(programs[i], vocab['program_idx_to_token'])
         if program_pred_str == program_str:

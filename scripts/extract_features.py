@@ -6,12 +6,19 @@
 
 import argparse, os, json
 import h5py
+import torch
 import numpy as np
 from scipy.misc import imread, imresize
 from tqdm import tqdm
 
+
 import torch
 import torchvision
+
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 
 
 parser = argparse.ArgumentParser()
@@ -45,7 +52,7 @@ def build_model(args):
     name = 'layer%d' % (i + 1)
     layers.append(getattr(cnn, name))
   model = torch.nn.Sequential(*layers)
-  model.cuda()
+  model.to(device)
   model.eval()
   return model
 
@@ -60,7 +67,7 @@ def run_batch(cur_batch, model):
 
   image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
   image_batch = (image_batch / 255.0 - mean) / std
-  image_batch = torch.FloatTensor(image_batch).cuda()
+  image_batch = torch.FloatTensor(image_batch).to(device)
   image_batch = torch.autograd.Variable(image_batch, volatile=True)
 
   feats = model(image_batch)

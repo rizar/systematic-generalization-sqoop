@@ -11,6 +11,10 @@ from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
 from torch.nn.init import uniform_, xavier_uniform_, constant_
 
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 class FiLMGen(nn.Module):
   def __init__(self,
     null_token=0,
@@ -166,7 +170,7 @@ class FiLMGen(nn.Module):
 
     idx = idx.type_as(x.data)
     x[x.data == self.NULL] = replace
-    return x, Variable(idx), Variable(mask).type(torch.cuda.FloatTensor)
+    return x, idx, mask.to(device)
 
   def encoder(self, x, isTest=False):
     V_in, V_out, D, H, H_full, L, N, T_in, T_out = self.get_dims(x=x)
@@ -174,9 +178,9 @@ class FiLMGen(nn.Module):
 
     if self.taking_context:
       lengths = torch.LongTensor(idx.shape).fill_(1) + idx.data.cpu()
-      lengths = Variable(lengths.cuda())
+      lengths = lengths.to(device)
       seq_lengths, perm_idx = lengths.sort(0, descending=True)
-      iperm_idx = torch.LongTensor(perm_idx.shape).fill_(0).cuda()
+      iperm_idx = torch.LongTensor(perm_idx.shape).fill_(0).to(device)
       for i, v in enumerate(perm_idx):
         iperm_idx[v.data] = i
       x = x[perm_idx]
@@ -188,7 +192,7 @@ class FiLMGen(nn.Module):
       c0 = Variable(torch.zeros(L, N, H).type_as(embed.data))
 
     if self.variational_embedding_dropout > 0. and not isTest:
-      varDrop = Variable(torch.Tensor(N, D).fill_(self.variational_embedding_dropout).bernoulli_()).type(torch.cuda.FloatTensor)
+      varDrop = torch.Tensor(N, D).fill_(self.variational_embedding_dropout).bernoulli_().to(device)
       embed = (embed / (1. - self.variational_embedding_dropout)) * varDrop.unsqueeze(1)
 
     if self.taking_context:
@@ -209,8 +213,6 @@ class FiLMGen(nn.Module):
       out = out[iperm_idx]
 
       if out.shape[1] < T_in:
-        #zeros = Variable(torch.FloatTensor(out.shape[0], T_in - out.shape[1], out.shape[2]).fill_(0.).cuda())
-        #out = torch.cat([out, zeros], 1)
         mask = mask[:, :(out.shape[1]-T_in)] #The packing truncate the original length so we need to change mask to fit it
 
       hn = hn[iperm_idx]

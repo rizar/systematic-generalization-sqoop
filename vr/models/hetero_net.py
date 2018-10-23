@@ -11,6 +11,10 @@ from torch.autograd import Variable
 from vr.models.layers import build_stem
 from vr.models.module_net import ModuleNet
 
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 class Find(nn.Module):
   # Input:
   #   image_feat_grid: [N, D_im, H, W]
@@ -162,7 +166,7 @@ class HeteroModuleNet(ModuleNet):
         # very ugly
         input_text = torch.LongTensor([self.text_token_to_idx[text_token]]).unsqueeze(0)
         if program.is_cuda:
-          input_text = input_text.cuda()
+          input_text = input_text.to(device)
         module_inputs.append(Variable(input_text))
 
       for _ in range(num_inputs):

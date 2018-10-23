@@ -13,11 +13,15 @@ import vr.programs
 from vr.data import ClevrDataset, ClevrDataLoader
 from vr.preprocess import tokenize, encode
 
+
+device = torch.device('cuda:0' if torch.cuda.is_available() else 'cpu')
+
+
 parser = argparse.ArgumentParser()
 parser.add_argument('--model_path', default=None)
 parser.add_argument('--data_dir', default=None, type=str)
 
-loss_fn = torch.nn.CrossEntropyLoss().cuda()
+loss_fn = torch.nn.CrossEntropyLoss().to(device)
 
 def run_our_model_batch(args, model, loader, dtype):
   model.type(dtype)
@@ -36,7 +40,7 @@ def run_our_model_batch(args, model, loader, dtype):
     else:
       questions_var = Variable(questions.type(dtype).long(), volatile=True)
     feats_var = Variable(feats.type(dtype), volatile=True)
-    answers_var = Variable(answers.cuda())
+    answers_var = Variable(answers.to(device))
     scores = model(feats_var, questions_var)
     loss = loss_fn(scores, answers_var)
     probs = F.softmax(scores)

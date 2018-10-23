@@ -609,7 +609,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.train_program_generator == 1 or args.train_execution_engine == 1:
             if args.grad_clip > 0:
               allMacParams = itertools.chain(program_generator.parameters(), execution_engine.parameters())
-              torch.nn.utils.clip_grad_norm(allMacParams, args.grad_clip)
+              torch.nn.utils.clip_grad_norm_(allMacParams, args.grad_clip)
             pg_optimizer.step()
             ee_optimizer.step()
 
@@ -685,7 +685,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         # record alphas and gradients and p(model) here : DEBUGGING
         if args.model_type == 'SHNMN':
-          p_model = F.sigmoid(execution_engine.tree_odds).data.cpu().numpy()[0]
+          p_model = F.sigmoid(execution_engine.tree_odds).item()
           if t % 10 == 0:
             print('p_model:', p_model)
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
@@ -710,17 +710,16 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         raise ValueError()
 
       if t % args.record_loss_every == 0:
-        running_loss += loss.data[0]
+        running_loss += loss.item()
         avg_loss = running_loss / args.record_loss_every
-        print(t, time.time() - batch_start_time, time.time() - compute_start_time,
-              loss.data[0])
+        print(t, time.time() - batch_start_time, time.time() - compute_start_time, loss.item())
         stats['train_losses'].append(avg_loss)
         stats['train_losses_ts'].append(t)
         if reward is not None:
-          stats['train_rewards'].append(reward)
+          stats['train_rewards'].append(reward.item())
         running_loss = 0.0
       else:
-        running_loss += loss.data[0]
+        running_loss += loss.item()
 
 
       if t % args.checkpoint_every == 0:
@@ -764,7 +763,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
         if val_acc > stats['best_val_acc']:
           stats['best_val_acc'] = val_acc
-          if valB_loader: stats['bestB_val_acc'] = valB_acc
+          if valB_loader:
+              stats['bestB_val_acc'] = valB_acc
           best_pg_state = get_state(program_generator)
           best_ee_state = get_state(execution_engine)
           best_baseline_state = get_state(baseline_model)
@@ -853,10 +853,7 @@ def get_program_generator(args):
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
-      if args.simple_encoder:
-        pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
-      else:
-        pg = FiLMGen(**kwargs)
+      pg = FiLMGen(**kwargs)
     elif args.model_type in ['RelNet', 'ConvLSTM']:
       kwargs['bidirectional'] = args.bidirectional == 1
       kwargs['encoder_type'] = args.encoder_type
@@ -886,8 +883,8 @@ def get_execution_engine(args):
       'stem_kernel_size': args.module_stem_kernel_size,
       'stem_stride': args.module_stem_stride,
       'stem_padding': args.module_stem_padding,
-      'module_dim': args.module_dim,
       'stem_dim': args.stem_dim,
+      'module_dim': args.module_dim,
       'module_kernel_size': args.module_kernel_size,
       'module_residual': args.module_residual == 1,
       'module_input_proj': args.module_input_proj,
@@ -1176,11 +1173,10 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     if isinstance(questions, list):
       questions = questions[0]
 
-    questions_var = Variable(questions.cuda(), volatile=True)
-    feats_var = Variable(feats.cuda(), volatile=True)
-    answers_var = Variable(feats.cuda(), volatile=True)
+    questions_var = questions.cuda()
+    feats_var = feats.cuda()
     if programs[0] is not None:
-      programs_var = Variable(programs.cuda(), volatile=True)
+      programs_var = programs.cuda()
 
     scores = None  # Use this for everything but PG
     if args.model_type == 'PG':

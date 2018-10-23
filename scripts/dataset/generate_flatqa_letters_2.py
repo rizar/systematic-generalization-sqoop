@@ -249,11 +249,11 @@ def flatQA_gen(vocab):
   sampler_class = LongTailSampler(uniform_dist)
 
   train_sampler = sampler_class(False, 1, vocab)
-  dev_sampler   = sampler_class(True,  2, vocab)
+  val_sampler   = sampler_class(True,  2, vocab)
   test_sampler  = sampler_class(True,  3, vocab)
 
   train_pairs = []
-  dev_pairs   = []
+  val_pairs   = []
   test_pairs  = []
 
   chosen = set([ (x,y) for x in vocab for y in vocab if x != y] )
@@ -266,15 +266,15 @@ def flatQA_gen(vocab):
   random.shuffle(train_pairs)
 
   left = list(chosen)
-  print('number of zero shot pairs: %d' %len(left))
+  print('number of zero shot pairs: %d' % len(left))
   # dev / test pairs are all unseen
-  dev_slice = len(left) // 2
+  val_slice = len(left) // 2
 
 
-  for pair in left[ : dev_slice] :
-    dev_pairs  += [pair]*args.num_repeats_eval
+  for pair in left[:val_slice]:
+    val_pairs  += [pair]*args.num_repeats_eval
 
-  for pair in left[ dev_slice : ] :
+  for pair in left[val_slice:]:
     test_pairs += [pair]*args.num_repeats_eval
 
 
@@ -333,7 +333,7 @@ def flatQA_gen(vocab):
 
 
   gen_data(train_pairs, train_sampler, 1, vocab, 'train', question_vocab, program_vocab)
-  gen_data(dev_pairs, dev_sampler, 2, vocab, 'dev', question_vocab, program_vocab)
+  gen_data(val_pairs, val_sampler, 2, vocab, 'val', question_vocab, program_vocab)
   gen_data(test_pairs, test_sampler, 3, vocab, 'test', question_vocab, program_vocab)
 
 
@@ -515,23 +515,20 @@ def main():
 
 if __name__ == '__main__':
   parser = argparse.ArgumentParser()
-  parser.add_argument('--train', type=int, default=1000,
-                      help="Size of the training set")
-  parser.add_argument('--val', type=int, default=1000,
-                      help="Size of the development set")
-  parser.add_argument('--test', type=int, default=1000,
-                      help="Size of the test set")
-  parser.add_argument('--program', type=str, choices=('best', 'noand', 'chain', 'chain2', 'chain3', 'chain_shortcut'), default='best')
+  parser.add_argument(
+    '--program', type=str,
+    choices=('best', 'noand', 'chain', 'chain2', 'chain3', 'chain_shortcut'),
+    default='best')
   parser.add_argument('--num-shapes', type=int, default=len(SHAPES))
-  parser.add_argument('--num-colors', type=int, default=len(COLORS))
+  parser.add_argument('--num-colors', type=int, default=1)
   parser.add_argument('--num-objects', type=int, default=5)
-  parser.add_argument('--rhs_variety', type=int, default=15)
-  parser.add_argument('--num_repeats', type=int, default=1000)
+  parser.add_argument('--rhs_variety', type=int, default=len(SHAPES) // 2)
+  parser.add_argument('--num_repeats', type=int, default=10)
   parser.add_argument('--num_repeats_eval', type=int, default=10)
-  parser.add_argument('--data_dir', type=str, default='/data/milatmp1/smurty')
-
-  parser.add_argument('--mode', type=str, choices=['from_scratch', 'gen_easy'], default='from_scratch')
-
+  parser.add_argument('--data_dir', type=str, default='.')
+  parser.add_argument(
+    '--mode', type=str, choices=['from_scratch', 'gen_easy'],
+    default='from_scratch')
   parser.add_argument('--image-size', type=int, default=64)
   parser.add_argument('--min-obj-size', type=int, default=10)
   parser.add_argument('--max-obj-size', type=int, default=15)

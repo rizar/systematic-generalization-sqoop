@@ -11,7 +11,7 @@ import math
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from torch.nn.init import kaiming_normal, kaiming_uniform
+from torch.nn.init import kaiming_normal_, kaiming_uniform_
 
 
 class SimpleVisualBlock(nn.Module):
@@ -186,9 +186,9 @@ def build_classifier(module_C, module_H, module_W, num_answers,
 
 def init_modules(modules, init='uniform'):
   if init.lower() == 'normal':
-    init_params = kaiming_normal
+    init_params = kaiming_normal_
   elif init.lower() == 'uniform':
-    init_params = kaiming_uniform
+    init_params = kaiming_uniform_
   else:
     return
   for m in modules:

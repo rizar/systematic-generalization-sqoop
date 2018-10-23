@@ -20,7 +20,6 @@ from vr.models import (ModuleNet,
                        FiLMedNet,
                        FiLMGen,
                        MAC,
-                       SimpleEncoderBinary,
                        RelationNet)
 
 def invert_dict(d):
@@ -50,18 +49,14 @@ def load_cpu(path):
   return torch.load(path, map_location=lambda storage, loc: storage)
 
 
-def load_program_generator(path, model_type='PG+EE', simple_encoder = False):
+def load_program_generator(path, model_type='PG+EE'):
   checkpoint = load_cpu(path)
   kwargs = checkpoint['program_generator_kwargs']
   state = checkpoint['program_generator_state']
   if model_type in ['FiLM', 'MAC']:
-    if simple_encoder:
-      print('Loading Simple Encoder')
-      model = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
-    else:
-      kwargs = get_updated_args(kwargs, FiLMGen)
-      print('Loading FiLMGen from ' + path)
-      model = FiLMGen(**kwargs)
+    kwargs = get_updated_args(kwargs, FiLMGen)
+    print('Loading FiLMGen from ' + path)
+    model = FiLMGen(**kwargs)
 
   elif model_type == 'PG+EE':
     print('Loading PG from ' + path)

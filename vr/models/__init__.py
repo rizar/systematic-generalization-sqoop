@@ -14,11 +14,7 @@ from vr.models.filmed_net import FiLMedNet
 from vr.models.seq2seq import Seq2Seq
 from vr.models.seq2seq_att import Seq2SeqAtt
 from vr.models.film_gen import FiLMGen
-from vr.models.tfilmed_net import TFiLMedNet
-from vr.models.rtfilmed_net import RTFiLMedNet
 from vr.models.maced_net import MAC
-from vr.models.tmaced_met import TMAC
 from vr.models.baselines import LstmModel, CnnLstmModel, CnnLstmSaModel
-from vr.models.simple_encoder import SimpleEncoderBinary
 from vr.models.relation_net import RelationNet
 from vr.models.convlstm import ConvLSTM

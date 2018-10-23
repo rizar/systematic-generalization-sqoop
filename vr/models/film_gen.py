@@ -9,7 +9,7 @@ from torch.nn.utils.rnn import pack_padded_sequence, pad_packed_sequence
 
 from vr.embedding import expand_embedding_vocab
 from vr.models.layers import init_modules
-from torch.nn.init import uniform, xavier_uniform, constant
+from torch.nn.init import uniform_, xavier_uniform_, constant_
 
 class FiLMGen(nn.Module):
   def __init__(self,
@@ -95,8 +95,8 @@ class FiLMGen(nn.Module):
     if self.taking_context:
       self.decoder_linear = None #nn.Linear(2 * hidden_dim, hidden_dim)
       for n, p in self.encoder_rnn.named_parameters():
-        if n.startswith('weight'): xavier_uniform(p)
-        elif n.startswith('bias'): constant(p, 0.)
+        if n.startswith('weight'): xavier_uniform_(p)
+        elif n.startswith('bias'): constant_(p, 0.)
     else:
       self.decoder_linear = nn.Linear(hidden_dim * self.num_dir, self.num_modules * self.cond_feat_size)
 
@@ -122,7 +122,7 @@ class FiLMGen(nn.Module):
 
     init_modules(self.modules())
     if embedding_uniform_boundary > 0.:
-      uniform(self.encoder_embed.weight, -1.*embedding_uniform_boundary, embedding_uniform_boundary)
+      uniform_(self.encoder_embed.weight, -1.*embedding_uniform_boundary, embedding_uniform_boundary)
 
     # The attention scores will be saved here if the attention is used.
     self.scores = None

@@ -34,6 +34,7 @@ class ModuleNet(nn.Module):
                stem_kernel_size,
                stem_stride,
                stem_padding,
+               stem_dim,
                module_dim,
                module_kernel_size,
                module_input_proj,
@@ -60,7 +61,7 @@ class ModuleNet(nn.Module):
     # so [1,0] would be sharing the CNN weights while having different film coefficients for different modules in the program
     self.sharing_patterns = sharing_patterns
 
-    self.stem = build_stem(feature_dim[0], module_dim,
+    self.stem = build_stem(feature_dim[0], stem_dim, module_dim,
                            num_layers=stem_num_layers,
                            subsample_layers=stem_subsample_layers,
                            kernel_size=stem_kernel_size,
@@ -247,7 +248,7 @@ class ModuleNet(nn.Module):
     used_fn_j = True
     if j < program.size(1):
       fn_idx = program.data[i, j]
-      fn_str = self.vocab['program_idx_to_token'][fn_idx]
+      fn_str = self.vocab['program_idx_to_token'][fn_idx.item()]
     else:
       used_fn_j = False
       fn_str = 'scene'
@@ -325,7 +326,7 @@ class ModuleNet(nn.Module):
 
     if type(program) is list or type(program) is tuple:
       final_module_outputs = self._forward_modules_json(feats, program)
-    elif type(program) is Variable and program.dim() == 2:
+    elif type(program) is torch.Tensor and program.dim() == 2:
       final_module_outputs = self._forward_modules_ints(feats, program)
     elif torch.is_tensor(program) and program.dim() == 3:
       final_module_outputs = self._forward_modules_probs(feats, program)

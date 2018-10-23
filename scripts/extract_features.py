@@ -6,7 +6,6 @@
 
 import argparse, os, json
 import h5py
-import torch
 import numpy as np
 from scipy.misc import imread, imresize
 from tqdm import tqdm

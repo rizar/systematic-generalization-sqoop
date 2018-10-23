@@ -853,10 +853,7 @@ def get_program_generator(args):
       kwargs['module_num_layers'] = args.module_num_layers
       kwargs['module_dim'] = args.module_dim
       kwargs['debug_every'] = args.debug_every
-      if args.simple_encoder:
-        pg = SimpleEncoderBinary(kwargs['encoder_vocab_size'], kwargs['wordvec_dim'], kwargs['hidden_dim'], kwargs['module_dim'])
-      else:
-        pg = FiLMGen(**kwargs)
+      pg = FiLMGen(**kwargs)
     elif args.model_type in ['RelNet', 'ConvLSTM']:
       kwargs['bidirectional'] = args.bidirectional == 1
       kwargs['encoder_type'] = args.encoder_type

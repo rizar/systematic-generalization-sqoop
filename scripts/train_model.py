@@ -685,7 +685,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         loss.backward()
         # record alphas and gradients and p(model) here : DEBUGGING
         if args.model_type == 'SHNMN':
-          p_model = F.sigmoid(execution_engine.tree_odds).data.cpu().numpy()[0]
+          p_model = F.sigmoid(execution_engine.tree_odds).item()
           if t % 10 == 0:
             print('p_model:', p_model)
         if args.model_type == 'SHNMN' and not args.hard_code_alpha:
@@ -710,17 +710,16 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         raise ValueError()
 
       if t % args.record_loss_every == 0:
-        running_loss += loss.data[0]
+        running_loss += loss.item()
         avg_loss = running_loss / args.record_loss_every
-        print(t, time.time() - batch_start_time, time.time() - compute_start_time,
-              loss.data[0])
+        print(t, time.time() - batch_start_time, time.time() - compute_start_time, loss.item())
         stats['train_losses'].append(avg_loss)
         stats['train_losses_ts'].append(t)
         if reward is not None:
-          stats['train_rewards'].append(reward)
+          stats['train_rewards'].append(reward.item())
         running_loss = 0.0
       else:
-        running_loss += loss.data[0]
+        running_loss += loss.item()
 
 
       if t % args.checkpoint_every == 0:
@@ -764,7 +763,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
         if val_acc > stats['best_val_acc']:
           stats['best_val_acc'] = val_acc
-          if valB_loader: stats['bestB_val_acc'] = valB_acc
+          if valB_loader:
+              stats['bestB_val_acc'] = valB_acc
           best_pg_state = get_state(program_generator)
           best_ee_state = get_state(execution_engine)
           best_baseline_state = get_state(baseline_model)
@@ -1176,11 +1176,10 @@ def check_accuracy(args, program_generator, execution_engine, baseline_model, lo
     if isinstance(questions, list):
       questions = questions[0]
 
-    questions_var = Variable(questions.cuda(), volatile=True)
-    feats_var = Variable(feats.cuda(), volatile=True)
-    answers_var = Variable(feats.cuda(), volatile=True)
+    questions_var = questions.cuda()
+    feats_var = feats.cuda()
     if programs[0] is not None:
-      programs_var = Variable(programs.cuda(), volatile=True)
+      programs_var = programs.cuda()
 
     scores = None  # Use this for everything but PG
     if args.model_type == 'PG':

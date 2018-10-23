@@ -120,7 +120,7 @@ class ClevrDataset(Dataset):
     if program_seq is not None:
       program_json_seq = []
       for fn_idx in program_seq:
-        fn_str = self.vocab['program_idx_to_token'][fn_idx]
+        fn_str = self.vocab['program_idx_to_token'][int(fn_idx)]
         if fn_str == '<START>' or fn_str == '<END>':
           continue
         fn = vr.programs.str_to_function(fn_str)

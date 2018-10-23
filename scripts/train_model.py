@@ -609,7 +609,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
           if args.train_program_generator == 1 or args.train_execution_engine == 1:
             if args.grad_clip > 0:
               allMacParams = itertools.chain(program_generator.parameters(), execution_engine.parameters())
-              torch.nn.utils.clip_grad_norm(allMacParams, args.grad_clip)
+              torch.nn.utils.clip_grad_norm_(allMacParams, args.grad_clip)
             pg_optimizer.step()
             ee_optimizer.step()
 

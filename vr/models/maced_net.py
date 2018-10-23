@@ -25,6 +25,7 @@ class MAC(nn.Module):
                stem_subsample_layers,
                stem_stride,
                stem_padding,
+               stem_dim,
                num_modules,
                module_dim,
                question_embedding_dropout,
@@ -84,7 +85,7 @@ class MAC(nn.Module):
 
     # Initialize stem
     stem_feature_dim = feature_dim[0] + self.stem_use_coords * self.num_extra_channels
-    self.stem = build_stem(stem_feature_dim, module_dim,
+    self.stem = build_stem(stem_feature_dim, stem_dim, module_dim,
                            num_layers=stem_num_layers, with_batchnorm=stem_batchnorm,
                            kernel_size=stem_kernel_size, stride=stem_stride, padding=stem_padding,
                            subsample_layers=stem_subsample_layers, acceptEvenKernel=True)

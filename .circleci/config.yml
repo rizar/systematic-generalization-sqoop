@@ -48,7 +48,7 @@ jobs:
           name: run tests
           command: |
             . venv/bin/activate
-            python setup.py
+            python setup.py install
             bash test.sh
 
       - store_artifacts:

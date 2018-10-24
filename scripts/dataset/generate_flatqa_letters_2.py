@@ -484,7 +484,7 @@ def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
 def main():
   vocab = SHAPES
   if args.mode == 'from_scratch':
-    flatQA_gen(SHAPES)
+    flatQA_gen(SHAPES[:args.num_shapes])
   else:
     uniform_dist = [1.0 / len(vocab) ]*len(vocab)
     sampler_class = LongTailSampler(uniform_dist)

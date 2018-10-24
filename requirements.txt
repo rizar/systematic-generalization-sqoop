@@ -3,3 +3,4 @@ numpy
 torchvision
 h5py
 tqdm
+Pillow

@@ -12,8 +12,8 @@ questions = h5py.File('data/train_questions.h5')
 vocab = load_vocab('data/vocab.json')
 dataset = ClevrDataset(questions, features, vocab)
 def batch():
-  for i in numpy.random.choice(700000, 1):
-    dataset[i]
+    for i in numpy.random.choice(700000, 1):
+        dataset[i]
 pr = cProfile.Profile()
 pr.enable()
 print(timeit.timeit(batch, number=100) / 100)

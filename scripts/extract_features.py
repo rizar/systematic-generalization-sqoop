@@ -34,93 +34,93 @@ parser.add_argument('--batch_size', default=128, type=int)
 
 
 def build_model(args):
-  if args.model.lower() == 'none':
-    return None
-  if not hasattr(torchvision.models, args.model):
-    raise ValueError('Invalid model "%s"' % args.model)
-  if not 'resnet' in args.model:
-    raise ValueError('Feature extraction only supports ResNets')
-  cnn = getattr(torchvision.models, args.model)(pretrained=True)
-  layers = [
-    cnn.conv1,
-    cnn.bn1,
-    cnn.relu,
-    cnn.maxpool,
-  ]
-  for i in range(args.model_stage):
-    name = 'layer%d' % (i + 1)
-    layers.append(getattr(cnn, name))
-  model = torch.nn.Sequential(*layers)
-  model.to(device)
-  model.eval()
-  return model
+    if args.model.lower() == 'none':
+        return None
+    if not hasattr(torchvision.models, args.model):
+        raise ValueError('Invalid model "%s"' % args.model)
+    if not 'resnet' in args.model:
+        raise ValueError('Feature extraction only supports ResNets')
+    cnn = getattr(torchvision.models, args.model)(pretrained=True)
+    layers = [
+        cnn.conv1,
+      cnn.bn1,
+      cnn.relu,
+      cnn.maxpool,
+    ]
+    for i in range(args.model_stage):
+        name = 'layer%d' % (i + 1)
+        layers.append(getattr(cnn, name))
+    model = torch.nn.Sequential(*layers)
+    model.to(device)
+    model.eval()
+    return model
 
 
 def run_batch(cur_batch, model):
-  if model is None:
+    if model is None:
+        image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
+        return image_batch / 255.  # Scale pixel values to [0, 1]
+
+    mean = np.array([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
+    std = np.array([0.229, 0.224, 0.224]).reshape(1, 3, 1, 1)
+
     image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
-    return image_batch / 255.  # Scale pixel values to [0, 1]
+    image_batch = (image_batch / 255.0 - mean) / std
+    image_batch = torch.FloatTensor(image_batch).to(device)
+    image_batch = torch.autograd.Variable(image_batch, volatile=True)
 
-  mean = np.array([0.485, 0.456, 0.406]).reshape(1, 3, 1, 1)
-  std = np.array([0.229, 0.224, 0.224]).reshape(1, 3, 1, 1)
+    feats = model(image_batch)
+    feats = feats.data.cpu().clone().numpy()
 
-  image_batch = np.concatenate(cur_batch, 0).astype(np.float32)
-  image_batch = (image_batch / 255.0 - mean) / std
-  image_batch = torch.FloatTensor(image_batch).to(device)
-  image_batch = torch.autograd.Variable(image_batch, volatile=True)
-
-  feats = model(image_batch)
-  feats = feats.data.cpu().clone().numpy()
-
-  return feats
+    return feats
 
 
 def main(args):
-  input_paths = []
-  idx_set = set()
-  for fn in os.listdir(args.input_image_dir):
-    if not fn.endswith('.png'): continue
-    idx = int(os.path.splitext(fn)[0].split('_')[-1])
-    input_paths.append((os.path.join(args.input_image_dir, fn), idx))
-    idx_set.add(idx)
-  input_paths.sort(key=lambda x: x[1])
-  assert len(idx_set) == len(input_paths)
-  assert min(idx_set) == 0 and max(idx_set) == len(idx_set) - 1
-  if args.max_images is not None:
-    input_paths = input_paths[:args.max_images]
-  print(input_paths[0])
-  print(input_paths[-1])
+    input_paths = []
+    idx_set = set()
+    for fn in os.listdir(args.input_image_dir):
+        if not fn.endswith('.png'): continue
+        idx = int(os.path.splitext(fn)[0].split('_')[-1])
+        input_paths.append((os.path.join(args.input_image_dir, fn), idx))
+        idx_set.add(idx)
+    input_paths.sort(key=lambda x: x[1])
+    assert len(idx_set) == len(input_paths)
+    assert min(idx_set) == 0 and max(idx_set) == len(idx_set) - 1
+    if args.max_images is not None:
+        input_paths = input_paths[:args.max_images]
+    print(input_paths[0])
+    print(input_paths[-1])
 
-  model = build_model(args)
+    model = build_model(args)
 
-  img_size = (args.image_height, args.image_width)
-  with h5py.File(args.output_h5_file, 'w') as f:
-    feat_dset = None
-    i0 = 0
-    cur_batch = []
-    for i, (path, idx) in tqdm(enumerate(input_paths)):
-      img = imread(path, mode='RGB')
-      img = imresize(img, img_size, interp='bicubic')
-      img = img.transpose(2, 0, 1)[None]
-      cur_batch.append(img)
-      if len(cur_batch) == args.batch_size:
-        feats = run_batch(cur_batch, model)
-        if feat_dset is None:
-          N = len(input_paths)
-          _, C, H, W = feats.shape
-          feat_dset = f.create_dataset('features', (N, C, H, W),
-                                       dtype=np.float32)
-        i1 = i0 + len(cur_batch)
-        feat_dset[i0:i1] = feats
-        i0 = i1
+    img_size = (args.image_height, args.image_width)
+    with h5py.File(args.output_h5_file, 'w') as f:
+        feat_dset = None
+        i0 = 0
         cur_batch = []
-    if len(cur_batch) > 0:
-      feats = run_batch(cur_batch, model)
-      i1 = i0 + len(cur_batch)
-      feat_dset[i0:i1] = feats
-  return
+        for i, (path, idx) in tqdm(enumerate(input_paths)):
+            img = imread(path, mode='RGB')
+            img = imresize(img, img_size, interp='bicubic')
+            img = img.transpose(2, 0, 1)[None]
+            cur_batch.append(img)
+            if len(cur_batch) == args.batch_size:
+                feats = run_batch(cur_batch, model)
+                if feat_dset is None:
+                    N = len(input_paths)
+                    _, C, H, W = feats.shape
+                    feat_dset = f.create_dataset('features', (N, C, H, W),
+                                                 dtype=np.float32)
+                i1 = i0 + len(cur_batch)
+                feat_dset[i0:i1] = feats
+                i0 = i1
+                cur_batch = []
+        if len(cur_batch) > 0:
+            feats = run_batch(cur_batch, model)
+            i1 = i0 + len(cur_batch)
+            feat_dset[i0:i1] = feats
+    return
 
 
 if __name__ == '__main__':
-  args = parser.parse_args()
-  main(args)
+    args = parser.parse_args()
+    main(args)

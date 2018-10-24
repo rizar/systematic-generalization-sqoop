@@ -10,4 +10,4 @@ bash scripts/train/ee_flatqa.sh --data_dir flatqa-letters-variety_1-repeats_100 
 bash scripts/train/ee_new_flatqa.sh --data_dir flatqa-letters-variety_1-repeats_100 $ARGS --checkpoint_path=ee_new_flatqa
 bash scripts/train/rel_flatqa.sh --data_dir flatqa-letters-variety_1-repeats_100 $ARGS --checkpoint_path=rel_flatqa
 bash scripts/train/convlstm_flatqa.sh --data_dir flatqa-letters-variety_1-repeats_100 $ARGS --checkpoint_path=convlstm_flatqa
-bash scripts/train/shnmn.sh --data_dir flatqa-letters-variety_1-repeats_100 $ARGS --checkpoint_path=shnmn_flatqa
+bash scripts/train/shnmn_flatqa.sh --data_dir flatqa-letters-variety_1-repeats_100 $ARGS --checkpoint_path=shnmn_flatqa

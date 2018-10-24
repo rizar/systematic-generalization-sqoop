@@ -192,8 +192,6 @@ def generate_scene(rng, sampler, objects=[], restrict = False, **kwargs):
     return objects
 
 
-
-
 class Sampler:
     def __init__(self, test, seed, objects):
         self._test = test
@@ -243,7 +241,148 @@ def LongTailSampler(long_tail_dist):
     return partial(_LongTailSampler, long_tail_dist)
 
 
-def flatQA_gen(vocab):
+def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vocab):
+    num_examples = len(obj_pairs)
+    max_question_len = 8
+    if args.program == 'best':
+        max_program_len = 13
+    elif args.program == 'noand':
+        max_program_len = 9
+    elif args.program in ['chain', 'chain2', 'chain3']:
+        max_program_len = 8
+    elif args.program == 'chain_shortcut':
+        max_program_len = 12
+
+    presampled_relations = [sampler.sample_relation() for ex in obj_pairs] # pre-sample relations
+    with h5py.File(prefix + '_questions.h5', 'w') as dst_questions, h5py.File(prefix + '_features.h5', 'w') as dst_features:
+        features_dtype = h5py.special_dtype(vlen=numpy.dtype('uint8'))
+        features_dataset = dst_features.create_dataset('features', (num_examples,), dtype=features_dtype)
+        questions_dataset = dst_questions.create_dataset('questions', (num_examples, max_question_len), dtype=numpy.int64)
+        programs_dataset = dst_questions.create_dataset('programs', (num_examples, max_program_len), dtype=numpy.int64)
+        answers_dataset = dst_questions.create_dataset('answers', (num_examples,), dtype=numpy.int64)
+        image_idxs_dataset = dst_questions.create_dataset('image_idxs', (num_examples,), dtype=numpy.int64)
+
+        i = 0
+        rejection_sampling = {'a' : 0, 'b' : 0, 'c' : 0, 'd' : 0, 'e' : 0, 'f' : 0}
+
+        # different seeds for train/dev/test
+        rng = numpy.random.RandomState(seed)
+        before = time.time()
+        scenes = []
+        while i < len(obj_pairs):
+            scene, question, program, success, key = generate_image_and_question(
+                obj_pairs[i], sampler, rng, (i % 2) == 0, vocab, presampled_relations[i])
+            rejection_sampling[key] += 1
+            if success:
+                scenes.append(scene)
+                buffer_ = io.BytesIO()
+                image = draw_scene(scene)
+                image.save(buffer_, format='png')
+                buffer_.seek(0)
+                features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8')
+                questions_dataset[i]  = [question_vocab[w] for w in question]
+                programs_dataset[i]   = [program_vocab[w] for w in program]
+                answers_dataset[i]    = int( (i%2) == 0)
+                image_idxs_dataset[i] = i
+
+                i += 1
+                if i % 1000 == 0:
+                    time_data = "{} seconds per example".format((time.time() - before) / i )
+                    print(time_data)
+                print("\r>> Done with %d/%d examples : %s " %(i+1, len(obj_pairs),  rejection_sampling), end = '')
+                sys.stdout.flush()
+
+    print("{} seconds per example".format((time.time() - before) / len(obj_pairs) ))
+
+    with open(prefix + '_scenes.json', 'w') as dst:
+        json.dump(scenes, dst, indent=2, cls=CustomJSONEncoder)
+
+
+def generate_image_and_question(pair, sampler, rng, label, vocab, rel):
+    # x rel y has value label where pair == (x, y)
+
+    max_question_len = 8
+    if args.program == 'best':
+        max_program_len = 13
+    elif args.program == 'noand':
+        max_program_len = 9
+    elif args.program in ['chain', 'chain2', 'chain3']:
+        max_program_len = 8
+    elif args.program == 'chain_shortcut':
+        max_program_len = 12
+
+    x,y = pair
+    if label:
+        obj1 = get_random_spot(rng, [])
+        obj2 = get_random_spot(rng, [obj1])
+        if not obj2 or not obj1.relate(rel, obj2): return None, None, None, False, 'a'
+        obj1.shape = x
+        obj2.shape = y
+        scene = generate_scene(rng, sampler, objects=[obj1, obj2], restrict = False, relation=rel)
+    else:
+        # first generate a scene
+        obj1 = get_random_spot(rng, [])
+        obj2 = get_random_spot(rng, [obj1], rel = rel, rel_holds = False)
+        if not obj2 or obj1.relate(rel, obj2): return None, None, None, False, 'b'
+        obj1.shape = x
+        obj2.shape = y
+
+
+        scene = generate_scene(rng, sampler, objects = [obj1, obj2], restrict = True, relation=rel)
+        # choose x,y,x', y' st. x r' y, x r y', x' r y holds true
+
+        obj3 = scene[2] #x'
+        obj4 = scene[3] #y'
+
+        if not obj1.relate(rel, obj4): return None, None, None, False, 'c'
+        elif not obj3.relate(rel, obj2): return None, None, None, False, 'd'
+
+    color1 = "green"
+    color2 = "green"
+    shape1 = x
+    shape2 = y
+    question = ["is", "there", "a", color1 , x, rel, color2, y]
+    if args.program == 'best':
+        program = ["<START>", relation_module(rel),
+             "And", shape_module(shape1), "scene", color_module(color1), "scene",
+             "And", shape_module(shape2), "scene", color_module(color2), "scene",
+             "<END>"]
+    elif args.program == 'noand':
+        program = ["<START>", relation_module(rel),
+             shape_module(shape1), color_module(color1), "scene",
+             shape_module(shape2), color_module(color2), "scene",
+             "<END>"]
+    elif args.program == 'chain':
+        program = ["<START>",
+             shape_module(shape1), color_module(color1),
+             unary_relation_module(rel),
+             shape_module(shape2), color_module(color2),
+             "scene", "<END>"]
+    elif args.program == 'chain2':
+        program = ["<START>",
+             shape_module(shape1), color_module(color1),
+             shape_module(shape2), color_module(color2),
+             unary_relation_module(rel),
+             "scene", "<END>"]
+    elif args.program == 'chain3':
+        program = ["<START>",
+             unary_relation_module(rel),
+             shape_module(shape1), color_module(color1),
+             shape_module(shape2), color_module(color2),
+             "scene", "<END>"]
+    elif args.program == 'chain_shortcut':
+        program = ["<START>",
+             binary_shape_module(shape1), 'scene',
+             binary_color_module(color1), 'scene',
+             unary_relation_module(rel),
+             binary_shape_module(shape2), 'scene',
+             binary_color_module(color2), 'scene',
+             'scene', "<END>"]
+
+    return scene, question, program, True, 'f'
+
+
+def gen_sqoop(vocab):
     uniform_dist = [1.0 / len(vocab) ]*len(vocab)
     sampler_class = LongTailSampler(uniform_dist)
 
@@ -336,181 +475,34 @@ def flatQA_gen(vocab):
     gen_data(test_pairs, test_sampler, 3, vocab, 'test', question_vocab, program_vocab)
 
 
+def gen_image_understanding_test():
+    uniform_dist = [1.0 / len(vocab) ]*len(vocab)
+    sampler_class = LongTailSampler(uniform_dist)
+
+    eval_sampler = sampler_class(True, 4, vocab)
+
+    question_file = h5py.File('train_questions.h5', 'r')
+    questions = question_file['questions']
+    vocab_file = open('vocab.json'); vocab_obj = json.load(vocab_file);
+
+    question_vocab = vocab_obj['question_token_to_idx']
+    program_vocab  = vocab_obj['program_token_to_idx']
+
+    inverse_vocab = {idx : sym for (sym, idx) in question_vocab.items() }
+
+    seen_pairs = []
+    for question in questions:
+        x,y = (inverse_vocab[question[4] ], inverse_vocab[question[7] ])
+        seen_pairs.append( (x,y) )
+
+    seen_pairs_uniq = list(set(seen_pairs))
+    seen_pairs = []
+    for seen_pair in seen_pairs_uniq:
+        seen_pairs += [seen_pair]*args.num_repeats_eval
 
 
-def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vocab):
-    num_examples = len(obj_pairs)
-    max_question_len = 8
-    if args.program == 'best':
-        max_program_len = 13
-    elif args.program == 'noand':
-        max_program_len = 9
-    elif args.program in ['chain', 'chain2', 'chain3']:
-        max_program_len = 8
-    elif args.program == 'chain_shortcut':
-        max_program_len = 12
+    gen_data(seen_pairs, eval_sampler, 4, vocab, 'test_easy', question_vocab, program_vocab)
 
-    presampled_relations = [sampler.sample_relation() for ex in obj_pairs] # pre-sample relations
-    with h5py.File(prefix + '_questions.h5', 'w') as dst_questions, h5py.File(prefix + '_features.h5', 'w') as dst_features:
-        features_dtype = h5py.special_dtype(vlen=numpy.dtype('uint8'))
-        features_dataset = dst_features.create_dataset('features', (num_examples,), dtype=features_dtype)
-        questions_dataset = dst_questions.create_dataset('questions', (num_examples, max_question_len), dtype=numpy.int64)
-        programs_dataset = dst_questions.create_dataset('programs', (num_examples, max_program_len), dtype=numpy.int64)
-        answers_dataset = dst_questions.create_dataset('answers', (num_examples,), dtype=numpy.int64)
-        image_idxs_dataset = dst_questions.create_dataset('image_idxs', (num_examples,), dtype=numpy.int64)
-
-        i = 0
-        rejection_sampling = {'a' : 0, 'b' : 0, 'c' : 0, 'd' : 0, 'e' : 0, 'f' : 0}
-
-        # different seeds for train/dev/test
-        rng = numpy.random.RandomState(seed)
-        before = time.time()
-        scenes = []
-        while i < len(obj_pairs):
-            scene, question, program, success, key = generate_imgAndQuestion(obj_pairs[i], sampler, rng, (i % 2) == 0, vocab, presampled_relations[i])
-            rejection_sampling[key] += 1
-            if success:
-                scenes.append(scene)
-                buffer_ = io.BytesIO()
-                image = draw_scene(scene)
-                image.save(buffer_, format='png')
-                buffer_.seek(0)
-                features_dataset[i]   = numpy.frombuffer(buffer_.read(), dtype='uint8')
-                questions_dataset[i]  = [question_vocab[w] for w in question]
-                programs_dataset[i]   = [program_vocab[w] for w in program]
-                answers_dataset[i]    = int( (i%2) == 0)
-                image_idxs_dataset[i] = i
-
-                i += 1
-                if i % 1000 == 0:
-                    time_data = "{} seconds per example".format((time.time() - before) / i )
-                    print(time_data)
-                print("\r>> Done with %d/%d examples : %s " %(i+1, len(obj_pairs),  rejection_sampling), end = '')
-                sys.stdout.flush()
-
-    print("{} seconds per example".format((time.time() - before) / len(obj_pairs) ))
-
-    with open(prefix + '_scenes.json', 'w') as dst:
-        json.dump(scenes, dst, indent=2, cls=CustomJSONEncoder)
-
-
-def generate_imgAndQuestion(pair, sampler, rng, label, vocab, rel):
-    # x rel y has value label where pair == (x, y)
-
-    max_question_len = 8
-    if args.program == 'best':
-        max_program_len = 13
-    elif args.program == 'noand':
-        max_program_len = 9
-    elif args.program in ['chain', 'chain2', 'chain3']:
-        max_program_len = 8
-    elif args.program == 'chain_shortcut':
-        max_program_len = 12
-
-
-
-    x,y = pair
-    if label:
-        obj1 = get_random_spot(rng, [])
-        obj2 = get_random_spot(rng, [obj1])
-        if not obj2 or not obj1.relate(rel, obj2): return None, None, None, False, 'a'
-        obj1.shape = x
-        obj2.shape = y
-        scene = generate_scene(rng, sampler, objects=[obj1, obj2], restrict = False, relation=rel)
-    else:
-        # first generate a scene
-        obj1 = get_random_spot(rng, [])
-        obj2 = get_random_spot(rng, [obj1], rel = rel, rel_holds = False)
-        if not obj2 or obj1.relate(rel, obj2): return None, None, None, False, 'b'
-        obj1.shape = x
-        obj2.shape = y
-
-
-        scene = generate_scene(rng, sampler, objects = [obj1, obj2], restrict = True, relation=rel)
-        # choose x,y,x', y' st. x r' y, x r y', x' r y holds true
-
-        obj3 = scene[2] #x'
-        obj4 = scene[3] #y'
-
-        if not obj1.relate(rel, obj4): return None, None, None, False, 'c'
-        elif not obj3.relate(rel, obj2): return None, None, None, False, 'd'
-
-    color1 = "green"
-    color2 = "green"
-    shape1 = x
-    shape2 = y
-    question = ["is", "there", "a", color1 , x, rel, color2, y]
-    if args.program == 'best':
-        program = ["<START>", relation_module(rel),
-             "And", shape_module(shape1), "scene", color_module(color1), "scene",
-             "And", shape_module(shape2), "scene", color_module(color2), "scene",
-             "<END>"]
-    elif args.program == 'noand':
-        program = ["<START>", relation_module(rel),
-             shape_module(shape1), color_module(color1), "scene",
-             shape_module(shape2), color_module(color2), "scene",
-             "<END>"]
-    elif args.program == 'chain':
-        program = ["<START>",
-             shape_module(shape1), color_module(color1),
-             unary_relation_module(rel),
-             shape_module(shape2), color_module(color2),
-             "scene", "<END>"]
-    elif args.program == 'chain2':
-        program = ["<START>",
-             shape_module(shape1), color_module(color1),
-             shape_module(shape2), color_module(color2),
-             unary_relation_module(rel),
-             "scene", "<END>"]
-    elif args.program == 'chain3':
-        program = ["<START>",
-             unary_relation_module(rel),
-             shape_module(shape1), color_module(color1),
-             shape_module(shape2), color_module(color2),
-             "scene", "<END>"]
-    elif args.program == 'chain_shortcut':
-        program = ["<START>",
-             binary_shape_module(shape1), 'scene',
-             binary_color_module(color1), 'scene',
-             unary_relation_module(rel),
-             binary_shape_module(shape2), 'scene',
-             binary_color_module(color2), 'scene',
-             'scene', "<END>"]
-
-    return scene, question, program, True, 'f'
-
-
-def main():
-    vocab = SHAPES
-    if args.mode == 'from_scratch':
-        flatQA_gen(SHAPES[:args.num_shapes])
-    else:
-        uniform_dist = [1.0 / len(vocab) ]*len(vocab)
-        sampler_class = LongTailSampler(uniform_dist)
-
-        eval_sampler = sampler_class(True, 4, vocab)
-
-        question_file = h5py.File('train_questions.h5', 'r')
-        questions = question_file['questions']
-        vocab_file = open('vocab.json'); vocab_obj = json.load(vocab_file);
-
-        question_vocab = vocab_obj['question_token_to_idx']
-        program_vocab  = vocab_obj['program_token_to_idx']
-
-        inverse_vocab = {idx : sym for (sym, idx) in question_vocab.items() }
-
-        seen_pairs = []
-        for question in questions:
-            x,y = (inverse_vocab[question[4] ], inverse_vocab[question[7] ])
-            seen_pairs.append( (x,y) )
-
-        seen_pairs_uniq = list(set(seen_pairs))
-        seen_pairs = []
-        for seen_pair in seen_pairs_uniq:
-            seen_pairs += [seen_pair]*args.num_repeats_eval
-
-
-        gen_data(seen_pairs, eval_sampler, 4, vocab, 'test_easy', question_vocab, program_vocab)
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
@@ -526,8 +518,11 @@ if __name__ == '__main__':
     parser.add_argument('--num_repeats_eval', type=int, default=10)
     parser.add_argument('--data_dir', type=str, default='.')
     parser.add_argument(
-        '--mode', type=str, choices=['from_scratch', 'gen_easy'],
-      default='from_scratch')
+        '--mode', type=str, choices=['sqoop', 'sqoop_easy_test'],
+      default='sqoop',
+      help='in sqoop_easy_test mode the script generates a test set with the same '
+           'questions as the dataset in the current directory, '
+           'but with different images')
     parser.add_argument('--image-size', type=int, default=64)
     parser.add_argument('--min-obj-size', type=int, default=10)
     parser.add_argument('--max-obj-size', type=int, default=15)
@@ -536,7 +531,7 @@ if __name__ == '__main__':
     args = parser.parse_args()
 
     args.level = 'relations'
-    data_full_dir = "%s/flatqa-letters-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
+    data_full_dir = "%s/sqoop-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
     if not os.path.exists(data_full_dir):
         os.makedirs(data_full_dir)
 
@@ -546,4 +541,8 @@ if __name__ == '__main__':
 
     FONT_OBJECTS = { font_size : ImageFont.truetype(args.font) for font_size in range(10, 16) }
 
-    main()
+    vocab = SHAPES[:args.num_shapes]
+    if args.mode == 'sqoop':
+        gen_sqoop(vocab)
+    else:
+        gen_image_understanding_test(vocab)

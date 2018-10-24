@@ -1,8 +1,6 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
-python $THIS_SCRIPT_DIR/../train_model.py \
+python $NMN/scripts/train_model.py \
   --feature_dim=3,64,64 \
   --model_type MAC \
   --num_iterations 50000 \

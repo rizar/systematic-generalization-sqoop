@@ -1,8 +1,6 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
-python $THIS_SCRIPT_DIR/../train_model.py \
+python $NMN/scripts/train_model.py \
   --model_type CNN+LSTM+SA \
   --classifier_fc_dims 1024 \
   --feature_dim=3,30,30 \

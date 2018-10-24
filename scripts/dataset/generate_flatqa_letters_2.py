@@ -21,8 +21,7 @@ RELATIONS = ['left_of', 'right_of', 'above', 'below']
 COLORS = ['red', 'green', 'blue', 'yellow', 'cyan',
           'purple', 'brown', 'gray']
 SHAPES = list(string.ascii_uppercase) + ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
-#SHAPES =  ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0']
-FONT_OBJECTS = { font_size : ImageFont.truetype("arial.ttf") for font_size in range(10, 16) }
+
 
 # === Definition of modules for NMN === #
 def shape_module(shape):
@@ -533,6 +532,7 @@ if __name__ == '__main__':
   parser.add_argument('--min-obj-size', type=int, default=10)
   parser.add_argument('--max-obj-size', type=int, default=15)
   parser.add_argument('--no-rotate', action='store_false', dest='rotate')
+  parser.add_argument('--font', default='arial.ttf')
   args = parser.parse_args()
 
   args.level = 'relations'
@@ -543,5 +543,7 @@ if __name__ == '__main__':
   os.chdir(data_full_dir)
   with open('args.txt', 'w') as dst:
     print(args, file=dst)
+
+  FONT_OBJECTS = { font_size : ImageFont.truetype(args.font) for font_size in range(10, 16) }
 
   main()

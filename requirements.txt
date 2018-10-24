@@ -4,3 +4,4 @@ torchvision
 h5py
 tqdm
 Pillow
+termcolor

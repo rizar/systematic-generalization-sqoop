@@ -49,7 +49,7 @@ jobs:
           command: |
             . venv/bin/activate
             python setup.py install
-            bash test.sh
+            bash -x test.sh
 
       - store_artifacts:
           path: test-reports

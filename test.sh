@@ -4,7 +4,7 @@ FULL_TEST_ARGS="--batch_size=2 --record_loss_every=1 --checkpoint_every=2 --num_
 QUICK_TEST_ARGS="--batch_size=2 --record_loss_every=1 --num_iterations=1 --num_val_samples=4 --loader_num_workers=0 --load_features"
 export NMN=`pwd`
 
-#python scripts/generate_sqoop.py --num-shapes=3 --num_repeats=100 --rhs_variety=1 --font=DejaVuSans.ttf
+python scripts/generate_sqoop.py --num-shapes=3 --num_repeats=100 --rhs_variety=1 --font=DejaVuSans.ttf
 
 # full tests
 bash scripts/train/film_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=film_ckpt

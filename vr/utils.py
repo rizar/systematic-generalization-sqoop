@@ -53,21 +53,16 @@ def load_program_generator(path, model_type='PG+EE'):
     checkpoint = load_cpu(path)
     kwargs = checkpoint['program_generator_kwargs']
     state = checkpoint['program_generator_state']
-    if model_type in ['FiLM', 'MAC']:
+    if model_type in ['FiLM', 'MAC', 'RelNet']:
         kwargs = get_updated_args(kwargs, FiLMGen)
-        print('Loading FiLMGen from ' + path)
         model = FiLMGen(**kwargs)
-
     elif model_type == 'PG+EE':
-        print('Loading PG from ' + path)
         if kwargs.rnn_attention:
             model = Seq2SeqAtt(**kwargs)
         else:
             model = Seq2Seq(**kwargs)
-    elif model_type == 'EE':
-        model = None
     else:
-        raise ValueError()
+        model = None
     if model is not None:
         model.load_state_dict(state)
     return model, kwargs
@@ -79,24 +74,19 @@ def load_execution_engine(path, verbose=True, model_type='PG+EE'):
     state = checkpoint['execution_engine_state']
     kwargs['verbose'] = verbose
     if model_type == 'FiLM':
-        print('Loading FiLMedNet from ' + path)
         kwargs = get_updated_args(kwargs, FiLMedNet)
         model = FiLMedNet(**kwargs)
     elif model_type == 'EE':
-        print('Loading EE from ' + path)
         model = ModuleNet(**kwargs)
     elif model_type == 'MAC':
-        print('Loading MAC from ' + path)
         kwargs.setdefault('write_unit', 'original')
         kwargs.setdefault('read_connect', 'last')
         kwargs.setdefault('noisy_controls', False)
         kwargs.pop('sharing_params_patterns', None)
         model = MAC(**kwargs)
     elif model_type == 'RelNet':
-        print('Loading Relation Net from ' + path)
         model = RelationNet(**kwargs)
     elif model_type == 'SHNMN':
-        print('Loading Soft Homogenous NMN from ' + path)
         model = SHNMN(**kwargs)
     else:
         raise ValueError()

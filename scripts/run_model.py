@@ -35,12 +35,11 @@ parser.add_argument('--execution_engine', default=None)
 parser.add_argument('--baseline_model', default=None)
 parser.add_argument('--model_type', default='FiLM')
 parser.add_argument('--debug_every', default=float('inf'), type=float)
-parser.add_argument('--use_gpu', default=1, type=int)
+parser.add_argument('--use_gpu', default=torch.cuda.is_available(), type=int)
 
 # For running on a preprocessed dataset
 parser.add_argument('--data_dir', default=None, type=str)
-parser.add_argument('--input_question_h5', default=None)
-parser.add_argument('--input_features_h5', default=None)
+parser.add_argument('--part', default='val', type=str)
 
 # This will override the vocab stored in the checkpoint;
 # we need this to run CLEVR models on human data
@@ -85,14 +84,10 @@ grads = {}
 programs = {}  # NOTE: Useful for zero-shot program manipulation when in debug mode
 
 def main(args):
-    if args.debug_every <= 1:
-        pdb.set_trace()
     if not args.program_generator:
         args.program_generator = args.execution_engine
-    if args.data_dir and not args.input_question_h5:
-        args.input_question_h5 = os.path.join(args.data_dir, 'val_questions.h5')
-    if args.data_dir and not args.input_features_h5:
-        args.input_features_h5 = os.path.join(args.data_dir, 'val_features.h5')
+    input_question_h5 = os.path.join(args.data_dir, '{}_questions.h5'.format(args.part))
+    input_features_h5 = os.path.join(args.data_dir, '{}_features.h5'.format(args.part))
 
     model = None
     if args.baseline_model is not None:
@@ -119,7 +114,7 @@ def main(args):
     if args.question is not None and args.image is not None:
         run_single_example(args, model, dtype, args.question)
     # Interactive mode
-    elif args.image is not None and args.input_question_h5 is None and args.input_features_h5 is None:
+    elif args.image is not None and input_question_h5 is None and input_features_h5 is None:
         feats_var = extract_image_features(args, dtype)
         print(colored('Ask me something!', 'cyan'))
         while True:
@@ -129,8 +124,8 @@ def main(args):
     else:
         vocab = load_vocab(args)
         loader_kwargs = {
-            'question_h5': args.input_question_h5,
-          'feature_h5': args.input_features_h5,
+          'question_h5': input_question_h5,
+          'feature_h5': input_features_h5,
           'vocab': vocab,
           'batch_size': args.batch_size,
         }
@@ -300,67 +295,35 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
     all_vib_costs = []
     num_correct, num_samples = 0, 0
 
-    loaded_gammas = None
-    loaded_betas = None
-    if args.gammas_from:
-        print('Loading ')
-        loaded_gammas = torch.load(args.gammas_from)
-    if args.betas_from:
-        print('Betas loaded!')
-        loaded_betas = torch.load(args.betas_from)
-
     q_types = []
-    film_params = []
 
-    if args.num_last_words_shuffled == -1:
-        print('All words of each question shuffled.')
-    elif args.num_last_words_shuffled > 0:
-        print('Last %d words of each question shuffled.' % args.num_last_words_shuffled)
     start = time.time()
     for batch in tqdm(loader):
         assert(not pg or not pg.training)
         assert(not ee.training)
         questions, images, feats, answers, programs, program_lists = batch
 
-        if args.num_last_words_shuffled != 0:
-            for i, question in enumerate(questions):
-                # Search for <END> token to find question length
-                q_end = get_index(question.numpy().tolist(), index=2, default=len(question))
-                if args.num_last_words_shuffled > 0:
-                    q_end -= args.num_last_words_shuffled  # Leave last few words unshuffled
-                if q_end < 2:
-                    q_end = 2
-                question = question[1:q_end]
-                random.shuffle(question)
-                questions[i][1:q_end] = question
-
         if isinstance(questions, list):
-            questions_var = Variable(questions[0].type(dtype).long(), volatile=True)
+            questions_var = questions[0].type(dtype).long()
             q_types += [questions[1].cpu().numpy()]
         else:
-            questions_var = Variable(questions.type(dtype).long(), volatile=True)
-        feats_var = Variable(feats.type(dtype), volatile=True)
-        if args.model_type == 'FiLM':
+            questions_var = questions.type(dtype).long()
+        feats_var = feats.type(dtype)
+        if args.model_type == 'EE':
+            programs_pred = programs
+        elif pg:
             programs_pred = pg(questions_var)
-            # Examine effect of various conditioning modifications at test time!
-            programs_pred = pg.modify_output(programs_pred, gamma_option=args.gamma_option,
-                                             gamma_scale=args.gamma_scale, gamma_shift=args.gamma_shift,
-                                             beta_option=args.beta_option, beta_scale=args.beta_scale,
-                                             beta_shift=args.beta_shift)
-            if args.gammas_from:
-                programs_pred[:,:,:pg.module_dim] = loaded_gammas.expand_as(
-                    programs_pred[:,:,:pg.module_dim])
-            if args.betas_from:
-                programs_pred[:,:,pg.module_dim:2*pg.module_dim] = loaded_betas.expand_as(
-                    programs_pred[:,:,pg.module_dim:2*pg.module_dim])
-            film_params += [programs_pred.cpu().data.numpy()]
-        elif args.model_type == 'EE':
-            programs_pred = Variable(programs)
         else:
-            programs_pred = pg(questions_var)
+            programs_pred = None
 
-        scores = ee(feats_var, programs_pred, save_activations=True)
-        probs = F.softmax(scores)
+        kwargs = {'save_activations': True} if args.model_type in ['FiLM', 'MAC'] else {}
+        pos_args = [feats_var]
+        if args.model_type in ['SHNMN']:
+            pos_args.append(questions_var)
+        else:
+            pos_args.append(programs_pred)
+        scores = ee(*pos_args, **kwargs)
+        probs = F.softmax(scores, dim=1)
 
         _, preds = scores.data.cpu().max(1)
         # all_programs.append(programs_pred.data.cpu().clone())

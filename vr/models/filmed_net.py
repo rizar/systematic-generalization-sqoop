@@ -317,6 +317,26 @@ class FiLMedResBlock(nn.Module):
         return out
 
 
+class ConcatFiLMedResBlock(nn.Module):
+    def __init__(self, num_input, in_dim, out_dim=None, with_residual=True, with_intermediate_batchnorm=False, with_batchnorm=True,
+                 with_cond=[False], dropout=0, num_extra_channels=0, extra_channel_freq=1,
+                 with_input_proj=0, num_cond_maps=0, kernel_size=3, batchnorm_affine=False,
+                 num_layers=1, condition_method='bn-film', debug_every=float('inf')):
+        super(ConcatFiLMedResBlock, self).__init__()
+        self.proj = nn.Conv2d(num_input * in_dim, in_dim, kernel_size=1, padding=0)
+        self.tfilmedResBlock = FiLMedResBlock(in_dim=in_dim, out_dim=out_dim, with_residual=with_residual,
+            with_intermediate_batchnorm=with_intermediate_batchnorm, with_batchnorm=with_batchnorm,
+            with_cond=with_cond, dropout=dropout, num_extra_channels=num_extra_channels, extra_channel_freq=extra_channel_freq,
+            with_input_proj=with_input_proj, num_cond_maps=num_cond_maps, kernel_size=kernel_size, batchnorm_affine=batchnorm_affine,
+            num_layers=num_layers, condition_method=condition_method, debug_every=debug_every)
+
+    def forward(self, x, gammas=None, betas=None, extra_channels=None, cond_maps=None):
+        out = torch.cat(x, 1) # Concatentate along depth
+        out = F.relu(self.proj(out))
+        out = self.tfilmedResBlock(out, gammas=gammas, betas=betas, extra_channels=extra_channels, cond_maps=cond_maps)
+        return out
+
+
 def coord_map(shape, start=-1, end=1):
     """
     Gives, a 2d shape tuple, returns two mxn coordinate maps,

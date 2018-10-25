@@ -1,11 +1,9 @@
 import numpy
 import math
 import torch
-import sys
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import torchvision.models
 
 from vr.models.layers import init_modules, ResidualBlock, SimpleVisualBlock, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem, ConcatBlock
@@ -13,7 +11,7 @@ import vr.programs
 
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant, uniform
 
-from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
+from vr.models.filmed_net import FiLM, FiLMedResBlock, ConcatFiLMedResBlock, coord_map
 from functools import partial
 
 
@@ -75,9 +73,9 @@ def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
     h_prev = torch.cat([sentinel, img], dim=1) # B x 2 x C x H x W
 
     for i in range(num_modules):
-        alpha_curr = F.softmax(alpha[i])
-        tau_0_curr = F.softmax(tau_0[i, :(i+2)])
-        tau_1_curr = F.softmax(tau_1[i, :(i+2)])
+        alpha_curr = F.softmax(alpha[i], dim=0)
+        tau_0_curr = F.softmax(tau_0[i, :(i+2)], dim=0)
+        tau_1_curr = F.softmax(tau_1[i, :(i+2)], dim=0)
 
         question_rep = torch.sum(alpha_curr.view(1,-1,1)*question, dim=1) #(B,D)
         # B x C x H x W
@@ -359,9 +357,9 @@ class SHNMN(nn.Module):
                         self.num_modules, self.alpha,
                         Variable(tree_tau_0), Variable(tree_tau_1), self.func)
 
-        p_tree = F.sigmoid(self.tree_odds[0])
-        output_probs_tree  = F.softmax(self.classifier(h_final_tree))
-        output_probs_chain = F.softmax(self.classifier(h_final_chain))
+        p_tree = torch.sigmoid(self.tree_odds[0])
+        output_probs_tree  = F.softmax(self.classifier(h_final_tree), dim=1)
+        output_probs_chain = F.softmax(self.classifier(h_final_chain), dim=1)
         probs_mixture = p_tree * output_probs_tree + (1.0 - p_tree) * output_probs_chain
         eps = 1e-6
         probs_mixture = (1 - eps) * probs_mixture + eps

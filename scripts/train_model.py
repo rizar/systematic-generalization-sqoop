@@ -150,16 +150,7 @@ parser.add_argument('--use_coords', default=1, type=int)  # 0: none, 1: low usag
 parser.add_argument('--grad_clip', default=0, type=float)  # <= 0 for no grad clipping
 parser.add_argument('--debug_every', default=float('inf'), type=float)  # inf for no pdb
 parser.add_argument('--print_verbose_every', default=float('inf'), type=float)  # inf for min print
-
 parser.add_argument('--film_use_attention', default=0, type=int)
-
-#Tfilm options
-parser.add_argument('--max_program_module_arity', default=2, type=int)
-parser.add_argument('--max_program_tree_depth', default=5, type=int)
-
-#RTfilm options
-parser.add_argument('--tree_type_for_RTfilm', default='complete_binary3', type=str)
-parser.add_argument('--share_module_weight_at_depth', default=0, type=int)
 
 #MAC options
 parser.add_argument('--mac_write_unit', default='original', type=str)
@@ -181,29 +172,22 @@ parser.add_argument('--mac_embedding_uniform_boundary', default=1., type=float)
 
 parser.add_argument('--exponential_moving_average_weight', default=1., type=float)
 
-#TMAC options
-parser.add_argument('--tree_type_for_TMAC', default='complete_binary3', type=str)
-parser.add_argument('--tmac_sharing_params_patterns', default=[0,1,1,1], type=parse_int_list)
-
 #NMNFilm2 options
 parser.add_argument('--nmnfilm2_sharing_params_patterns', default=[0,0], type=parse_int_list)
 parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
 #SHNMN options
-parser.add_argument('--hard_code_alpha', action="store_true")
-parser.add_argument('--hard_code_tau', action="store_true")
-parser.add_argument('--use_stopwords', action="store_true")
+parser.add_argument('--shnmn_type', default='hard', type=str,
+        choices=['hard', 'soft'])
+parser.add_argument('--use_module', default='residual', type=str, choices=['conv', 'find', 'residual'])
 parser.add_argument('--tau_init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
-parser.add_argument('--alpha_init', default='correct', type=str,
+parser.add_argument('--alpha_init', default='uniform', type=str,
         choices=['xavier_uniform', 'constant', 'uniform', 'correct', 'correct_xry', 'correct_rxy' ])
-
-
-parser.add_argument('--shnmn_type', default='soft', type=str,
-        choices=['hard', 'soft'])
-parser.add_argument('--use_module', default='conv', type=str, choices=['conv', 'find', 'residual'])
 parser.add_argument('--model_bernoulli', default=0.5, type=float)
+parser.add_argument('--hard_code_alpha', action="store_true")
+parser.add_argument('--hard_code_tau', action="store_true")
 
 
 # CNN options (for baselines)
@@ -1070,7 +1054,6 @@ def get_execution_engine(args):
               'classifier_dropout' : args.classifier_dropout,
               'hard_code_alpha' : args.hard_code_alpha,
               'hard_code_tau' : args.hard_code_tau,
-              'use_stopwords' : args.use_stopwords,
               'tau_init' : args.tau_init,
               'alpha_init' : args.alpha_init,
               'model_type' : args.shnmn_type,

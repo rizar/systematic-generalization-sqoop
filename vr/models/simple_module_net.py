@@ -20,7 +20,7 @@ import vr.programs
 
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant
 
-from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
+from vr.models.filmed_net import FiLM, FiLMedResBlock, ConcatFiLMedResBlock,coord_map
 from functools import partial
 
 # helper functions

@@ -18,3 +18,7 @@ bash scripts/train/shnmn_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_
 # extra quick tests
 bash scripts/train/ee_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $QUICK_TEST_ARGS --checkpoint_path=ee_new_flatqa --nmn_use_film=1
 bash scripts/train/ee_new_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $QUICK_TEST_ARGS --checkpoint_path=ee_new_flatqa --nmn_use_film=1
+bash scripts/train/shnmn_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $QUICK_TEST_ARGS\
+  --checkpoint_path=shnmn_find_flatqa --use_module=find
+bash scripts/train/shnmn_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $QUICK_TEST_ARGS\
+  --checkpoint_path=shnmn_find_flatqa --use_module=conv

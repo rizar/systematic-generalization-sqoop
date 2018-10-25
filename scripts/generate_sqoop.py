@@ -243,15 +243,14 @@ def LongTailSampler(long_tail_dist):
 
 def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vocab):
     num_examples = len(obj_pairs)
-    max_question_len = 8
+
+    max_question_len = 3
     if args.program == 'best':
-        max_program_len = 13
-    elif args.program == 'noand':
-        max_program_len = 9
+        max_program_len = 7
     elif args.program in ['chain', 'chain2', 'chain3']:
-        max_program_len = 8
+        max_program_len = 6
     elif args.program == 'chain_shortcut':
-        max_program_len = 12
+        max_program_len = 8
 
     presampled_relations = [sampler.sample_relation() for ex in obj_pairs] # pre-sample relations
     with h5py.File(prefix + '_questions.h5', 'w') as dst_questions, h5py.File(prefix + '_features.h5', 'w') as dst_features:
@@ -301,16 +300,6 @@ def gen_data(obj_pairs, sampler, seed, vocab, prefix, question_vocab, program_vo
 def generate_image_and_question(pair, sampler, rng, label, vocab, rel):
     # x rel y has value label where pair == (x, y)
 
-    max_question_len = 8
-    if args.program == 'best':
-        max_program_len = 13
-    elif args.program == 'noand':
-        max_program_len = 9
-    elif args.program in ['chain', 'chain2', 'chain3']:
-        max_program_len = 8
-    elif args.program == 'chain_shortcut':
-        max_program_len = 12
-
     x,y = pair
     if label:
         obj1 = get_random_spot(rng, [])
@@ -341,43 +330,40 @@ def generate_image_and_question(pair, sampler, rng, label, vocab, rel):
     color2 = "green"
     shape1 = x
     shape2 = y
-    question = ["is", "there", "a", color1 , x, rel, color2, y]
+    question = [x, rel, y]
     if args.program == 'best':
         program = ["<START>", relation_module(rel),
-             "And", shape_module(shape1), "scene", color_module(color1), "scene",
-             "And", shape_module(shape2), "scene", color_module(color2), "scene",
-             "<END>"]
-    elif args.program == 'noand':
-        program = ["<START>", relation_module(rel),
-             shape_module(shape1), color_module(color1), "scene",
-             shape_module(shape2), color_module(color2), "scene",
-             "<END>"]
+                   shape_module(shape1), "scene",
+                   shape_module(shape2), "scene",
+                   "<END>"]
     elif args.program == 'chain':
         program = ["<START>",
-             shape_module(shape1), color_module(color1),
-             unary_relation_module(rel),
-             shape_module(shape2), color_module(color2),
-             "scene", "<END>"]
+                   shape_module(shape1),
+                   unary_relation_module(rel),
+                   shape_module(shape2),
+                   "scene", 
+                   "<END>"]
     elif args.program == 'chain2':
         program = ["<START>",
-             shape_module(shape1), color_module(color1),
-             shape_module(shape2), color_module(color2),
-             unary_relation_module(rel),
-             "scene", "<END>"]
+                   shape_module(shape1), 
+                   shape_module(shape2),
+                   unary_relation_module(rel),
+                   "scene", 
+                   "<END>"]
     elif args.program == 'chain3':
         program = ["<START>",
-             unary_relation_module(rel),
-             shape_module(shape1), color_module(color1),
-             shape_module(shape2), color_module(color2),
-             "scene", "<END>"]
+                   unary_relation_module(rel),
+                   shape_module(shape1),
+                   shape_module(shape2),
+                   "scene", 
+                   "<END>"]
     elif args.program == 'chain_shortcut':
         program = ["<START>",
-             binary_shape_module(shape1), 'scene',
-             binary_color_module(color1), 'scene',
-             unary_relation_module(rel),
-             binary_shape_module(shape2), 'scene',
-             binary_color_module(color2), 'scene',
-             'scene', "<END>"]
+                   binary_shape_module(shape1), 'scene',
+                   unary_relation_module(rel),
+                   binary_shape_module(shape2), 'scene',
+                   'scene', 
+                   "<END>"]
 
     return scene, question, program, True, 'f'
 

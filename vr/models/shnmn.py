@@ -1,11 +1,9 @@
 import numpy
 import math
 import torch
-import sys
 import torch.nn as nn
 import torch.nn.functional as F
 from torch.autograd import Variable
-import torchvision.models
 
 from vr.models.layers import init_modules, ResidualBlock, SimpleVisualBlock, GlobalAveragePool, Flatten
 from vr.models.layers import build_classifier, build_stem, ConcatBlock
@@ -13,7 +11,7 @@ import vr.programs
 
 from torch.nn.init import kaiming_normal, kaiming_uniform, xavier_uniform, xavier_normal, constant, uniform
 
-from vr.models.filmed_net import FiLM, FiLMedResBlock, coord_map
+from vr.models.filmed_net import FiLM, FiLMedResBlock, ConcatFiLMedResBlock, coord_map
 from functools import partial
 
 

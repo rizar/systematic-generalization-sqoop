@@ -267,8 +267,10 @@ def main(args):
             kwargs = {'slurmid': os.environ['SLURM_JOB_ID']}
         args.checkpoint_path = args.checkpoint_path.format(**kwargs)
         dirname = os.path.dirname(args.checkpoint_path)
-        if dirname and not os.path.exists(dirname):
+        try:
             os.makedirs(dirname)
+        except FileExistsError:
+            pass
     print('Will save checkpoints to %s' % args.checkpoint_path)
 
     if args.data_dir:

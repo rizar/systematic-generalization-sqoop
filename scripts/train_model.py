@@ -408,8 +408,6 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     baseline_model, baseline_kwargs, baseline_optimizer = None, None, None
     baseline_type = None
 
-    pg_best_state, ee_best_state, baseline_best_state = None, None, None
-
     stats = {
         'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
       'train_accs': [], 'val_accs': [], 'val_accs_ts': [], 'alphas' : [], 'grads' : [],
@@ -755,32 +753,43 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                     stats['valB_accs'].append(valB_acc)
                     stats['valB_accs_ts'].append(t)
 
-                if val_acc > stats['best_val_acc']:
-                    stats['best_val_acc'] = val_acc
-                    if valB_loader:
-                        stats['bestB_val_acc'] = valB_acc
-                    best_pg_state = get_state(program_generator)
-                    best_ee_state = get_state(execution_engine)
-                    best_baseline_state = get_state(baseline_model)
+                pg_state = get_state(program_generator)
+                ee_state = get_state(execution_engine)
+                baseline_state = get_state(baseline_model)
 
                 stats['model_t'] = t
                 stats['model_epoch'] = epoch
 
                 checkpoint = {
                     'args': args.__dict__,
-                  'program_generator_kwargs': pg_kwargs,
-                  'program_generator_state': best_pg_state,
-                  'execution_engine_kwargs': ee_kwargs,
-                  'execution_engine_state': best_ee_state,
-                  'baseline_kwargs': baseline_kwargs,
-                  'baseline_state': best_baseline_state,
-                  'baseline_type': baseline_type,
-                  'vocab': vocab
+                    'program_generator_kwargs': pg_kwargs,
+                    'program_generator_state': pg_state,
+                    'execution_engine_kwargs': ee_kwargs,
+                    'execution_engine_state': ee_state,
+                    'baseline_kwargs': baseline_kwargs,
+                    'baseline_state': baseline_state,
+                    'baseline_type': baseline_type,
+                    'vocab': vocab
                 }
                 for k, v in stats.items():
                     checkpoint[k] = v
+
+                # Save current model
                 print('Saving checkpoint to %s' % args.checkpoint_path)
                 torch.save(checkpoint, args.checkpoint_path)
+
+                # Save the best model separately
+                if val_acc > stats['best_val_acc']:
+                    print('Saving best so far checkpoint to %s' % (args.checkpoint_path + '.best'))
+                    stats['best_val_acc'] = val_acc
+                    if valB_loader:
+                        stats['bestB_val_acc'] = valB_acc
+                    checkpoint['program_generator_state'] = pg_state
+                    checkpoint['execution_engine_state'] = ee_state
+                    checkpoint['baseline_state'] = baseline_state
+                    torch.save(checkpoint, args.checkpoint_path + '.best')
+
+                # Save training status in a human-readable format
                 del checkpoint['program_generator_state']
                 del checkpoint['execution_engine_state']
                 del checkpoint['baseline_state']
@@ -788,6 +797,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                     json.dump(checkpoint, f, indent=2, sort_keys=True)
 
             if t == args.num_iterations:
+            # Save the best model separately
                 break
 
             batch_start_time = time.time()

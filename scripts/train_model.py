@@ -776,13 +776,6 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                 print('Saving checkpoint to %s' % args.checkpoint_path)
                 torch.save(checkpoint, args.checkpoint_path)
 
-                # Save training status in a human-readable format
-                del checkpoint['program_generator_state']
-                del checkpoint['execution_engine_state']
-                del checkpoint['baseline_state']
-                with open(args.checkpoint_path + '.json', 'w') as f:
-                    json.dump(checkpoint, f, indent=2, sort_keys=True)
-
                 # Save the best model separately
                 if val_acc > stats['best_val_acc']:
                     print('Saving best so far checkpoint to %s' % (args.checkpoint_path + '.best'))
@@ -794,6 +787,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                     checkpoint['baseline_state'] = baseline_state
                     torch.save(checkpoint, args.checkpoint_path + '.best')
 
+                # Save training status in a human-readable format
+                del checkpoint['program_generator_state']
+                del checkpoint['execution_engine_state']
+                del checkpoint['baseline_state']
+                with open(args.checkpoint_path + '.json', 'w') as f:
+                    json.dump(checkpoint, f, indent=2, sort_keys=True)
 
             if t == args.num_iterations:
             # Save the best model separately

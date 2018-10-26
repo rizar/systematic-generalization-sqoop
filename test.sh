@@ -1,7 +1,7 @@
 set -e
 
-FULL_TEST_ARGS="--batch_size=2 --record_loss_every=1 --checkpoint_every=2 --num_iterations=5 --num_val_samples=4 --loader_num_workers=0 --load_features"
-QUICK_TEST_ARGS="--batch_size=2 --record_loss_every=1 --num_iterations=1 --num_val_samples=4 --loader_num_workers=0 --load_features"
+FULL_TEST_ARGS="--batch_size=2 --record_loss_every=1 --checkpoint_every=2 --num_iterations=5 --num_val_samples=4"
+QUICK_TEST_ARGS="--batch_size=2 --record_loss_every=1 --num_iterations=1 --num_val_samples=4"
 export NMN=`pwd`
 
 python scripts/generate_sqoop.py --num-shapes=3 --num_repeats=100 --rhs_variety=1 --font=DejaVuSans.ttf

@@ -1,8 +1,6 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
-python $THIS_SCRIPT_DIR/../train_model.py \
+python $NMN/train_model.py \
   --model_type EE \
   --nmn_use_film 1 `#was added from EE to integrate FiLM` \
   --nmnfilm2_sharing_params_patterns 1,0 `#was added from EE to integrate FiLM` \

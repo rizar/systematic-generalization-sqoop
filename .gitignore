@@ -5,6 +5,7 @@ data
 exp
 scripts/dev
 notebooks/
+output/
 
 # Image files
 img/cst

@@ -1,8 +1,6 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
-python $THIS_SCRIPT_DIR/../train_model.py \
+python $NMN/scripts/train_model.py \
   --model_type FiLM \
   --num_iterations 20000000 \
   --print_verbose_every 20000000 \

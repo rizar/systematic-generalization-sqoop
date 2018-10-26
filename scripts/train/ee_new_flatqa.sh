@@ -1,7 +1,5 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
 python $NMN/scripts/train_model.py \
   --model_type SimpleNMN \
   --feature_dim=3,64,64 \

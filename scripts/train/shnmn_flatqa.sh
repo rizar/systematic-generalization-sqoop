@@ -1,7 +1,5 @@
 #!/bin/bash
 
-THIS_SCRIPT_DIR=`dirname $0`
-
 python $NMN/scripts/train_model.py \
   --model_type SHNMN \
   --feature_dim=3,64,64 \
@@ -17,7 +15,7 @@ python $NMN/scripts/train_model.py \
   --module_stem_subsample_layers 1,3 \
   --module_intermediate_batchnorm 0 \
   --module_batchnorm 0 \
-  --module_dim 16 \
+  --module_dim 64 \
   --classifier_batchnorm 1 \
   --weight_decay 1e-5 \
   --classifier_downsample maxpoolfull \

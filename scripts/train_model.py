@@ -71,8 +71,8 @@ parser.add_argument('--valB_features_h5', default=None)
 parser.add_argument('--feature_dim', default=[1024,14,14], type=parse_int_list)
 parser.add_argument('--vocab_json', default='vocab.json')
 
-parser.add_argument('--load_features', action="store_true")
-parser.add_argument('--loader_num_workers', type=int, default=1)
+parser.add_argument('--load_features', type=int, default=1)
+parser.add_argument('--loader_num_workers', type=int, default=0)
 parser.add_argument('--use_local_copies', default=0, type=int)
 parser.add_argument('--cleanup_local_copies', default=1, type=int)
 
@@ -221,7 +221,7 @@ parser.add_argument('--reward_decay', default=0.9, type=float)
 parser.add_argument('--weight_decay', default=0, type=float)
 
 # Output options
-parser.add_argument('--checkpoint_path', default='')
+parser.add_argument('--checkpoint_path', default='{slurmid}.pt')
 parser.add_argument('--allow-resume', action='store_true')
 parser.add_argument('--randomize_checkpoint_path', type=int, default=0)
 parser.add_argument('--avoid_checkpoint_override', default=0, type=int)
@@ -258,11 +258,14 @@ def main(args):
         name, ext = os.path.splitext(args.checkpoint_path)
         num = random.randint(1, 1000000)
         args.checkpoint_path = '%s_%06d%s' % (name, num, ext)
-    elif not args.checkpoint_path:
+    else:
+        kwargs = {}
         if 'SLURM_JOB_ID' in os.environ:
-            args.checkpoint_path = os.environ['SLURM_JOB_ID'] + '.pt'
-        else:
-            raise Exception('checkpoint path not defined')
+            kwargs = {'slurmid': os.environ['SLURM_JOB_ID']}
+        args.checkpoint_path = args.checkpoint_path.format(**kwargs)
+        dirname = os.path.dirname(args.checkpoint_path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
     print('Will save checkpoints to %s' % args.checkpoint_path)
 
     if args.data_dir:

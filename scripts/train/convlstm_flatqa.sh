@@ -5,8 +5,6 @@ python $NMN/scripts/train_model.py \
   --num_val_samples 1000 \
   --checkpoint_every 100 \
   --record_loss_every 10 \
-  --loader_num_workers 0 \
-  --load_features \
   \
   --model_type ConvLSTM \
   --num_iterations 100000 \

@@ -178,15 +178,18 @@ parser.add_argument('--nmn_use_film', default=0, type=int)
 parser.add_argument('--nmn_use_simple_block', default=0, type=int)
 
 #SHNMN options
-parser.add_argument('--shnmn_type', default='hard', type=str,
+parser.add_argument('--shnmn_type', default='soft', type=str,
         choices=['hard', 'soft'])
 parser.add_argument('--use_module', default='residual', type=str, choices=['conv', 'find', 'residual'])
+# for soft
 parser.add_argument('--tau_init', default='random', type=str,
         choices=['random', 'tree', 'chain'])
+# for hard
+parser.add_argument('--model_bernoulli', default=0.5, type=float)
 parser.add_argument('--alpha_init', default='uniform', type=str,
         choices=['xavier_uniform', 'constant', 'uniform', 'correct', 'correct_xry', 'correct_rxy' ])
-parser.add_argument('--model_bernoulli', default=0.5, type=float)
 parser.add_argument('--hard_code_alpha', action="store_true")
+# must be used with the soft version
 parser.add_argument('--hard_code_tau', action="store_true")
 
 

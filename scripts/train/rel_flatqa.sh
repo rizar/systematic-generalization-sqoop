@@ -4,8 +4,6 @@ python $NMN/scripts/train_model.py \
   --checkpoint_every 100 \
   --record_loss_every 10 \
   --num_val_samples 1000 \
-  --loader_num_workers 0 \
-  --load_features \
 \
   --model_type RelNet \
   --num_iterations 200000 \

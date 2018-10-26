@@ -380,7 +380,8 @@ def gen_sqoop(vocab):
     val_pairs   = []
     test_pairs  = []
 
-    chosen = set([ (x,y) for x in vocab for y in vocab if x != y] )
+    all_pairs = set([(x,y) for x in vocab for y in vocab if x != y])
+    chosen = set(all_pairs)
     for i, x in enumerate(vocab):
         ys = random.sample(vocab[:i] + vocab[i+1:], args.rhs_variety)
         for y in ys:
@@ -389,18 +390,21 @@ def gen_sqoop(vocab):
 
     random.shuffle(train_pairs)
 
-    left = list(chosen)
-    print('number of zero shot pairs: %d' % len(left))
-    # dev / test pairs are all unseen
-    val_slice = len(left) // 2
-
-
-    for pair in left[:val_slice]:
-        val_pairs  += [pair]*args.num_repeats_eval
-
-    for pair in left[val_slice:]:
-        test_pairs += [pair]*args.num_repeats_eval
-
+    if args.split == 'systematic':
+        left = list(chosen)
+        print('number of zero shot pairs: %d' % len(left))
+        # dev / test pairs are all unseen
+        val_slice = len(left) // 2
+        for pair in left[:val_slice]:
+            val_pairs  += [pair] * args.num_repeats_eval
+        for pair in left[val_slice:]:
+            test_pairs += [pair] * args.num_repeats_eval
+    else:
+        all_ = list(all_pairs)
+        for pair in all_:
+            val_pairs += [pair] * args.num_repeats_eval
+        for pair in all_:
+            test_pairs += [pair] * args.num_repeats_eval
 
     # generate data vocabulary
     question_words = (['<NULL>', '<START>', '<END>', 'is', 'there', 'a', 'green'] + vocab + RELATIONS)
@@ -500,6 +504,7 @@ if __name__ == '__main__':
     parser.add_argument('--num-colors', type=int, default=1)
     parser.add_argument('--num-objects', type=int, default=5)
     parser.add_argument('--rhs_variety', type=int, default=len(SHAPES) // 2)
+    parser.add_argument('--split', type=str, default='systematic', choices=('systematic', 'vanilla'))
     parser.add_argument('--num_repeats', type=int, default=10)
     parser.add_argument('--num_repeats_eval', type=int, default=10)
     parser.add_argument('--data_dir', type=str, default='.')
@@ -518,6 +523,8 @@ if __name__ == '__main__':
 
     args.level = 'relations'
     data_full_dir = "%s/sqoop-variety_%d-repeats_%d" %(args.data_dir, args.rhs_variety, args.num_repeats)
+    if args.split == 'vanilla':
+        data_full_dir += "_vanilla"
     if not os.path.exists(data_full_dir):
         os.makedirs(data_full_dir)
 

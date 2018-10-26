@@ -348,7 +348,7 @@ def main(args):
             question_families = json.load(f)
 
     train_loader_kwargs = {
-        'question_h5': args.train_question_h5,
+      'question_h5': args.train_question_h5,
       'feature_h5': args.train_features_h5,
       'load_features': args.load_features,
       'vocab': vocab,
@@ -360,7 +360,7 @@ def main(args):
       'percent_of_data': args.percent_of_data_for_training,
     }
     val_loader_kwargs = {
-        'question_h5': args.val_question_h5,
+      'question_h5': args.val_question_h5,
       'feature_h5': args.val_features_h5,
       'load_features': args.load_features,
       'vocab': vocab,

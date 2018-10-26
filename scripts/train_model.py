@@ -71,8 +71,8 @@ parser.add_argument('--valB_features_h5', default=None)
 parser.add_argument('--feature_dim', default=[1024,14,14], type=parse_int_list)
 parser.add_argument('--vocab_json', default='vocab.json')
 
-parser.add_argument('--load_features', action="store_true")
-parser.add_argument('--loader_num_workers', type=int, default=1)
+parser.add_argument('--load_features', type=int, default=1)
+parser.add_argument('--loader_num_workers', type=int, default=0)
 parser.add_argument('--use_local_copies', default=0, type=int)
 parser.add_argument('--cleanup_local_copies', default=1, type=int)
 

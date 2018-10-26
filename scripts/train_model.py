@@ -221,7 +221,7 @@ parser.add_argument('--reward_decay', default=0.9, type=float)
 parser.add_argument('--weight_decay', default=0, type=float)
 
 # Output options
-parser.add_argument('--checkpoint_path', default='')
+parser.add_argument('--checkpoint_path', default='{slurmid}.pt')
 parser.add_argument('--allow-resume', action='store_true')
 parser.add_argument('--randomize_checkpoint_path', type=int, default=0)
 parser.add_argument('--avoid_checkpoint_override', default=0, type=int)
@@ -258,11 +258,14 @@ def main(args):
         name, ext = os.path.splitext(args.checkpoint_path)
         num = random.randint(1, 1000000)
         args.checkpoint_path = '%s_%06d%s' % (name, num, ext)
-    elif not args.checkpoint_path:
+    else:
+        kwargs = {}
         if 'SLURM_JOB_ID' in os.environ:
-            args.checkpoint_path = os.environ['SLURM_JOB_ID'] + '.pt'
-        else:
-            raise Exception('checkpoint path not defined')
+            kwargs = {'slurmid': os.environ['SLURM_JOB_ID']}
+        args.checkpoint_path = args.checkpoint_path.format(**kwargs)
+        dirname = os.path.dirname(args.checkpoint_path)
+        if dirname and not os.path.exists(dirname):
+            os.makedirs(dirname)
     print('Will save checkpoints to %s' % args.checkpoint_path)
 
     if args.data_dir:

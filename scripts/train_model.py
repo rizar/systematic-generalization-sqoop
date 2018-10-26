@@ -268,7 +268,8 @@ def main(args):
         args.checkpoint_path = args.checkpoint_path.format(**kwargs)
         dirname = os.path.dirname(args.checkpoint_path)
         try:
-            os.makedirs(dirname)
+            if dirname:
+                os.makedirs(dirname)
         except FileExistsError:
             pass
     print('Will save checkpoints to %s' % args.checkpoint_path)

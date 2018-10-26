@@ -6,7 +6,6 @@ python $NMN/scripts/train_model.py \
   --num_iterations 20000000 \
   --print_verbose_every 20000000 \
   --checkpoint_every 11000 \
-  --checkpoint_path logs/$SLURM_JOB_ID.pt \
   --record_loss_every 100 \
   --num_val_samples 149991 \
   --optimizer Adam \

@@ -6,7 +6,7 @@ python $NMN/train_model.py \
   --nmnfilm2_sharing_params_patterns 1,0 `#was added from EE to integrate FiLM` \
   --feature_dim=3,64,64 \
   --num_iterations=50000 \
-  --checkpoint_every 100 \
+  --checkpoint_every 1000 \
   --record_loss_every 10 \
   --num_val_samples 1000 \
   --optimizer Adam \

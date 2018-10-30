@@ -3,7 +3,7 @@
 python $NMN/scripts/train_model.py \
   --feature_dim 3,64,64 \
   --num_val_samples 1000 \
-  --checkpoint_every 100 \
+  --checkpoint_every 1000 \
   --record_loss_every 10 \
   \
   --model_type ConvLSTM \

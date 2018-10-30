@@ -49,8 +49,9 @@ def load_cpu(path):
     return torch.load(path, map_location=lambda storage, loc: storage)
 
 
-def load_program_generator(path, model_type='PG+EE'):
+def load_program_generator(path):
     checkpoint = load_cpu(path)
+    model_type = checkpoint['args']['model_type']
     kwargs = checkpoint['program_generator_kwargs']
     state = checkpoint['program_generator_state']
     if model_type in ['FiLM', 'MAC', 'RelNet']:
@@ -68,8 +69,9 @@ def load_program_generator(path, model_type='PG+EE'):
     return model, kwargs
 
 
-def load_execution_engine(path, verbose=True, model_type='PG+EE'):
+def load_execution_engine(path, verbose=True):
     checkpoint = load_cpu(path)
+    model_type = checkpoint['args']['model_type']
     kwargs = checkpoint['execution_engine_kwargs']
     state = checkpoint['execution_engine_state']
     kwargs['verbose'] = verbose

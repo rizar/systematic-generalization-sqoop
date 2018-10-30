@@ -27,13 +27,13 @@ import vr.utils as utils
 import vr.programs
 from vr.data import ClevrDataset, ClevrDataLoader
 from vr.preprocess import tokenize, encode
+from vr.models import *
 
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--program_generator', default=None)
 parser.add_argument('--execution_engine', default=None)
 parser.add_argument('--baseline_model', default=None)
-parser.add_argument('--model_type', default='FiLM')
 parser.add_argument('--debug_every', default=float('inf'), type=float)
 parser.add_argument('--use_gpu', default=torch.cuda.is_available(), type=int)
 
@@ -97,9 +97,9 @@ def main(args):
             new_vocab = utils.load_vocab(args.vocab_json)
             model.rnn.expand_vocab(new_vocab['question_token_to_idx'])
     elif args.program_generator is not None and args.execution_engine is not None:
-        pg, _ = utils.load_program_generator(args.program_generator, args.model_type)
+        pg, _ = utils.load_program_generator(args.program_generator)
         ee, _ = utils.load_execution_engine(
-            args.execution_engine, verbose=False, model_type=args.model_type)
+            args.execution_engine, verbose=False)
         if args.vocab_json is not None:
             new_vocab = utils.load_vocab(args.vocab_json)
             pg.expand_encoder_vocab(new_vocab['question_token_to_idx'])
@@ -113,14 +113,6 @@ def main(args):
         dtype = torch.cuda.FloatTensor
     if args.question is not None and args.image is not None:
         run_single_example(args, model, dtype, args.question)
-    # Interactive mode
-    elif args.image is not None and input_question_h5 is None and input_features_h5 is None:
-        feats_var = extract_image_features(args, dtype)
-        print(colored('Ask me something!', 'cyan'))
-        while True:
-            # Get user question
-            question_raw = input(">>> ")
-            run_single_example(args, model, dtype, question_raw, feats_var)
     else:
         vocab = load_vocab(args)
         loader_kwargs = {
@@ -158,124 +150,6 @@ def extract_image_features(args, dtype):
     return feats_var
 
 
-def run_single_example(args, model, dtype, question_raw, feats_var=None):
-    interactive = feats_var is not None
-    if not interactive:
-        feats_var = extract_image_features(args, dtype)
-
-    # Tokenize the question
-    vocab = load_vocab(args)
-    question_tokens = tokenize(question_raw,
-                        punct_to_keep=[';', ','],
-                        punct_to_remove=['?', '.'])
-    if args.enforce_clevr_vocab == 1:
-        for word in question_tokens:
-            if word not in vocab['question_token_to_idx']:
-                print(colored('No one taught me what "%s" means :( Try me again!' % (word), 'magenta'))
-                return
-    question_encoded = encode(question_tokens,
-                         vocab['question_token_to_idx'],
-                         allow_unk=True)
-    question_encoded = torch.LongTensor(question_encoded).view(1, -1)
-    question_encoded = question_encoded.type(dtype).long()
-    question_var = Variable(question_encoded, volatile=False)
-
-    # Run the model
-    scores = None
-    predicted_program = None
-    if type(model) is tuple:
-        pg, ee = model
-        pg.type(dtype)
-        pg.eval()
-        ee.type(dtype)
-        ee.eval()
-        if args.model_type == 'FiLM':
-            predicted_program = pg(question_var)
-        else:
-            predicted_program = pg.reinforce_sample(
-                                  question_var,
-                                  temperature=args.temperature,
-                                  argmax=(args.sample_argmax == 1))
-        programs[question_raw] = predicted_program
-        if args.debug_every <= -1:
-            pdb.set_trace()
-        scores = ee(feats_var, predicted_program, save_activations=True)
-    else:
-        model.type(dtype)
-        scores = model(question_var, feats_var)
-
-    # Print results
-    predicted_probs = scores.data.cpu()
-    _, predicted_answer_idx = predicted_probs[0].max(dim=0)
-    predicted_probs = F.softmax(Variable(predicted_probs[0])).data
-    predicted_answer = vocab['answer_idx_to_token'][predicted_answer_idx[0]]
-
-    answers_to_probs = {}
-    for i in range(len(vocab['answer_idx_to_token'])):
-        answers_to_probs[vocab['answer_idx_to_token'][i]] = predicted_probs[i]
-    answers_to_probs_sorted = sorted(answers_to_probs.items(), key=lambda x: x[1])
-    answers_to_probs_sorted.reverse()
-    for i in range(len(answers_to_probs_sorted)):
-        if answers_to_probs_sorted[i][1] >= 1e-3 and args.debug_every < float('inf'):
-            print("%s: %.1f%%" % (answers_to_probs_sorted[i][0].capitalize(),
-              100 * answers_to_probs_sorted[i][1]))
-
-    if not interactive:
-        print(colored('Question: "%s"' % question_raw, 'cyan'))
-    print(colored(str(predicted_answer).capitalize(), 'magenta'))
-
-    if interactive:
-        return
-
-    # Visualize Gradients w.r.t. output
-    cf_conv = ee.classifier[0](ee.cf_input)
-    cf_bn = ee.classifier[1](cf_conv)
-    pre_pool = ee.classifier[2](cf_bn)
-    pooled = ee.classifier[3](pre_pool)
-
-    pre_pool_max_per_c = pre_pool.max(2, keepdim=True)[0].max(3, keepdim=True)[0].expand_as(pre_pool)
-    pre_pool_masked = (pre_pool_max_per_c == pre_pool).float() * pre_pool
-    pool_feat_locs = (pre_pool_masked > 0).float().sum(1, keepdim=True)
-    if args.debug_every <= 1:
-        pdb.set_trace()
-
-    if args.output_viz_dir != 'NA':
-        viz_dir = args.output_viz_dir + question_raw + ' ' + predicted_answer
-        if not os.path.isdir(viz_dir):
-            os.mkdir(viz_dir)
-        args.viz_dir = viz_dir
-        print('Saving visualizations to ' + args.viz_dir)
-
-        # Backprop w.r.t. sum of output scores - What affected prediction most?
-        ee.feats.register_hook(save_grad('stem'))
-        for i in range(ee.num_modules):
-            ee.module_outputs[i].register_hook(save_grad('m' + str(i)))
-        scores_sum = scores.sum()
-        scores_sum.backward()
-
-        # Visualizations!
-        visualize(feats_var, args, 'resnet101')
-        visualize(ee.feats, args, 'conv-stem')
-        visualize(grads['stem'], args, 'grad-conv-stem')
-        for i in range(ee.num_modules):
-            visualize(ee.module_outputs[i], args, 'resblock' + str(i))
-            visualize(grads['m' + str(i)], args, 'grad-resblock' + str(i))
-        visualize(pre_pool, args, 'pre-pool')
-        visualize(pool_feat_locs, args, 'pool-feature-locations')
-
-    if (predicted_program is not None) and (args.model_type != 'FiLM'):
-        print()
-        print('Predicted program:')
-        program = predicted_program.data.cpu()[0]
-        num_inputs = 1
-        for fn_idx in program:
-            fn_str = vocab['program_idx_to_token'][fn_idx]
-            num_inputs += vr.programs.get_num_inputs(fn_str) - 1
-            print(fn_str)
-            if num_inputs == 0:
-                break
-
-
 def run_our_model_batch(args, pg, ee, loader, dtype):
     if pg:
         pg.type(dtype)
@@ -309,16 +183,14 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         else:
             questions_var = questions.type(dtype).long()
         feats_var = feats.type(dtype)
-        if args.model_type == 'EE':
-            programs_pred = programs
-        elif pg:
+        if pg:
             programs_pred = pg(questions_var)
         else:
             programs_pred = None
 
-        kwargs = {'save_activations': True} if args.model_type in ['FiLM', 'MAC'] else {}
+        kwargs = {'save_activations': True} if isinstance(ee, (FiLMedNet, ModuleNet)) else {}
         pos_args = [feats_var]
-        if args.model_type in ['SHNMN']:
+        if isinstance(ee, SHNMN):
             pos_args.append(questions_var)
         else:
             pos_args.append(programs_pred)
@@ -331,9 +203,9 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         all_probs.append(probs.data.cpu().clone())
         all_preds.append(preds.cpu().clone())
         all_correct.append(preds == answers)
-        if args.model_type == 'FiLM' and pg.scores is not None:
+        if isinstance(pg, FiLMGen) and pg.scores is not None:
             all_film_scores.append(pg.scores.data.cpu().clone())
-        if args.model_type == 'MAC':
+        if isinstance(ee, MAC):
             all_control_scores.append(ee.control_scores.data.cpu().clone())
             all_read_scores.append(ee.read_scores.data.cpu().clone())
         if hasattr(ee, 'vib_costs'):

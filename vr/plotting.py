@@ -36,8 +36,6 @@ def load_logs(root, data_train, data_val, args):
 
 
 def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=1):
-    pyplot.figure(figsize=(15, 5))
-
     for root, df_root in df.groupby('root'):
         min_progress = min([df_slurmid['step'].max() for _, df_slurmid in df_root.groupby('slurmid')])
         df_root = df_root[df_root['step'] <= min_progress]
@@ -89,21 +87,21 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
     pyplot.legend()
 
 
-def plot_all_runs(df, train_quantity='train_acc', val_quantity='val_acc', color=None):
+def plot_all_runs(df, train_quantity='train_acc', val_quantity='val_acc', color=None, window=1):
     kwargs = {}
     if color:
         kwargs['color'] = color
     for (root, slurmid), df_run in df.groupby(['root', 'slurmid']):
         path = root + ' ' + slurmid
         train_lines = pyplot.plot(df_run['step'],
-                                  df_run[train_quantity],
+                                  df_run[train_quantity].rolling(window).mean(),
                                   label=path + ' train',
 
                                   linestyle='dotted',
                                   **kwargs)
         if val_quantity:
             pyplot.plot(df_run['step'],
-                        df_run[val_quantity],
+                        df_run[val_quantity].rolling(window).mean(),
                         label=path + ' val',
                         color=train_lines[0].get_color())
         to_print = [path, df_run['step'].iloc[-1], df_run[train_quantity].iloc[-1]]

@@ -8,23 +8,23 @@ python scripts/generate_sqoop.py --num-shapes=3 --num_repeats=100 --rhs_variety=
 
 # full tests
 bash scripts/train/film_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=film_ckpt
-python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=film_ckpt --model_type=FiLM  --num_samples=3
+python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=film_ckpt --num_samples=3
 
 bash scripts/train/mac_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=mac_ckpt
-python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=mac_ckpt --model_type=MAC  --num_samples=3
+python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=mac_ckpt --num_samples=3
 
 bash scripts/train/ee_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=ee_ckpt
-python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=ee_ckpt --model_type=EE  --num_samples=3
+python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=ee_ckpt --num_samples=3
 
 bash scripts/train/ee_new_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=ee_new_ckpt
 
 bash scripts/train/rel_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=rel_ckpt
-python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=rel_ckpt --model_type=RelNet  --num_samples=3
+python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=rel_ckpt --num_samples=3
 
 bash scripts/train/convlstm_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=convlstm_ckpt
 
 bash scripts/train/shnmn_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $FULL_TEST_ARGS --checkpoint_path=shnmn_ckpt
-python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=shnmn_ckpt --model_type=SHNMN  --num_samples=3
+python scripts/run_model.py --data_dir sqoop-variety_1-repeats_100 --execution_engine=shnmn_ckpt --num_samples=3
 
 # extra quick tests
 bash scripts/train/ee_flatqa.sh --data_dir sqoop-variety_1-repeats_100 $QUICK_TEST_ARGS --checkpoint_path=ee_new_flatqa --nmn_use_film=1

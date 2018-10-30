@@ -186,9 +186,11 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         if pg:
             programs_pred = pg(questions_var)
         else:
-            programs_pred = None
+            programs_pred = programs
 
-        kwargs = {'save_activations': True} if isinstance(ee, (FiLMedNet, ModuleNet)) else {}
+        kwargs = ({'save_activations': True} 
+                  if isinstance(ee, (FiLMedNet, ModuleNet, MAC)) 
+                  else {})
         pos_args = [feats_var]
         if isinstance(ee, SHNMN):
             pos_args.append(questions_var)

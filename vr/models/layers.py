@@ -14,6 +14,16 @@ import torch.nn.functional as F
 from torch.nn.init import kaiming_normal_, kaiming_uniform_
 
 
+class SequentialSaveActivations(nn.Sequential):
+
+    def forward(self, input_):
+        self.outputs = [input_]
+        for module in self._modules.values():
+            input_ = module(input_)
+            self.outputs.append(input_)
+        return input_
+
+
 class SimpleVisualBlock(nn.Module):
     def __init__(self, in_dim, out_dim=None, kernel_size=3):
         if out_dim is None:
@@ -123,14 +133,15 @@ def build_stem(feature_dim,
                 raise(NotImplementedError)
             cur_padding = cur_kernel_size // 2
         layers.append(nn.Conv2d(prev_dim, curr_out,
-                                kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding))
+                                kernel_size=cur_kernel_size, stride=cur_stride, padding=cur_padding,
+                                bias=not with_batchnorm))
         if with_batchnorm:
             layers.append(nn.BatchNorm2d(curr_out))
         layers.append(nn.ReLU(inplace=True))
         if i in subsample_layers:
             layers.append(nn.MaxPool2d(kernel_size=2, stride=2))
         prev_dim = curr_out
-    return nn.Sequential(*layers)
+    return SequentialSaveActivations(*layers)
 
 
 def build_classifier(module_C, module_H, module_W, num_answers,

@@ -199,6 +199,15 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         scores = ee(*pos_args, **kwargs)
         probs = F.softmax(scores, dim=1)
 
+        #loss = torch.nn.CrossEntropyLoss()(scores, answers.cuda())
+        #loss.backward()
+
+        #for i, output in enumerate(ee.stem.outputs):
+        #  print('module_{}:'.format(i), output.mean().item(), 
+        #        ((output ** 2).mean() ** 0.5).item(),
+        #        output.min().item(), 
+        #        output.max().item())
+
         _, preds = scores.data.cpu().max(1)
         # all_programs.append(programs_pred.data.cpu().clone())
         all_scores.append(scores.data.cpu().clone())

@@ -151,7 +151,7 @@ def build_classifier(module_C, module_H, module_W, num_answers,
     prev_dim = module_C * module_H * module_W
     cur_dim = module_C
     if proj_dim is not None and proj_dim > 0:
-        layers.append(nn.Conv2d(module_C, proj_dim, kernel_size=1))
+        layers.append(nn.Conv2d(module_C, proj_dim, kernel_size=1, bias=not with_batchnorm))
         if with_batchnorm:
             layers.append(nn.BatchNorm2d(proj_dim))
         layers.append(nn.ReLU(inplace=True))
@@ -184,7 +184,7 @@ def build_classifier(module_C, module_H, module_W, num_answers,
         dropout = [0] * len(fc_dims)
 
     for next_dim, next_dropout in zip(fc_dims, dropout):
-        layers.append(nn.Linear(prev_dim, next_dim))
+        layers.append(nn.Linear(prev_dim, next_dim, bias=not with_batchnorm))
         if with_batchnorm:
             layers.append(nn.BatchNorm1d(next_dim))
         layers.append(nn.ReLU(inplace=True))

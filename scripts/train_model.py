@@ -473,7 +473,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             else:
                 base_parameters.append(param)
         print("SENSITIVE PARAMS ARE: ", sensitive_parameters)
-        ee_optimizer = optim_method([{'params' : sensitive_parameters, 'lr' : args.sensitive_learning_rate} , 
+        ee_optimizer = optim_method([{'params' : sensitive_parameters, 
+                                      'lr' : args.sensitive_learning_rate,
+                                      'weight_decay': 0.0} , 
                                      {'params' : base_parameters} ],
                                     lr=args.learning_rate,
                                     weight_decay=args.weight_decay)

@@ -19,7 +19,6 @@ python $NMN/scripts/train_model.py \
   --bidirectional 0 \
   --decoder_type linear \
   --encoder_type gru \
-  --weight_decay 1e-5 \
   --rnn_num_layers 1 \
   --rnn_wordvec_dim 200 \
   --rnn_hidden_dim 1024 `#was 4096 in original FiLM` \

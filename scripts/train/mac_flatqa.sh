@@ -29,7 +29,6 @@ python $NMN/scripts/train_model.py \
   --mac_use_memory_gate 0 \
   --bidirectional 1 \
   --encoder_type lstm \
-  --weight_decay 1e-5 \
   --rnn_num_layers 1 \
   --rnn_wordvec_dim 300 \
   --rnn_hidden_dim 128 \

@@ -17,7 +17,6 @@ python $NMN/scripts/train_model.py \
   --module_batchnorm 0 \
   --module_dim 64 \
   --classifier_batchnorm 1 \
-  --weight_decay 1e-5 \
   --classifier_downsample maxpoolfull \
   --classifier_proj_dim 512 \
   --program_generator_parameter_efficient 1 $@

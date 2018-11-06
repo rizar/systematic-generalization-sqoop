@@ -244,18 +244,18 @@ def main(args):
     try:
         last_commit = subprocess.check_output(
             'cd {}; git log -n1'.format(nmn_iwp_code), shell=True).decode('utf-8')
-        print('LAST COMMIT INFO:')
-        print(last_commit)
+        logger.info('LAST COMMIT INFO:')
+        logger.info(last_commit)
     except subprocess.CalledProcessError:
-        print('Could not figure out the last commit')
+        logger.info('Could not figure out the last commit')
     try:
         diff = subprocess.check_output(
             'cd {}; git diff'.format(nmn_iwp_code), shell=True).decode('utf-8')
         if diff:
-            print('GIT DIFF:')
-            print(diff)
+            logger.info('GIT DIFF:')
+            logger.info(diff)
     except subprocess.CalledProcessError:
-        print('Could not figure out the last commit')
+        logger.info('Could not figure out the last commit')
 
     if args.randomize_checkpoint_path == 1:
         name, ext = os.path.splitext(args.checkpoint_path)
@@ -272,7 +272,7 @@ def main(args):
                 os.makedirs(dirname)
         except FileExistsError:
             pass
-    print('Will save checkpoints to %s' % args.checkpoint_path)
+    logger.info('Will save checkpoints to %s' % args.checkpoint_path)
 
     if args.data_dir:
         args.train_question_h5 = os.path.join(args.data_dir, args.train_question_h5)
@@ -344,7 +344,7 @@ def main(args):
         args.val_question_h5 = root + 'val_questions.h5'
         args.val_features_h5 = root + 'val_features.h5'
 
-    print(args)
+    logger.info(args)
     question_families = None
     if args.family_split_file is not None:
         with open(args.family_split_file, 'r') as f:
@@ -501,10 +501,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
     set_mode('train', [program_generator, execution_engine, baseline_model])
 
-    print('train_loader has %d samples' % len(train_loader.dataset))
-    print('val_loader has %d samples' % len(val_loader.dataset))
+    logger.info('train_loader has %d samples' % len(train_loader.dataset))
+    logger.info('val_loader has %d samples' % len(val_loader.dataset))
     if valB_loader:
-        print('valB_loader has %d samples' % len(valB_loader.dataset))
+        logger.info('valB_loader has %d samples' % len(valB_loader.dataset))
 
     num_checkpoints = 0
     epoch_start_time = 0.0
@@ -517,12 +517,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         if (epoch > 0) and (args.time == 1):
             epoch_time = time.time() - epoch_start_time
             epoch_total_time += epoch_time
-            print(colored('EPOCH PASS AVG TIME: ' + str(epoch_total_time / epoch), 'white'))
-            print(colored('Epoch Pass Time      : ' + str(epoch_time), 'white'))
+            logger.info('EPOCH PASS AVG TIME: ' + str(epoch_total_time / epoch), 'white')
+            logger.info('Epoch Pass Time      : ' + str(epoch_time), 'white')
         epoch_start_time = time.time()
 
         epoch += 1
-        print('Starting epoch %d' % epoch)
+        logger.info('Starting epoch %d' % epoch)
 
         batch_start_time = time.time()
         for batch in train_loader:
@@ -708,7 +708,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             if t % args.record_loss_every == 0:
                 running_loss += loss.item()
                 avg_loss = running_loss / args.record_loss_every
-                print(t, time.time() - batch_start_time, time.time() - compute_start_time, loss.item())
+                logger.info("{} {:.5f} {:.5f} {:.5f}".format(t, time.time() - batch_start_time, time.time() - compute_start_time, loss.item()))
                 stats['train_losses'].append(avg_loss)
                 stats['train_losses_ts'].append(t)
                 if reward is not None:
@@ -726,10 +726,10 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                            baseline_model, train_loader)
                 train_pass_time = (time.time() - start)
                 train_pass_total_time += train_pass_time
-                print('TRAIN PASS AVG TIME: ' + str(train_pass_total_time / num_checkpoints))
-                print('Train Pass Time      : ' + str(train_pass_time))
-                print('train accuracy is', train_acc)
-                print('Checking validation accuracy ...')
+                logger.info('TRAIN PASS AVG TIME: ' + str(train_pass_total_time / num_checkpoints))
+                logger.info('Train Pass Time      : ' + str(train_pass_time))
+                logger.info('train accuracy is {}'.format(train_acc))
+                logger.info('Checking validation accuracy ...')
                 start = time.time()
 
 
@@ -737,9 +737,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                                          baseline_model, val_loader)
                 val_pass_time = (time.time() - start)
                 val_pass_total_time += val_pass_time
-                print('VAL PASS AVG TIME:   ' + str(val_pass_total_time / num_checkpoints))
-                print('Val Pass Time        : ' + str(val_pass_time))
-                print('val accuracy is ', val_acc)
+                logger.info('VAL PASS AVG TIME:   ' + str(val_pass_total_time / num_checkpoints))
+                logger.info('Val Pass Time        : ' + str(val_pass_time))
+                logger.info('val accuracy is {}'.format(val_acc))
                 stats['train_accs'].append(train_acc)
                 stats['val_accs'].append(val_acc)
                 stats['val_accs_ts'].append(t)
@@ -751,9 +751,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                     if args.time == 1:
                         valB_pass_time = (time.time() - start)
                         valB_pass_total_time += valB_pass_time
-                        print(colored('VAL B PASS AVG TIME:   ' + str(valB_pass_total_time / num_checkpoints), 'cyan'))
-                        print(colored('Val B Pass Time        : ' + str(valB_pass_time), 'cyan'))
-                    print('val B accuracy is ', valB_acc)
+                        logger.info(colored('VAL B PASS AVG TIME:   ' + str(valB_pass_total_time / num_checkpoints), 'cyan'))
+                        logger.info(colored('Val B Pass Time        : ' + str(valB_pass_time), 'cyan'))
+                    logger.info('val B accuracy is ', valB_acc)
                     stats['valB_accs'].append(valB_acc)
                     stats['valB_accs_ts'].append(t)
 
@@ -779,12 +779,12 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                     checkpoint[k] = v
 
                 # Save current model
-                print('Saving checkpoint to %s' % args.checkpoint_path)
+                logger.info('Saving checkpoint to %s' % args.checkpoint_path)
                 torch.save(checkpoint, args.checkpoint_path)
 
                 # Save the best model separately
                 if val_acc > stats['best_val_acc']:
-                    print('Saving best so far checkpoint to %s' % (args.checkpoint_path + '.best'))
+                    logger.info('Saving best so far checkpoint to %s' % (args.checkpoint_path + '.best'))
                     stats['best_val_acc'] = val_acc
                     if valB_loader:
                         stats['bestB_val_acc'] = valB_acc
@@ -1251,4 +1251,7 @@ def check_grad_num_nans(model, model_name='model'):
 
 if __name__ == '__main__':
     args = parser.parse_args()
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(name)s: %(asctime)s: %(message)s")
     main(args)

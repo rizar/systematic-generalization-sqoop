@@ -262,9 +262,10 @@ def main(args):
         num = random.randint(1, 1000000)
         args.checkpoint_path = '%s_%06d%s' % (name, num, ext)
     else:
-        kwargs = {}
+        num = random.randint(1, 1000000)
+        kwargs = {'rnd':  num}
         if 'SLURM_JOB_ID' in os.environ:
-            kwargs = {'slurmid': os.environ['SLURM_JOB_ID']}
+            kwargs.update({'slurmid': os.environ['SLURM_JOB_ID']})
         args.checkpoint_path = args.checkpoint_path.format(**kwargs)
         dirname = os.path.dirname(args.checkpoint_path)
         try:

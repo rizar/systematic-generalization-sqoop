@@ -34,6 +34,14 @@ def _chain_tau():
     tau_0[2][3] = tau_1[2][0] = 100 #3rd block - lhs inp 2nd block, rhs inp sentinel
     return tau_0, tau_1
 
+def _chain_with_shortcuts_tau():
+    tau_0 = torch.zeros(3, 4)
+    tau_1 = torch.zeros(3, 4)
+    tau_0[0][1] = tau_1[0][0] = 100 #1st block - lhs inp img, rhs inp sentinel
+    tau_0[1][2] = tau_1[1][1] = 100 #2nd block - lhs inp 1st block, rhs img
+    tau_0[2][3] = tau_1[2][1] = 100 #3rd block - lhs inp 2nd block, rhs img 
+    return tau_0, tau_1
+
 
 def _tree_tau():
     tau_0 = torch.zeros(3, 4)
@@ -258,6 +266,10 @@ class SHNMN(nn.Module):
         elif tau_init == 'chain':
             tau_0, tau_1 = _chain_tau()
             print("initializing with chain")
+        elif tau_init == 'chain_with_shortcuts':
+            tau_0, tau_1 = _chain_with_shortcuts_tau() 
+            print("initializing with chain and shortcuts")
+
         else:
             tau_0, tau_1 = _random_tau(num_modules)
 

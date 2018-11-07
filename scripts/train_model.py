@@ -183,7 +183,7 @@ parser.add_argument('--shnmn_type', default='soft', type=str,
 parser.add_argument('--use_module', default='residual', type=str, choices=['conv', 'find', 'residual'])
 # for soft
 parser.add_argument('--tau_init', default='random', type=str,
-        choices=['random', 'tree', 'chain'])
+        choices=['random', 'tree', 'chain', 'chain_with_shortcuts'])
 # for hard
 parser.add_argument('--model_bernoulli', default=0.5, type=float)
 parser.add_argument('--alpha_init', default='uniform', type=str,

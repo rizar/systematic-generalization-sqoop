@@ -86,7 +86,7 @@ def _shnmn_func(question, img, num_modules, alpha, tau_0, tau_1, func):
 
         h_prev = torch.cat([h_prev, h_i.unsqueeze(1)], dim=1)
 
-    return h_prev[:, -1, :, :, :]
+    return h_prev
 
 
 class FindModule(nn.Module):
@@ -347,15 +347,17 @@ class SHNMN(nn.Module):
         chain_tau_0, chain_tau_1 = _chain_tau()
         chain_tau_0 = chain_tau_0.to(device)
         chain_tau_1 = chain_tau_1.to(device)
-        h_final_chain = _shnmn_func(question, stemmed_img,
+        h_chain = _shnmn_func(question, stemmed_img,
                         self.num_modules, self.alpha,
                         Variable(chain_tau_0), Variable(chain_tau_1), self.func)
+        h_final_chain = h_chain[:, -1, :, :, :]
         tree_tau_0, tree_tau_1 = _tree_tau()
         tree_tau_0 = tree_tau_0.to(device)
         tree_tau_1 = tree_tau_1.to(device)
-        h_final_tree  = _shnmn_func(question, stemmed_img,
+        h_tree  = _shnmn_func(question, stemmed_img,
                         self.num_modules, self.alpha,
                         Variable(tree_tau_0), Variable(tree_tau_1), self.func)
+        h_final_tree = h_tree[:, -1, :, :, :]
 
         p_tree = torch.sigmoid(self.tree_odds[0])
         output_probs_tree  = F.softmax(self.classifier(h_final_tree), dim=1)
@@ -370,8 +372,9 @@ class SHNMN(nn.Module):
         question = self.question_embeddings(question)
         stemmed_img = self.stem(image).unsqueeze(1) # B x 1 x C x H x W
 
-        h_final = _shnmn_func(question, stemmed_img, self.num_modules,
+        self.h = _shnmn_func(question, stemmed_img, self.num_modules,
                               self.alpha, self.tau_0, self.tau_1, self.func)
+        h_final = self.h[:, -1, :, :, :]
         return self.classifier(h_final)
 
     def forward(self, image, question):

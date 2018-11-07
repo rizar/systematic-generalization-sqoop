@@ -225,7 +225,7 @@ parser.add_argument('--weight_decay', default=0, type=float)
 
 # Output options
 parser.add_argument('--checkpoint_path', default='{slurmid}.pt')
-parser.add_argument('--allow-resume', action='store_true')
+parser.add_argument('--allow_resume', action='store_true')
 parser.add_argument('--randomize_checkpoint_path', type=int, default=0)
 parser.add_argument('--avoid_checkpoint_override', default=0, type=int)
 parser.add_argument('--record_loss_every', default=1, type=int)

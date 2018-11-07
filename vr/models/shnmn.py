@@ -274,7 +274,7 @@ class SHNMN(nn.Module):
             tau_0, tau_1 = _random_tau(num_modules)
 
         if hard_code_tau:
-            assert(tau_init in ['chain', 'tree'])
+            assert(tau_init in ['chain', 'tree', 'chain_with_shortcuts'])
             self.tau_0 = Variable(tau_0)
             self.tau_1 = Variable(tau_1)
             self.tau_0 = self.tau_0.to(device)

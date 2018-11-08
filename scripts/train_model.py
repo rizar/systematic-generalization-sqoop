@@ -441,8 +441,8 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         baseline_type = args.model_type
 
     if args.allow_resume and os.path.exists(args.checkpoint_path):
-        program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path, model_type=args.model_type, use_simple=args.simple_encoder)
-        execution_engine, _  = vr.utils.load_execution_engine(args.checkpoint_path, model_type=args.model_type)
+        program_generator, _ = vr.utils.load_program_generator(args.checkpoint_path)
+        execution_engine, _  = vr.utils.load_execution_engine(args.checkpoint_path)
         program_generator.to(device)
         execution_engine.to(device)
         with open(args.checkpoint_path + '.json', 'r') as f:

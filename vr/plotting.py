@@ -35,7 +35,7 @@ def load_logs(root, data_train, data_val, args):
                 load_log(root, file_, data_train, data_val, args)
 
 
-def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=1):
+def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=1, plot_interval=False):
     for root, df_root in df.groupby('root'):
         min_progress = min([df_slurmid['step'].max() for _, df_slurmid in df_root.groupby('slurmid')])
         df_root = df_root[df_root['step'] <= min_progress]
@@ -50,18 +50,24 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
                                   linestyle='dotted')
 
         # Plot validation
+        n_seeds = len(df_root['slurmid'].unique())
         if val_quantity:
             val_values = df_agg[val_quantity]['mean']
             val_std = df_agg[val_quantity]['std']
             val_values = val_values.rolling(window).mean()
             val_std = val_std.rolling(window).mean()
+            width = val_std * stats.t.ppf(0.975, n_seeds - 1) / (n_seeds ** 0.5)
             pyplot.plot(df_agg.index,
                         val_values,
                         label=root + " val",
                         color=train_lines[0].get_color())
+            if plot_interval:
+                pyplot.fill_between(df_agg.index,
+                                    val_values - width, val_values + width,
+                                    color=train_lines[0].get_color(),
+                                    alpha=0.5)
 
         # Count number of successes
-        n_seeds = len(df_root['slurmid'].unique())
         n_train_successes = 0
         n_val_successes = 0
         for slurmid, df_slurmid in df_root.groupby('slurmid'):
@@ -78,10 +84,8 @@ def plot_average(df, train_quantity='train_acc', val_quantity='val_acc', window=
         to_print = ["{} ({} steps)".format(root, str(min_progress)),
                     success_report, "({:.1f})".format(100 * train_values.iloc[-1])]
         if val_quantity:
-            std = val_std.iloc[-1]
-            width = std * stats.t.ppf(0.975, n_seeds - 1) / (n_seeds ** 0.5)
             to_print.append("{} out of {}".format(n_val_successes, n_seeds))
-            to_print.append("({:.1f}+-{:.1f})".format(100 * val_values.iloc[-1], 100 * width))
+            to_print.append("({:.1f}+-{:.1f})".format(100 * val_values.iloc[-1], 100 * width.iloc[-1]))
         print(*to_print)
 
     pyplot.legend()

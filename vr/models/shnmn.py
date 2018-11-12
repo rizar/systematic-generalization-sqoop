@@ -372,8 +372,10 @@ class SHNMN(nn.Module):
         h_final_tree = h_tree[:, -1, :, :, :]
 
         p_tree = torch.sigmoid(self.tree_odds[0])
-        output_probs_tree  = F.softmax(self.classifier(h_final_tree), dim=1)
-        output_probs_chain = F.softmax(self.classifier(h_final_chain), dim=1)
+        self.tree_scores = self.classifier(h_final_tree)
+        self.chain_scores = self.classifier(h_final_chain)
+        output_probs_tree  = F.softmax(self.tree_scores, dim=1)
+        output_probs_chain = F.softmax(self.chain_scores, dim=1)
         probs_mixture = p_tree * output_probs_tree + (1.0 - p_tree) * output_probs_chain
         eps = 1e-6
         probs_mixture = (1 - eps) * probs_mixture + eps

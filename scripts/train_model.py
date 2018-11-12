@@ -408,7 +408,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
       'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
       'train_accs': [], 'val_accs': [], 'val_accs_ts': [], 'alphas' : [], 'grads' : [],
       'best_val_acc': -1, 'model_t': 0, 'model_epoch': 0,
-      'p_tree': [],
+      'p_tree': [], 'tree_loss': [], 'chain_loss': []
     }
     for i in range(3):
         stats['alphas_{}'.format(i)] = []
@@ -676,14 +676,19 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                 # Train execution engine with ground-truth programs
                 ee_optimizer.zero_grad()
                 scores = execution_engine(feats_var, questions_var)
+                if args.shnmn_type == 'hard':
+                    tree_loss = loss_fn(execution_engine.tree_scores, answers_var)
+                    chain_loss = loss_fn(execution_engine.chain_scores, answers_var)
                 loss = loss_fn(scores, answers_var)
                 loss.backward()
                 # record alphas and gradients and p(model) here : DEBUGGING
-                if args.model_type == 'SHNMN':
+                if args.model_type == 'SHNMN' and args.shnmn_type == 'hard':
                     p_tree = F.sigmoid(execution_engine.tree_odds).item()
                     if t % 10 == 0:
                         print('p_tree:', p_tree)
                         stats['p_tree'].append(p_tree)
+                    stats['tree_loss'].append(tree_loss.item())
+                    stats['chain_loss'].append(chain_loss.item())
                 if args.model_type == 'SHNMN' and not args.hard_code_alpha:
                     alphas = [execution_engine.alpha[i] for i in range(3)]
                     alphas = [t.data.cpu().numpy() for t in alphas]

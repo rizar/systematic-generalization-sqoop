@@ -685,11 +685,11 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                 # record alphas and gradients and p(model) here : DEBUGGING
                 if args.model_type == 'SHNMN' and args.shnmn_type == 'hard':
                     p_tree = F.sigmoid(execution_engine.tree_odds).item()
-                    if t % 10 == 0:
+                    if t % args.checkpoint_every == 0:
                         print('p_tree:', p_tree)
                         stats['p_tree'].append(p_tree)
-                    stats['tree_loss'].append(tree_loss.item())
-                    stats['chain_loss'].append(chain_loss.item())
+                        stats['tree_loss'].append(tree_loss.item())
+                        stats['chain_loss'].append(chain_loss.item())
                 if args.model_type == 'SHNMN' and not args.hard_code_alpha:
                     alphas = [execution_engine.alpha[i] for i in range(3)]
                     alphas = [t.data.cpu().numpy() for t in alphas]

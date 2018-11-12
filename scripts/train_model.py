@@ -233,12 +233,6 @@ parser.add_argument('--checkpoint_every', default=10000, type=int)
 parser.add_argument('--time', default=0, type=int)
 
 
-def pretty_print(dat, dat_grad):
-    for i, (dat_i, dat_i_grad) in enumerate(zip(dat, dat_grad)):
-        print('data_%d: %s' % (i , " ".join(['{:.3f}'.format(float(x)) for x in dat_i ])) )
-        print('grad_%d: %s' % (i , " ".join(['{:.3f}'.format(float(x)) for x in dat_i_grad]) ) )
-
-
 def main(args):
     nmn_iwp_code = list(vr.__path__)[0]
     try:
@@ -411,10 +405,14 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     baseline_type = None
 
     stats = {
-        'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
+      'train_losses': [], 'train_rewards': [], 'train_losses_ts': [],
       'train_accs': [], 'val_accs': [], 'val_accs_ts': [], 'alphas' : [], 'grads' : [],
-      'best_val_acc': -1, 'model_t': 0, 'model_epoch': 0
+      'best_val_acc': -1, 'model_t': 0, 'model_epoch': 0,
+      'p_tree': [],
     }
+    for i in range(3):
+        stats['alphas_{}'.format(i)] = []
+        stats['alphas_{}_grad'.format(i)] = []
     if valB_loader:
         stats['valB_accs'] = []
         stats['valB_accs_ts'] = []
@@ -425,19 +423,19 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
     if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'PG', 'PG+EE', 'RelNet', 'ConvLSTM']:
         program_generator, pg_kwargs = get_program_generator(args)
 
-        print('Here is the conditioning network:')
-        print(program_generator)
+        logger.info('Here is the conditioning network:')
+        logger.info(program_generator)
     if args.model_type in ['TMAC', 'MAC', 'RTfilm', 'Tfilm', 'FiLM', 'EE', 'PG+EE', 'Hetero', 'SimpleNMN', 'SHNMN', 'RelNet', 'ConvLSTM']:
         execution_engine, ee_kwargs = get_execution_engine(args)
-        print('Here is the conditioned network:')
-        print(execution_engine)
+        logger.info('Here is the conditioned network:')
+        logger.info(execution_engine)
     if args.model_type in ['LSTM', 'CNN+LSTM', 'CNN+LSTM+SA']:
         baseline_model, baseline_kwargs = get_baseline_model(args)
         params = baseline_model.parameters()
         if args.baseline_train_only_rnn == 1:
             params = baseline_model.rnn.parameters()
-        print('Here is the baseline model')
-        print(baseline_model)
+        logger.info('Here is the baseline model')
+        logger.info(baseline_model)
         baseline_type = args.model_type
 
     if args.allow_resume and os.path.exists(args.checkpoint_path):
@@ -464,16 +462,16 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
         # separate learning rate for p(model) for the stochastic tree NMN
         base_parameters = []
         sensitive_parameters = []
-        print("PARAMETERS:")
+        logger.info("PARAMETERS:")
         for name, param in execution_engine.named_parameters():
             if not param.requires_grad:
                 continue
-            print(name)
+            logger.info(name)
             if name.startswith('tree_odds') or name.startswith('alpha'):
                 sensitive_parameters.append(param)
             else:
                 base_parameters.append(param)
-        print("SENSITIVE PARAMS ARE: ", sensitive_parameters)
+        logger.info("SENSITIVE PARAMS ARE: {}".format(sensitive_parameters))
         ee_optimizer = optim_method([{'params' : sensitive_parameters, 
                                       'lr' : args.sensitive_learning_rate,
                                       'weight_decay': 0.0} , 
@@ -589,7 +587,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                 full_loss = loss.clone()
                 if args.mac_vib_coof:
                     if t > args.mac_vib_start:
-                        print(execution_engine.vib_costs.mean())
+                        logger.info(execution_engine.vib_costs.mean())
                         full_loss += args.mac_vib_coof * execution_engine.vib_costs.mean()
 
 
@@ -682,15 +680,20 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
                 loss.backward()
                 # record alphas and gradients and p(model) here : DEBUGGING
                 if args.model_type == 'SHNMN':
-                    p_model = F.sigmoid(execution_engine.tree_odds).item()
+                    p_tree = F.sigmoid(execution_engine.tree_odds).item()
                     if t % 10 == 0:
-                        print('p_model:', p_model)
+                        print('p_tree:', p_tree)
+                        stats['p_tree'].append(p_tree)
                 if args.model_type == 'SHNMN' and not args.hard_code_alpha:
                     alphas = [execution_engine.alpha[i] for i in range(3)]
                     alphas = [t.data.cpu().numpy() for t in alphas]
                     alphas_grad = execution_engine.alpha.grad.data.cpu().numpy()
                     if t % 10 == 0:
-                        pretty_print(alphas, alphas_grad)
+                        for i, (alphas_i, alphas_i_grad) in enumerate(zip(alphas, alphas_grad)):
+                            print('data_%d: %s' % (i , " ".join(['{:.3f}'.format(float(x)) for x in alphas_i ])) )
+                            print('grad_%d: %s' % (i , " ".join(['{:.3f}'.format(float(x)) for x in alphas_i_grad]) ) )
+                            stats['alphas_{}'.format(i)].append(alphas_i.tolist())
+                            stats['alphas_{}_grad'.format(i)].append(alphas_i_grad.tolist())
 
                 ee_optimizer.step()
             elif args.model_type in ['RelNet', 'ConvLSTM']:
@@ -721,7 +724,7 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
 
             if t % args.checkpoint_every == 0:
                 num_checkpoints += 1
-                print('Checking training accuracy ... ')
+                logger.info('Checking training accuracy ... ')
                 start = time.time()
                 train_acc = check_accuracy(args, program_generator, execution_engine,
                                            baseline_model, train_loader)
@@ -824,7 +827,7 @@ def get_program_generator(args):
             args.program_generator_start_from, model_type=args.model_type)
         cur_vocab_size = pg.encoder_embed.weight.size(0)
         if cur_vocab_size != len(vocab['question_token_to_idx']):
-            print('Expanding vocabulary of program generator')
+            logger.info('Expanding vocabulary of program generator')
             pg.expand_encoder_vocab(vocab['question_token_to_idx'])
             kwargs['encoder_vocab_size'] = len(vocab['question_token_to_idx'])
     else:

@@ -50,6 +50,7 @@ class MAC(nn.Module):
                  noisy_controls,
                  debug_every=float('inf'),
                  print_verbose_every=float('inf'),
+                 hard_code_control=False,
                  verbose=True,
                  ):
         super().__init__()
@@ -154,6 +155,7 @@ class MAC(nn.Module):
                 self.part_transforms.append(mod)
                 self.add_module("part_transform_" + str(i), mod)
 
+        self.hard_code_control = hard_code_control
         self.noisy_controls = noisy_controls
         if noisy_controls:
             self.compute_mu = nn.Linear(self.module_dim, self.module_dim)
@@ -196,41 +198,74 @@ class MAC(nn.Module):
             dropout_mask_memory = None
 
         # compute controls
-        controls = [init_control]
-        control_scores = [torch.zeros_like(q_context[:, :, 0])]
-        for fn_num in range(self.num_modules):
-            inputUnit = self.inputUnits[fn_num]
 
-            #compute question representation specific to this cell
-            q_rep_i = inputUnit(q_rep) # N x d
+        if self.hard_code_control:
+            batch_size, time_steps, dim = q_context.shape
+            
+            # first half attends to first object [1, self.num_modules//2]
+            # next half attends to second object [1+self.num_modules//2, self.num_modules]
+            first_half  = self.num_modules // 2
+            second_half = self.num_modules - (self.num_modules // 2)
+            mid_pt = 1 + (self.num_modules // 2)
 
-            #compute control at the current step
-            control_i, control_scores_i = self.controlUnit(
-                controls[fn_num], q_rep_i, q_context, q_mask)
-            controls.append(control_i)
-            control_scores.append(control_scores_i)
-        controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x M x D
-        control_scores = torch.cat([c.unsqueeze(1) for c in control_scores], 1) # N x M x T
+            control_scores = torch.zeros((batch_size, 1+self.num_modules, time_steps), 
+                                         dtype=q_rep.dtype,
+                                         device=device)   
+            control_scores[:,1:mid_pt, 0] = 1.0
+            control_scores[:,mid_pt:, 2] = 1.0
 
-        disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).to(device)
-        connections = []
-        for pre_connect in self.pre_connects:
-            connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x M x M
-            connect = connect - 1000 * disconnect_mask.unsqueeze(0)
-            connect = torch.nn.Softmax(dim=2)(connect)
-            connections.append(connect)
+            controls = torch.zeros((batch_size, 1+self.num_modules, dim),
+                                   dtype=q_rep.dtype,
+                                   device=device)
+            controls[:,1:mid_pt, :] = q_context[:, 0].unsqueeze(1).expand(-1,first_half,-1)
+            controls[:,mid_pt:, :] = q_context[:, 1].unsqueeze(1).expand(-1,second_half,-1)
 
-        if self.noisy_controls:
-            mu = self.compute_mu(controls)
-            logvar = -5 + self.compute_logvar(controls)
-            std = (0.5 * logvar).exp()
-            noise = Variable(torch.randn(*std.size())).to(device)
-            kls = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp()))
-            vib_costs_each_step = kls.sum(2)
-            self.vib_costs = vib_costs_each_step.max(1)[0]
-            noisy_controls = mu + std * noise
-        else:
+            disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).to(device)
+            connections = []
+            for pre_connect in self.pre_connects:
+                connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x M x M
+                connect = connect - 1000 * disconnect_mask.unsqueeze(0)
+                connect = torch.nn.Softmax(dim=2)(connect)
+                connections.append(connect)
+
             noisy_controls = controls
+            
+        else:
+            controls = [init_control]
+            control_scores = [torch.zeros_like(q_context[:, :, 0])]
+            for fn_num in range(self.num_modules):
+                inputUnit = self.inputUnits[fn_num]
+
+                #compute question representation specific to this cell
+                q_rep_i = inputUnit(q_rep) # N x d
+
+                #compute control at the current step
+                control_i, control_scores_i = self.controlUnit(
+                    controls[fn_num], q_rep_i, q_context, q_mask)
+                controls.append(control_i)
+                control_scores.append(control_scores_i)
+            controls = torch.cat([c.unsqueeze(1) for c in controls], 1) # N x M x D
+            control_scores = torch.cat([c.unsqueeze(1) for c in control_scores], 1) # N x M x T
+
+            disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).to(device)
+            connections = []
+            for pre_connect in self.pre_connects:
+                connect = torch.bmm(controls, pre_connect(controls).permute(0, 2, 1)) # N x M x M
+                connect = connect - 1000 * disconnect_mask.unsqueeze(0)
+                connect = torch.nn.Softmax(dim=2)(connect)
+                connections.append(connect)
+
+            if self.noisy_controls:
+                mu = self.compute_mu(controls)
+                logvar = -5 + self.compute_logvar(controls)
+                std = (0.5 * logvar).exp()
+                noise = Variable(torch.randn(*std.size())).to(device)
+                kls = (-0.5 * (1 + logvar - mu.pow(2) - logvar.exp()))
+                vib_costs_each_step = kls.sum(2)
+                self.vib_costs = vib_costs_each_step.max(1)[0]
+                noisy_controls = mu + std * noise
+            else:
+                noisy_controls = controls
 
         for fn_num in range(self.num_modules):
             inputUnit = self.inputUnits[fn_num]

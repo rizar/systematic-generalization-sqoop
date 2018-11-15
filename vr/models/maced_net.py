@@ -211,14 +211,17 @@ class MAC(nn.Module):
             control_scores = torch.zeros((batch_size, 1+self.num_modules, time_steps), 
                                          dtype=q_rep.dtype,
                                          device=device)   
+            # first half set to x, second half set to y
             control_scores[:,1:mid_pt, 0] = 1.0
             control_scores[:,mid_pt:, 2] = 1.0
 
             controls = torch.zeros((batch_size, 1+self.num_modules, dim),
                                    dtype=q_rep.dtype,
                                    device=device)
+        
+            # first half set to x, second half set to y
             controls[:,1:mid_pt, :] = q_context[:, 0].unsqueeze(1).expand(-1,first_half,-1)
-            controls[:,mid_pt:, :] = q_context[:, 1].unsqueeze(1).expand(-1,second_half,-1)
+            controls[:,mid_pt:, :] = q_context[:, 2].unsqueeze(1).expand(-1,second_half,-1)
 
             disconnect_mask = Variable(torch.triu(torch.ones(controls.size(1), controls.size(1)))).to(device)
             connections = []

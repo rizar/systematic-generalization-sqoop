@@ -1,6 +1,6 @@
 # Systematic Generalization: What Is Required and Can It Be Learned
 
-The code used for the experiments in the paper. 
+The code used for the experiments in [the paper](https://openreview.net/forum?id=HkezXnA9YX).
 
 ### Setup
 

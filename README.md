@@ -14,7 +14,8 @@ pip install -e .
 export NMN=$PWD
 ```
 
-Download all versions of SQOOP dataset from URL and unpack it. Let `$DATA` be the location of the data on your system.
+Download all versions of SQOOP dataset from [here](https://drive.google.com/file/d/1yaXQL-MH0nQM9cqRbIrWkB3kBNM_ltY_/view?usp=sharing) 
+and unpack it. Let `$DATA` be the location of the data on your system.
 
 ### Running Experiments
 
@@ -23,28 +24,28 @@ In the examples below we are using SQOOP with `#rhs/lhs=1`, other versions can b
 #### FiLM
 
     scripts/train/film_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000 --checkpoint_path model.pt\
-    --num_iterations 200000
+     --num_iterations 200000
 
 #### MAC
 
     scripts/train/mac_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000 --checkpoint_path model.pt\
-    --num_iterations 100000
+     --num_iterations 100000
 
 #### Conv+LSTM
 
     scripts/train/convlstm_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000 --checkpoint_path model.pt\
-    --num_iterations 200000
+     --num_iterations 200000
 
 #### RelNet
 
     scripts/train/rel_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000 --checkpoint_path model.pt\
-    --num_iterations 500000
+     --num_iterations 500000
 
 #### NMN-Tree, NMN-Chain, NMN-Chain-Shortcut
 
     scripts/train/shnmn_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000\
-      --hard_code_tau --tau_init tree --hard_code_alpha --alpha_init correct\
-    --num_iterations 50000 --checkpoint_path model.pt
+     --hard_code_tau --tau_init tree --hard_code_alpha --alpha_init correct\
+     --num_iterations 50000 --checkpoint_path model.pt
 
 For a different layout use `--tau_init=chain` or `--tau_init=chain_shortcut`. For a different module, use `--use_module=find`, the default is Residual. 
 Make sure to train for 200000 iterations if you use Find.
@@ -52,14 +53,16 @@ Make sure to train for 200000 iterations if you use Find.
 #### Stochastic-N2NMN
 
      scripts/train/shnmn_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000\
-        --shnmn_type hard --model_bernoulli 0.5 --hard_code_alpha --alpha_init=correct --num_iterations 200000 
+      --shnmn_type hard --model_bernoulli 0.5 --hard_code_alpha --alpha_init=correct\
+      --num_iterations 200000 --checkpoint_path model.pt
 
 `--model_bernoulli` is the initial probability of the model being a tree.
 
 #### Attention-N2NMN
 
     scripts/train/shnmn_flatqa.sh --data_dir $DATA/sqoop-variety_1-repeats_30000\
-        --hard_code_tau --tau_init tree --use_module=find --num_iterations 200000
+     --hard_code_tau --tau_init tree --use_module=find --num_iterations 200000\
+     --checkpoint_path model.pt
 
 ### Citation
 

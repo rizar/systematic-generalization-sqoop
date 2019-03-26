@@ -7,7 +7,8 @@ The code used for the experiments in [the paper](https://openreview.net/forum?id
 Build the conda environment, install the code within it:
 
 ```
-git clone <this-repo>
+git clone https://github.com/rizar/systematic-generalization-sqoop.git
+cd systematic-generalization-sqoop
 conda env create -n sysgen
 conda activate sysgen
 pip install -e .

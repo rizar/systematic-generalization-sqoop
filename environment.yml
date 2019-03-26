@@ -1,4 +1,4 @@
-name: nmn
+name: sysgen
 channels:
     - pytorch
     - defaults

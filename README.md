@@ -13,6 +13,7 @@ export NMN=$PWD
 Setup the environment using `conda` (recommended) and install this as a package in development mode
 ```
 conda env create -f environment.yml
+conda activate sysgen
 pip install -e .
 ```
 if you don't use conda, you can do `pip install --user -r requirements.txt`

@@ -4,16 +4,21 @@ The code used for the experiments in [the paper](https://openreview.net/forum?id
 
 ### Setup
 
-Build the conda environment, install the code within it:
-
+Clone the repo
 ```
 git clone https://github.com/rizar/systematic-generalization-sqoop.git
 cd systematic-generalization-sqoop
-conda env create -n sysgen
-conda activate sysgen
-pip install -e .
 export NMN=$PWD
 ```
+Setup the environment using `conda` (recommended)
+```
+conda env create -f environment.yml
+```
+if you don't use conda, install packages with `pip`
+```
+pip install -e .
+```
+
 
 Download all versions of SQOOP dataset from [here](https://drive.google.com/file/d/1yaXQL-MH0nQM9cqRbIrWkB3kBNM_ltY_/view?usp=sharing) 
 and unpack it. Let `$DATA` be the location of the data on your system.

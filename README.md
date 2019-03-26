@@ -10,14 +10,12 @@ git clone https://github.com/rizar/systematic-generalization-sqoop.git
 cd systematic-generalization-sqoop
 export NMN=$PWD
 ```
-Setup the environment using `conda` (recommended)
+Setup the environment using `conda` (recommended) and install this as a package in development mode
 ```
 conda env create -f environment.yml
-```
-if you don't use conda, install packages with `pip`
-```
 pip install -e .
 ```
+if you don't use conda, you can do `pip install --user -r requirements.txt`
 
 
 Download all versions of SQOOP dataset from [here](https://drive.google.com/file/d/1yaXQL-MH0nQM9cqRbIrWkB3kBNM_ltY_/view?usp=sharing) 

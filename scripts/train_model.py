@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+# Copyright 2019-present, Mila
 # Copyright 2017-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -474,9 +475,9 @@ def train_loop(args, train_loader, val_loader, valB_loader=None):
             else:
                 base_parameters.append(param)
         logger.info("SENSITIVE PARAMS ARE: {}".format(sensitive_parameters))
-        ee_optimizer = optim_method([{'params' : sensitive_parameters, 
+        ee_optimizer = optim_method([{'params' : sensitive_parameters,
                                       'lr' : args.sensitive_learning_rate,
-                                      'weight_decay': 0.0} , 
+                                      'weight_decay': 0.0} ,
                                      {'params' : base_parameters} ],
                                     lr=args.learning_rate,
                                     weight_decay=args.weight_decay)

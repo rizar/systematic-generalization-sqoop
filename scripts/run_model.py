@@ -1,3 +1,4 @@
+# Copyright 2019-present, Mila
 # Copyright 2017-present, Facebook, Inc.
 # All rights reserved.
 #
@@ -188,8 +189,8 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         else:
             programs_pred = programs
 
-        kwargs = ({'save_activations': True} 
-                  if isinstance(ee, (FiLMedNet, ModuleNet, MAC)) 
+        kwargs = ({'save_activations': True}
+                  if isinstance(ee, (FiLMedNet, ModuleNet, MAC))
                   else {})
         pos_args = [feats_var]
         if isinstance(ee, SHNMN):
@@ -203,9 +204,9 @@ def run_our_model_batch(args, pg, ee, loader, dtype):
         #loss.backward()
 
         #for i, output in enumerate(ee.stem.outputs):
-        #  print('module_{}:'.format(i), output.mean().item(), 
+        #  print('module_{}:'.format(i), output.mean().item(),
         #        ((output ** 2).mean() ** 0.5).item(),
-        #        output.min().item(), 
+        #        output.min().item(),
         #        output.max().item())
 
         _, preds = scores.data.cpu().max(1)

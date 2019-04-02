@@ -19,7 +19,7 @@ pip install -e .
 if you don't use conda, you can do `pip install --user -r requirements.txt`
 
 
-Download all versions of SQOOP dataset from [here](https://drive.google.com/file/d/1yaXQL-MH0nQM9cqRbIrWkB3kBNM_ltY_/view?usp=sharing) 
+Download all versions of SQOOP dataset from [here](https://drive.google.com/file/d/1yaXQL-MH0nQM9cqRbIrWkB3kBNM_ltY_/view?usp=sharing)
 and unpack it. Let `$DATA` be the location of the data on your system.
 
 ### Running Experiments
@@ -52,7 +52,7 @@ In the examples below we are using SQOOP with `#rhs/lhs=1`, other versions can b
      --hard_code_tau --tau_init tree --hard_code_alpha --alpha_init correct\
      --num_iterations 50000 --checkpoint_path model.pt
 
-For a different layout use `--tau_init=chain` or `--tau_init=chain_shortcut`. For a different module, use `--use_module=find`, the default is Residual. 
+For a different layout use `--tau_init=chain` or `--tau_init=chain_shortcut`. For a different module, use `--use_module=find`, the default is Residual.
 Make sure to train for 200000 iterations if you use Find.
 
 #### Stochastic-N2NMN
@@ -87,4 +87,4 @@ Make sure to train for 200000 iterations if you use Find.
 
 ### Acknowledgements.
 
-This code is based on the reference implementation for "FiLM: Visual Reasoning with a General Conditioning Layer" by Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, Aaron Courville.
+This code is based on the reference implementation for ["FiLM: Visual Reasoning with a General Conditioning Layer"](https://github.com/ethanjperez/film) by Ethan Perez, Florian Strub, Harm de Vries, Vincent Dumoulin, Aaron Courville (AAAI 2018) which was based on the reference implementation for ["Inferring and Executing Programs for Visual Reasoning"](https://github.com/facebookresearch/clevr-iep) by Justin Johnson, Bharath Hariharan, Laurens van der Maaten, Judy Hoffman, Fei-Fei Li, Larry Zitnick, Ross Girshick (ICCV 2017)
